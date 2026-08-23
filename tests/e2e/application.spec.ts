@@ -86,14 +86,39 @@ test('opens and saves a 64x64 PNG through the native file lifecycle', async () =
     const window = await application.firstWindow();
 
     await window.getByRole('button', { name: 'Open PNG' }).click();
-    await expect(window.getByLabel('Application status')).toHaveText(
-      'input-skin.png',
+    const editorStatus = window.getByLabel('Editor status');
+    const canvas = window.getByRole('img', { name: '2D skin canvas' });
+    const zoomValue = window.getByTestId('zoom-value');
+
+    await expect(canvas).toBeVisible();
+    await expect(editorStatus.getByText('input-skin.png')).toBeVisible();
+    await expect(editorStatus.getByText('64×64')).toBeVisible();
+    await expect(window.getByLabel('Texture coordinates')).toHaveText(
+      'X: — Y: —',
+    );
+    await expect(zoomValue).not.toHaveText('100%');
+
+    const initialZoom = await zoomValue.textContent();
+    expect(initialZoom).not.toBeNull();
+    await window.getByRole('button', { name: 'Zoom in' }).click();
+    await expect(zoomValue).not.toHaveText(initialZoom!);
+
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox).not.toBeNull();
+    const zoom =
+      Number.parseInt((await zoomValue.textContent()) ?? '', 10) / 100;
+    const textureLeft = (canvasBox!.width - 64 * zoom) / 2;
+    const textureTop = (canvasBox!.height - 64 * zoom) / 2;
+    await window.mouse.move(
+      canvasBox!.x + textureLeft + 32.5 * zoom,
+      canvasBox!.y + textureTop + 32.5 * zoom,
+    );
+    await expect(window.getByLabel('Texture coordinates')).toHaveText(
+      'X: 32 Y: 32',
     );
 
     await window.getByRole('button', { name: 'Save As…' }).click();
-    await expect(window.getByLabel('Application status')).toHaveText(
-      'saved-copy.png',
-    );
+    await expect(editorStatus.getByText('saved-copy.png')).toBeVisible();
 
     const saved = decode(await readFile(outputPath), { checkCrc: true });
     expect(saved.width).toBe(64);

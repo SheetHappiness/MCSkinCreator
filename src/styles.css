@@ -33,7 +33,7 @@ body {
 
 .application-shell {
   display: grid;
-  grid-template-rows: 40px 1fr 24px;
+  grid-template-rows: 40px 1fr;
   width: 100%;
   height: 100%;
   background: #202225;
@@ -54,6 +54,44 @@ body {
   font-weight: 600;
 }
 
+.title-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.title-bar button,
+.editor-status-bar button {
+  border: 1px solid #45484d;
+  border-radius: 3px;
+  color: #cfd1d4;
+  background: #303237;
+  font: inherit;
+}
+
+.title-bar button {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.title-bar button:hover:not(:disabled),
+.editor-status-bar button:hover {
+  border-color: #62666d;
+  background: #383b40;
+}
+
+.title-bar button:focus-visible,
+.editor-status-bar button:focus-visible,
+.skin-canvas:focus-visible {
+  outline: 2px solid #8ca7c7;
+  outline-offset: -2px;
+}
+
+.title-bar button:disabled {
+  color: #777b82;
+}
+
 .milestone {
   color: #9da1a8;
   font-size: 11px;
@@ -61,12 +99,19 @@ body {
 }
 
 .workspace {
-  display: grid;
-  place-items: center;
+  position: relative;
   min-height: 0;
+  overflow: hidden;
+}
+
+.workspace.is-empty {
+  display: grid;
+  grid-template-rows: 1fr 24px;
+  place-items: center stretch;
 }
 
 .workspace-placeholder {
+  place-self: center;
   max-width: 360px;
   color: #aeb1b7;
   text-align: center;
@@ -129,9 +174,109 @@ body {
 .status-bar {
   display: flex;
   align-items: center;
+  align-self: stretch;
   padding: 0 10px;
   border-top: 1px solid #34373b;
   color: #9da1a8;
   background: #292b2f;
   font-size: 11px;
+}
+
+.editor-workspace {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 26px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.canvas-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #1d1f22;
+}
+
+.skin-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: default;
+  touch-action: none;
+}
+
+.skin-canvas.is-panning {
+  cursor: grabbing;
+}
+
+.editor-status-bar {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) auto auto minmax(116px, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 0 10px;
+  border-top: 1px solid #34373b;
+  color: #9da1a8;
+  background: #292b2f;
+  font-size: 11px;
+}
+
+.document-name {
+  overflow: hidden;
+  color: #b9bcc1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewport-controls {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.editor-status-bar button {
+  min-width: 24px;
+  height: 20px;
+  padding: 0 6px;
+  line-height: 18px;
+}
+
+.editor-status-bar button[aria-pressed='true'] {
+  border-color: #61758d;
+  color: #e1e7ee;
+  background: #3a4654;
+}
+
+.viewport-controls output {
+  width: 46px;
+  color: #c5c8cc;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.coordinate-readout {
+  justify-self: end;
+  color: #b3b6bb;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.workspace-error {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 2;
+  max-width: min(520px, calc(100% - 32px));
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid #764944;
+  border-radius: 3px;
+  color: #f0c0bb;
+  background: #3b2928;
+  font-size: 11px;
+  transform: translateX(-50%);
 }
