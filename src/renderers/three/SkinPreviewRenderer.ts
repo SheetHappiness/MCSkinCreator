@@ -89,6 +89,8 @@ export class SkinPreviewRenderer {
   private currentModel: SkinDocument['model'];
   private outerVisible = true;
   private disposed = false;
+  private readonly activePointerIds = new Set<number>();
+  private readonly ownerWindow: Window | null;
 
   constructor(
     private readonly mount: HTMLElement,
@@ -103,6 +105,20 @@ export class SkinPreviewRenderer {
     this.renderer.domElement.setAttribute('aria-label', '3D skin preview');
     this.renderer.domElement.setAttribute('data-preview-ready', 'true');
     this.mount.append(this.renderer.domElement);
+    this.ownerWindow = mount.ownerDocument.defaultView;
+    this.renderer.domElement.addEventListener(
+      'pointerdown',
+      this.handlePointerDown,
+    );
+    this.renderer.domElement.addEventListener(
+      'pointerup',
+      this.handlePointerFinished,
+    );
+    this.renderer.domElement.addEventListener(
+      'pointercancel',
+      this.handlePointerFinished,
+    );
+    this.ownerWindow?.addEventListener('blur', this.cancelActivePointers);
 
     this.camera.position.copy(CAMERA_POSITION);
     this.controls = environment.createControls(
@@ -151,6 +167,20 @@ export class SkinPreviewRenderer {
     this.resizeObserver.disconnect();
     this.controls.removeEventListener('change', this.handleControlsChange);
     this.controls.dispose();
+    this.ownerWindow?.removeEventListener('blur', this.cancelActivePointers);
+    this.renderer.domElement.removeEventListener(
+      'pointerdown',
+      this.handlePointerDown,
+    );
+    this.renderer.domElement.removeEventListener(
+      'pointerup',
+      this.handlePointerFinished,
+    );
+    this.renderer.domElement.removeEventListener(
+      'pointercancel',
+      this.handlePointerFinished,
+    );
+    this.activePointerIds.clear();
     if (this.renderFrame !== undefined) {
       this.environment.cancelFrame(this.renderFrame);
       this.renderFrame = undefined;
@@ -175,6 +205,29 @@ export class SkinPreviewRenderer {
   }
 
   private readonly handleControlsChange = () => this.requestRender();
+
+  private readonly handlePointerDown = (event: PointerEvent) => {
+    this.activePointerIds.add(event.pointerId);
+  };
+
+  private readonly handlePointerFinished = (event: PointerEvent) => {
+    this.activePointerIds.delete(event.pointerId);
+  };
+
+  private readonly cancelActivePointers = () => {
+    const PointerEventConstructor = globalThis.PointerEvent;
+    if (PointerEventConstructor === undefined) {
+      this.activePointerIds.clear();
+      return;
+    }
+
+    for (const pointerId of this.activePointerIds) {
+      this.renderer.domElement.dispatchEvent(
+        new PointerEventConstructor('pointercancel', { pointerId }),
+      );
+    }
+    this.activePointerIds.clear();
+  };
 
   private handleDocumentMutation(): void {
     if (this.disposed) return;

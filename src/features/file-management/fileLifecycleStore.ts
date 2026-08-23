@@ -4,6 +4,7 @@ import { useStore } from 'zustand';
 import type {
   EditCommand,
   FileCommand,
+  NativeAppLifecycleApi,
   NativeSkinEditApi,
   NativeSkinFileApi,
 } from '../../../electron/fileContract';
@@ -57,9 +58,23 @@ const unavailableEditApi: NativeSkinEditApi = {
 
 const nativeEdits = window.skinEdits ?? unavailableEditApi;
 
+const unavailableLifecycleApi: NativeAppLifecycleApi = {
+  async confirmUnsavedChanges() {
+    return 'cancel';
+  },
+  setDocumentState() {},
+  onCloseRequest() {
+    return () => undefined;
+  },
+  respondToCloseRequest() {},
+};
+
+const nativeLifecycle = window.appLifecycle ?? unavailableLifecycleApi;
+
 export const documentSessionController = new DocumentSessionController(
   nativeFiles,
   () => crypto.randomUUID(),
+  (displayName) => nativeLifecycle.confirmUnsavedChanges({ displayName }),
 );
 
 const documentSessionStore = createStore<DocumentSessionState>(() =>
@@ -72,9 +87,22 @@ documentSessionController.subscribe((state) => {
     canUndo: state.canUndo,
     canRedo: state.canRedo,
   });
+  nativeLifecycle.setDocumentState({
+    hasDocument: state.session !== undefined,
+    ...(state.session === undefined
+      ? {}
+      : { displayName: state.session.displayName }),
+    isDirty: state.session?.document.isDirty ?? false,
+    isBusy: state.isBusy,
+  });
 });
 
 nativeEdits.setCommandState({ canUndo: false, canRedo: false });
+nativeLifecycle.setDocumentState({
+  hasDocument: false,
+  isDirty: false,
+  isBusy: false,
+});
 
 function runFileCommand(command: FileCommand): void {
   cancelActiveEditorInteraction();
@@ -99,6 +127,13 @@ function runEditCommand(command: EditCommand): void {
 }
 
 nativeEdits.onEditCommand(runEditCommand);
+
+nativeLifecycle.onCloseRequest((requestId) => {
+  cancelActiveEditorInteraction();
+  void documentSessionController.prepareToClose().then((shouldClose) => {
+    nativeLifecycle.respondToCloseRequest({ requestId, shouldClose });
+  });
+});
 
 export function useDocumentSessionState(): DocumentSessionState {
   return useStore(documentSessionStore);

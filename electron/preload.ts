@@ -1,9 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 import type {
+  CloseRequestResponse,
+  DocumentPresentationState,
   EditCommand,
   EditCommandState,
   FileCommand,
+  NativeAppLifecycleApi,
   NativeSkinEditApi,
   NativeSkinFileApi,
   OpenSkinPngResult,
@@ -11,6 +14,8 @@ import type {
   SaveSkinPngAsResult,
   SaveSkinPngRequest,
   SaveSkinPngResult,
+  UnsavedChangesDecision,
+  UnsavedChangesRequest,
 } from './fileContract';
 
 // Sandboxed Electron preloads cannot require neighboring compiled modules.
@@ -25,6 +30,13 @@ const SKIN_FILE_CHANNELS = {
 const SKIN_EDIT_CHANNELS = {
   command: 'skin-edit:command',
   state: 'skin-edit:state',
+} as const;
+
+const APP_LIFECYCLE_CHANNELS = {
+  confirmUnsaved: 'app-lifecycle:confirm-unsaved',
+  documentState: 'app-lifecycle:document-state',
+  closeRequest: 'app-lifecycle:close-request',
+  closeResponse: 'app-lifecycle:close-response',
 } as const;
 
 const skinFileApi: NativeSkinFileApi = {
@@ -85,5 +97,34 @@ const skinEditApi: NativeSkinEditApi = {
   },
 };
 
+const appLifecycleApi: NativeAppLifecycleApi = {
+  async confirmUnsavedChanges(
+    request: UnsavedChangesRequest,
+  ): Promise<UnsavedChangesDecision> {
+    return ipcRenderer.invoke(
+      APP_LIFECYCLE_CHANNELS.confirmUnsaved,
+      request,
+    ) as Promise<UnsavedChangesDecision>;
+  },
+  setDocumentState(state: DocumentPresentationState): void {
+    ipcRenderer.send(APP_LIFECYCLE_CHANNELS.documentState, state);
+  },
+  onCloseRequest(listener: (requestId: number) => void): () => void {
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      if (Number.isSafeInteger(value) && Number(value) > 0) {
+        listener(Number(value));
+      }
+    };
+    ipcRenderer.on(APP_LIFECYCLE_CHANNELS.closeRequest, handler);
+    return () => {
+      ipcRenderer.removeListener(APP_LIFECYCLE_CHANNELS.closeRequest, handler);
+    };
+  },
+  respondToCloseRequest(response: CloseRequestResponse): void {
+    ipcRenderer.send(APP_LIFECYCLE_CHANNELS.closeResponse, response);
+  },
+};
+
 contextBridge.exposeInMainWorld('skinFiles', skinFileApi);
 contextBridge.exposeInMainWorld('skinEdits', skinEditApi);
+contextBridge.exposeInMainWorld('appLifecycle', appLifecycleApi);

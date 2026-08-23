@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   editorToolFromShortcut,
+  getEditorToolShortcut,
   getPointerAction,
   isEditableKeyboardTarget,
 } from './editorShortcuts';
@@ -37,6 +38,27 @@ describe('editor tool keyboard shortcuts', () => {
     expect(isEditableKeyboardTarget(document.createElement('button'))).toBe(
       false,
     );
+  });
+
+  it('suppresses tool changes in inputs and with command modifiers', () => {
+    const base = {
+      key: 'e',
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      target: document.createElement('button'),
+    };
+
+    expect(getEditorToolShortcut(base)).toBe('eraser');
+    expect(getEditorToolShortcut({ ...base, ctrlKey: true })).toBeUndefined();
+    expect(getEditorToolShortcut({ ...base, metaKey: true })).toBeUndefined();
+    expect(getEditorToolShortcut({ ...base, altKey: true })).toBeUndefined();
+    expect(
+      getEditorToolShortcut({
+        ...base,
+        target: document.createElement('input'),
+      }),
+    ).toBeUndefined();
   });
 });
 

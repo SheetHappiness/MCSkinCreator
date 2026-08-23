@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+
 import {
   documentSessionController,
   useDocumentSessionState,
@@ -11,6 +13,13 @@ export function App() {
       ? 'No document open'
       : `${session.displayName}${session.document.isDirty ? ' •' : ''}`;
 
+  useEffect(() => {
+    document.title =
+      session === undefined
+        ? 'Minecraft Skin Editor'
+        : `${session.displayName}${session.document.isDirty ? ' •' : ''} — Minecraft Skin Editor`;
+  }, [session, session?.document.isDirty]);
+
   return (
     <div className="application-shell">
       <header className="title-bar">
@@ -20,7 +29,8 @@ export function App() {
             <>
               <button
                 type="button"
-                disabled={isBusy}
+                disabled={isBusy || !session.document.isDirty}
+                title="Save (Ctrl+S)"
                 onClick={() => void documentSessionController.save()}
               >
                 Save
@@ -28,13 +38,13 @@ export function App() {
               <button
                 type="button"
                 disabled={isBusy}
+                title="Save As (Ctrl+Shift+S)"
                 onClick={() => void documentSessionController.saveAs()}
               >
                 Save As…
               </button>
             </>
           )}
-          <span className="milestone">M7</span>
         </div>
       </header>
 
@@ -45,8 +55,8 @@ export function App() {
         {session === undefined ? (
           <>
             <section className="workspace-placeholder">
-              <h2>No document open</h2>
-              <p>Open a 64×64 Minecraft skin to begin.</p>
+              <h2>Open a 64×64 Minecraft skin to begin</h2>
+              <p>PNG · Classic or Slim model</p>
               <div className="file-actions" aria-label="File actions">
                 <button
                   type="button"
@@ -55,6 +65,7 @@ export function App() {
                 >
                   Open PNG
                 </button>
+                <kbd>Ctrl+O</kbd>
               </div>
               {isBusy ? <p className="operation-status">Working…</p> : null}
               {error === undefined ? null : (

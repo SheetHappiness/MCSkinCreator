@@ -1,6 +1,7 @@
 import type {
   NativeFileError,
   NativeSkinFileApi,
+  UnsavedChangesDecision,
 } from '../../../electron/fileContract';
 import { SkinDocument } from '../../engine/document';
 import { DocumentHistory } from '../../engine/history';
@@ -41,6 +42,9 @@ export interface DocumentSessionState {
 }
 
 export type DocumentSessionListener = (state: DocumentSessionState) => void;
+export type ConfirmUnsavedChanges = (
+  displayName: string,
+) => Promise<UnsavedChangesDecision>;
 
 function toLifecycleError(error: unknown): FileLifecycleError {
   if (error instanceof SkinPngError) {
@@ -60,9 +64,10 @@ function ensurePngName(displayName: string): string {
 }
 
 /**
- * Owns document-session metadata and coordinates atomic native persistence.
- * SkinDocument remains the only editable pixel authority; paths and names never
- * enter the domain model.
+ * Owns document-session metadata and serializes destructive lifecycle work.
+ * SkinDocument remains the only editable pixel authority; a replacement is
+ * published only after prompting, optional persistence, reading, and decoding
+ * have all completed successfully.
  */
 export class DocumentSessionController {
   private state: DocumentSessionState = {
@@ -76,7 +81,19 @@ export class DocumentSessionController {
   constructor(
     private readonly nativeFiles: NativeSkinFileApi,
     private readonly createDocumentId: () => string,
-  ) {}
+    private readonly confirmUnsavedChanges: ConfirmUnsavedChanges = async () =>
+      'cancel',
+    initialSession?: DocumentSession,
+  ) {
+    if (initialSession !== undefined) {
+      this.state = {
+        session: initialSession,
+        isBusy: false,
+        ...initialSession.history.getState(),
+      };
+      this.attachHistory(initialSession);
+    }
+  }
 
   getState(): DocumentSessionState {
     return this.state;
@@ -94,15 +111,19 @@ export class DocumentSessionController {
     }
   }
 
-  private begin(): boolean {
+  private beginOperation(): boolean {
     if (this.state.isBusy) {
       return false;
     }
 
     this.state.session?.history.cancelActiveTransaction();
-
     this.publish({ ...this.state, error: undefined, isBusy: true });
     return true;
+  }
+
+  private finishCanceled(): FileCommandOutcome {
+    this.publish({ ...this.state, error: undefined, isBusy: false });
+    return { status: 'canceled' };
   }
 
   private fail(error: FileLifecycleError): FileCommandOutcome {
@@ -117,18 +138,114 @@ export class DocumentSessionController {
     });
   }
 
+  private async persistCurrent(
+    forceSaveAs: boolean,
+    keepBusyAfterSuccess: boolean,
+  ): Promise<FileCommandOutcome> {
+    const session = this.state.session;
+    if (session === undefined) {
+      return this.fail({
+        code: 'no_document',
+        message: 'Open a PNG before saving.',
+      });
+    }
+
+    let bytes: Uint8Array;
+    try {
+      bytes = encodeSkinPng(session.document);
+    } catch (error) {
+      return this.fail(toLifecycleError(error));
+    }
+
+    if (forceSaveAs || session.filePath === undefined) {
+      const result = await this.nativeFiles.saveSkinPngAs({
+        suggestedName: ensurePngName(session.displayName),
+        bytes,
+      });
+
+      if (result.status === 'canceled') {
+        return this.finishCanceled();
+      }
+      if (result.status === 'error') {
+        return this.fail(result.error);
+      }
+
+      const nextSession: DocumentSession = {
+        document: session.document,
+        history: session.history,
+        filePath: result.filePath,
+        displayName: result.displayName,
+      };
+      session.document.markSaved();
+      this.publish({
+        ...this.state,
+        session: nextSession,
+        error: undefined,
+        isBusy: keepBusyAfterSuccess,
+      });
+      return { status: 'success' };
+    }
+
+    const result = await this.nativeFiles.saveSkinPng({
+      filePath: session.filePath,
+      bytes,
+    });
+    if (result.status === 'error') {
+      return this.fail(result.error);
+    }
+
+    session.document.markSaved();
+    this.publish({
+      ...this.state,
+      session,
+      error: undefined,
+      isBusy: keepBusyAfterSuccess,
+    });
+    return { status: 'success' };
+  }
+
+  /**
+   * Returns undefined when the destructive action may proceed. Any returned
+   * outcome aborts it without replacing or clearing the active session.
+   */
+  private async guardUnsavedChanges(): Promise<FileCommandOutcome | undefined> {
+    const session = this.state.session;
+    if (session === undefined || !session.document.isDirty) {
+      return undefined;
+    }
+
+    let decision: UnsavedChangesDecision;
+    try {
+      decision = await this.confirmUnsavedChanges(session.displayName);
+    } catch {
+      return this.finishCanceled();
+    }
+
+    if (decision === 'cancel') {
+      return this.finishCanceled();
+    }
+    if (decision === 'discard') {
+      return undefined;
+    }
+
+    const saveOutcome = await this.persistCurrent(false, true);
+    return saveOutcome.status === 'success' ? undefined : saveOutcome;
+  }
+
   async open(): Promise<FileCommandOutcome> {
-    if (!this.begin()) {
+    if (!this.beginOperation()) {
       return { status: 'ignored' };
     }
 
-    const result = await this.nativeFiles.openSkinPng();
-
-    if (result.status === 'canceled') {
-      this.publish({ ...this.state, isBusy: false });
-      return { status: 'canceled' };
+    const guardedOutcome = await this.guardUnsavedChanges();
+    if (guardedOutcome !== undefined) {
+      return guardedOutcome;
     }
 
+    const result = await this.nativeFiles.openSkinPng();
+    if (result.status === 'canceled') {
+      return this.finishCanceled();
+    }
     if (result.status === 'error') {
       return this.fail(result.error);
     }
@@ -160,6 +277,21 @@ export class DocumentSessionController {
     return { status: 'success' };
   }
 
+  /** Resolves true only when a native close may resume. */
+  async prepareToClose(): Promise<boolean> {
+    if (!this.beginOperation()) {
+      return false;
+    }
+
+    const guardedOutcome = await this.guardUnsavedChanges();
+    if (guardedOutcome !== undefined) {
+      return false;
+    }
+
+    this.publish({ ...this.state, error: undefined, isBusy: false });
+    return true;
+  }
+
   undo(): boolean {
     if (this.state.isBusy || this.state.session === undefined) {
       return false;
@@ -179,41 +311,7 @@ export class DocumentSessionController {
   }
 
   async save(): Promise<FileCommandOutcome> {
-    if (!this.begin()) {
-      return { status: 'ignored' };
-    }
-
-    const session = this.state.session;
-    if (session?.filePath === undefined) {
-      return this.fail({
-        code: 'no_document',
-        message: 'Open a PNG before saving.',
-      });
-    }
-
-    let bytes: Uint8Array;
-    try {
-      bytes = encodeSkinPng(session.document);
-    } catch (error) {
-      return this.fail(toLifecycleError(error));
-    }
-
-    const result = await this.nativeFiles.saveSkinPng({
-      filePath: session.filePath,
-      bytes,
-    });
-
-    if (result.status === 'error') {
-      return this.fail(result.error);
-    }
-
-    session.document.markSaved();
-    this.publish({ ...this.state, session, error: undefined, isBusy: false });
-    return { status: 'success' };
-  }
-
-  async saveAs(): Promise<FileCommandOutcome> {
-    if (!this.begin()) {
+    if (!this.beginOperation()) {
       return { status: 'ignored' };
     }
 
@@ -224,41 +322,18 @@ export class DocumentSessionController {
         message: 'Open a PNG before saving.',
       });
     }
-
-    let bytes: Uint8Array;
-    try {
-      bytes = encodeSkinPng(session.document);
-    } catch (error) {
-      return this.fail(toLifecycleError(error));
+    if (!session.document.isDirty) {
+      this.publish({ ...this.state, error: undefined, isBusy: false });
+      return { status: 'ignored' };
     }
 
-    const result = await this.nativeFiles.saveSkinPngAs({
-      suggestedName: ensurePngName(session.displayName),
-      bytes,
-    });
+    return this.persistCurrent(false, false);
+  }
 
-    if (result.status === 'canceled') {
-      this.publish({ ...this.state, isBusy: false });
-      return { status: 'canceled' };
+  async saveAs(): Promise<FileCommandOutcome> {
+    if (!this.beginOperation()) {
+      return { status: 'ignored' };
     }
-
-    if (result.status === 'error') {
-      return this.fail(result.error);
-    }
-
-    const nextSession: DocumentSession = {
-      document: session.document,
-      history: session.history,
-      filePath: result.filePath,
-      displayName: result.displayName,
-    };
-    session.document.markSaved();
-    this.publish({
-      ...this.state,
-      session: nextSession,
-      error: undefined,
-      isBusy: false,
-    });
-    return { status: 'success' };
+    return this.persistCurrent(true, false);
   }
 }

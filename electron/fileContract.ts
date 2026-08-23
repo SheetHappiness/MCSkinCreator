@@ -5,6 +5,13 @@ export const SKIN_FILE_CHANNELS = {
   command: 'skin-file:command',
 } as const;
 
+export const APP_LIFECYCLE_CHANNELS = {
+  confirmUnsaved: 'app-lifecycle:confirm-unsaved',
+  documentState: 'app-lifecycle:document-state',
+  closeRequest: 'app-lifecycle:close-request',
+  closeResponse: 'app-lifecycle:close-response',
+} as const;
+
 export const SKIN_EDIT_CHANNELS = {
   command: 'skin-edit:command',
   state: 'skin-edit:state',
@@ -66,4 +73,31 @@ export interface NativeSkinFileApi {
 export interface NativeSkinEditApi {
   setCommandState(state: EditCommandState): void;
   onEditCommand(listener: (command: EditCommand) => void): () => void;
+}
+
+export type UnsavedChangesDecision = 'save' | 'discard' | 'cancel';
+
+export interface UnsavedChangesRequest {
+  readonly displayName: string;
+}
+
+export interface DocumentPresentationState {
+  readonly hasDocument: boolean;
+  readonly displayName?: string;
+  readonly isDirty: boolean;
+  readonly isBusy: boolean;
+}
+
+export interface CloseRequestResponse {
+  readonly requestId: number;
+  readonly shouldClose: boolean;
+}
+
+export interface NativeAppLifecycleApi {
+  confirmUnsavedChanges(
+    request: UnsavedChangesRequest,
+  ): Promise<UnsavedChangesDecision>;
+  setDocumentState(state: DocumentPresentationState): void;
+  onCloseRequest(listener: (requestId: number) => void): () => void;
+  respondToCloseRequest(response: CloseRequestResponse): void;
 }

@@ -25,6 +25,28 @@ export function editorToolFromShortcut(key: string): EditorTool | undefined {
   return SHORTCUT_TO_TOOL[key.toLowerCase()];
 }
 
+export interface EditorToolShortcutInput {
+  readonly key: string;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly altKey: boolean;
+  readonly target: EventTarget | null;
+}
+
+export function getEditorToolShortcut(
+  input: EditorToolShortcutInput,
+): EditorTool | undefined {
+  if (
+    input.ctrlKey ||
+    input.metaKey ||
+    input.altKey ||
+    isEditableKeyboardTarget(input.target)
+  ) {
+    return undefined;
+  }
+  return editorToolFromShortcut(input.key);
+}
+
 export function getPointerAction(
   button: number,
   spacePressed: boolean,

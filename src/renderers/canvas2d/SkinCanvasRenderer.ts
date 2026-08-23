@@ -13,9 +13,10 @@ import {
 import { createSkinBitmapData, writeSkinBitmap } from './SkinBitmap';
 
 const CHECKER_SIZE = 8;
-const CHECKER_LIGHT = '#9b9da1';
-const CHECKER_DARK = '#85878b';
-const GRID_COLOR = 'rgba(12, 13, 15, 0.34)';
+const CHECKER_LIGHT = '#85878d';
+const CHECKER_DARK = '#777a80';
+const GRID_COLOR = 'rgba(10, 12, 15, 0.26)';
+const TEXTURE_BOUNDARY_COLOR = 'rgba(225, 229, 235, 0.32)';
 
 export interface SkinCanvasRenderOptions {
   readonly showGrid: boolean;
@@ -93,6 +94,36 @@ function drawPixelGrid(
   context.restore();
 }
 
+function drawTextureBoundary(
+  context: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  textureSize: Size,
+  surface: CanvasSurface,
+): void {
+  const left = alignGridLine(viewport.offsetX, surface.pixelRatio);
+  const top = alignGridLine(viewport.offsetY, surface.pixelRatio);
+  const right = alignGridLine(
+    viewport.offsetX + textureSize.width * viewport.zoom,
+    surface.pixelRatio,
+  );
+  const bottom = alignGridLine(
+    viewport.offsetY + textureSize.height * viewport.zoom,
+    surface.pixelRatio,
+  );
+
+  context.save();
+  context.strokeStyle = TEXTURE_BOUNDARY_COLOR;
+  context.lineWidth = 1 / surface.pixelRatio;
+  context.beginPath();
+  context.moveTo(left, top);
+  context.lineTo(right, top);
+  context.lineTo(right, bottom);
+  context.lineTo(left, bottom);
+  context.lineTo(left, top);
+  context.stroke();
+  context.restore();
+}
+
 export function renderSkinCanvas(
   canvas: HTMLCanvasElement,
   skinDocument: SkinDocument,
@@ -138,6 +169,8 @@ export function renderSkinCanvas(
     skinDocument.width * viewport.zoom,
     skinDocument.height * viewport.zoom,
   );
+
+  drawTextureBoundary(context, viewport, skinDocument, surface);
 
   if (shouldRenderPixelGrid(options.showGrid, viewport.zoom)) {
     drawPixelGrid(context, viewport, skinDocument, surface);

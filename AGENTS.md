@@ -357,6 +357,21 @@ Avoid modal noise.
 
 Use desktop-standard behavior.
 
+Open, window close, and application quit are destructive lifecycle actions.
+When the active document is dirty, they must use one serialized
+`Save / Don't Save / Cancel` decision:
+
+- Save persists the current path, or uses Save As when no path exists, before
+  resuming the original action;
+- Don't Save resumes without persistence;
+- Cancel, a canceled Save As, or any save failure aborts the original action.
+
+The renderer-side document-session controller remains the lifecycle authority
+because it owns dirty state and persistence. The Electron main process may gate
+native close and quit, but it must not race the renderer or clear the session
+before renderer approval. Repeated close requests must not create duplicate
+confirmation loops.
+
 ---
 
 # 14. UI Design Contract

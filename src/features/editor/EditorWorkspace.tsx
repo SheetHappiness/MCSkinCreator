@@ -33,17 +33,15 @@ import {
 import { renderSkinCanvas } from '../../renderers/canvas2d';
 import { SkinPreviewPanel } from '../preview/SkinPreviewPanel';
 import { registerActiveEditorInteraction } from './activeEditorInteraction';
+import { ColorFields } from './ColorFields';
+import { colorToHex } from './colorHex';
 import {
   setActiveEditorTool,
   setSelectedEditorColor,
   useActiveEditorTool,
   useSelectedEditorColor,
 } from './editorToolStore';
-import {
-  editorToolFromShortcut,
-  getPointerAction,
-  isEditableKeyboardTarget,
-} from './editorShortcuts';
+import { getEditorToolShortcut, getPointerAction } from './editorShortcuts';
 
 interface EditorWorkspaceProps {
   readonly document: SkinDocument;
@@ -115,14 +113,6 @@ function normalizeWheelDelta(event: ReactWheelEvent): number {
     return event.deltaY * event.currentTarget.clientHeight;
   }
   return event.deltaY;
-}
-
-function channelToHex(channel: number): string {
-  return channel.toString(16).padStart(2, '0');
-}
-
-function colorToHex(color: RgbaColor): string {
-  return `#${channelToHex(color.r)}${channelToHex(color.g)}${channelToHex(color.b)}`;
 }
 
 function colorFromHex(hex: string, alpha: number): RgbaColor {
@@ -206,6 +196,8 @@ export function EditorWorkspace({
     TextureCoordinate | undefined
   >(undefined);
   const [isPanning, setIsPanning] = useState(false);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [temporaryEyedropper, setTemporaryEyedropper] = useState(false);
 
   const fitToView = useCallback(() => {
     if (size.width <= 0 || size.height <= 0) return;
@@ -330,40 +322,39 @@ export function EditorWorkspace({
     strokeGestureRef.current = undefined;
   }, []);
 
+  const cancelInteraction = useCallback(() => {
+    finishPan();
+    cancelStroke();
+    spacePressedRef.current = false;
+    setIsSpacePressed(false);
+    setTemporaryEyedropper(false);
+  }, [cancelStroke, finishPan]);
+
   useEffect(
-    () => registerActiveEditorInteraction(cancelStroke),
-    [cancelStroke],
+    () => registerActiveEditorInteraction(cancelInteraction),
+    [cancelInteraction],
   );
 
   useEffect(() => {
     const handleWindowBlur = () => {
       spacePressedRef.current = false;
-      finishPan();
-      cancelStroke();
+      cancelInteraction();
     };
     window.addEventListener('blur', handleWindowBlur);
     return () => window.removeEventListener('blur', handleWindowBlur);
-  }, [cancelStroke, finishPan]);
+  }, [cancelInteraction]);
 
   const requestToolChange = useCallback(
     (tool: EditorTool) => {
-      cancelStroke();
+      cancelInteraction();
       setActiveEditorTool(tool);
     },
-    [cancelStroke],
+    [cancelInteraction],
   );
 
   useEffect(() => {
     const handleToolShortcut = (event: KeyboardEvent) => {
-      if (
-        event.ctrlKey ||
-        event.metaKey ||
-        event.altKey ||
-        isEditableKeyboardTarget(event.target)
-      ) {
-        return;
-      }
-      const tool = editorToolFromShortcut(event.key);
+      const tool = getEditorToolShortcut(event);
       if (tool !== undefined) {
         event.preventDefault();
         requestToolChange(tool);
@@ -372,6 +363,36 @@ export function EditorWorkspace({
     window.addEventListener('keydown', handleToolShortcut);
     return () => window.removeEventListener('keydown', handleToolShortcut);
   }, [requestToolChange]);
+
+  useEffect(() => {
+    const handleAltDown = (event: KeyboardEvent) => {
+      if (
+        event.key === 'Alt' &&
+        !event.repeat &&
+        (activeTool === 'pencil' || activeTool === 'eraser') &&
+        document.activeElement === canvasRef.current
+      ) {
+        event.preventDefault();
+        cancelStroke();
+        setTemporaryEyedropper(true);
+      }
+    };
+    const handleAltUp = (event: KeyboardEvent) => {
+      if (event.key === 'Alt') {
+        setTemporaryEyedropper(false);
+      }
+    };
+    window.addEventListener('keydown', handleAltDown);
+    window.addEventListener('keyup', handleAltUp);
+    return () => {
+      window.removeEventListener('keydown', handleAltDown);
+      window.removeEventListener('keyup', handleAltUp);
+    };
+  }, [activeTool, cancelStroke]);
+
+  const effectiveTool: EditorTool = temporaryEyedropper
+    ? 'eyedropper'
+    : activeTool;
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     event.currentTarget.focus({ preventScroll: true });
@@ -397,16 +418,16 @@ export function EditorWorkspace({
     if (point === undefined) return;
 
     event.preventDefault();
-    if (activeTool === 'eyedropper') {
+    if (effectiveTool === 'eyedropper') {
       setSelectedEditorColor(samplePixel(skinDocument, point));
       return;
     }
-    if (activeTool === 'fill') {
+    if (effectiveTool === 'fill') {
       fillAt(skinDocument, history, point, selectedColor);
       return;
     }
 
-    const color = activeTool === 'eraser' ? ERASER_COLOR : selectedColor;
+    const color = effectiveTool === 'eraser' ? ERASER_COLOR : selectedColor;
     const stroke = beginPixelStroke(history, color, point);
     event.currentTarget.setPointerCapture(event.pointerId);
     strokeGestureRef.current = { pointerId: event.pointerId, stroke };
@@ -475,7 +496,8 @@ export function EditorWorkspace({
                 className="tool-button"
                 aria-label={label}
                 aria-pressed={activeTool === tool}
-                title={`${label} (${shortcut})`}
+                aria-keyshortcuts={shortcut}
+                data-tooltip={`${label}\n${shortcut}`}
                 onClick={() => requestToolChange(tool)}
               >
                 <ToolIcon tool={tool} />
@@ -498,52 +520,32 @@ export function EditorWorkspace({
                 }
               />
             </label>
-            <label className="alpha-control">
-              <span>Alpha</span>
-              <input
-                type="number"
-                aria-label="Paint alpha"
-                min="0"
-                max="255"
-                step="1"
-                value={selectedColor.a}
-                onChange={(event) => {
-                  const value = Number.parseInt(event.currentTarget.value, 10);
-                  if (Number.isFinite(value)) {
-                    setSelectedEditorColor({
-                      ...selectedColor,
-                      a: Math.min(255, Math.max(0, value)),
-                    });
-                  }
-                }}
-              />
-            </label>
           </div>
         </aside>
 
         <div className="canvas-stage" ref={stageRef}>
           <canvas
             ref={canvasRef}
-            className={`skin-canvas${isPanning ? ' is-panning' : ''}`}
-            data-tool={activeTool}
+            className={`skin-canvas${isSpacePressed ? ' is-pan-ready' : ''}${isPanning ? ' is-panning' : ''}`}
+            data-tool={effectiveTool}
             aria-label="2D skin canvas"
             role="img"
             tabIndex={0}
             onBlur={() => {
-              spacePressedRef.current = false;
-              finishPan();
-              cancelStroke();
+              cancelInteraction();
             }}
             onKeyDown={(event) => {
               if (event.code === 'Space' && !event.repeat) {
                 event.preventDefault();
                 spacePressedRef.current = true;
+                setIsSpacePressed(true);
               }
             }}
             onKeyUp={(event) => {
               if (event.code === 'Space') {
                 event.preventDefault();
                 spacePressedRef.current = false;
+                setIsSpacePressed(false);
               }
             }}
             onPointerCancel={(event) => {
@@ -602,7 +604,8 @@ export function EditorWorkspace({
         <output className="coordinate-readout" aria-label="Texture coordinates">
           X: {hoveredPixel?.x ?? '—'}&nbsp;&nbsp; Y: {hoveredPixel?.y ?? '—'}
         </output>
-        <output className="color-readout" aria-label="Selected RGBA color">
+        <ColorFields color={selectedColor} onChange={setSelectedEditorColor} />
+        <output className="visually-hidden" aria-label="Selected RGBA color">
           {selectedHex.toUpperCase()} · A {selectedColor.a}
         </output>
       </footer>

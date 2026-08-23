@@ -9,8 +9,13 @@ import type {
   SaveSkinPngResult,
 } from '../../../electron/fileContract';
 import { SkinDocument, TRANSPARENT_RGBA } from '../../engine/document';
+import { DocumentHistory } from '../../engine/history';
 import { encodeSkinPng } from '../../engine/png';
-import { DocumentSessionController } from './documentSession';
+import {
+  DocumentSessionController,
+  type ConfirmUnsavedChanges,
+  type DocumentSession,
+} from './documentSession';
 
 function validPng(): Uint8Array {
   return encodeSkinPng(SkinDocument.createBlank({ id: 'source' }));
@@ -49,9 +54,27 @@ function nativeFileMock(): NativeFileMock {
   };
 }
 
-function controller(nativeFiles: NativeSkinFileApi): DocumentSessionController {
+function controller(
+  nativeFiles: NativeSkinFileApi,
+  confirmUnsavedChanges: ConfirmUnsavedChanges = async () => 'discard',
+  initialSession?: DocumentSession,
+): DocumentSessionController {
   let id = 0;
-  return new DocumentSessionController(nativeFiles, () => `document-${++id}`);
+  return new DocumentSessionController(
+    nativeFiles,
+    () => `document-${++id}`,
+    confirmUnsavedChanges,
+    initialSession,
+  );
+}
+
+function untitledSession(): DocumentSession {
+  const document = SkinDocument.createBlank({ id: 'untitled' });
+  return {
+    document,
+    history: new DocumentHistory(document),
+    displayName: 'Untitled.png',
+  };
 }
 
 async function openCurrentSession(
@@ -350,5 +373,139 @@ describe('document Save As lifecycle', () => {
     expect(current.filePath).toBe('C:\\skins\\skin.png');
     expect(current.displayName).toBe('skin.png');
     expect(current.document.isDirty).toBe(true);
+  });
+});
+
+describe('unsaved destructive lifecycle', () => {
+  it('keeps dirty A untouched when replacement Open is canceled', async () => {
+    const nativeFiles = nativeFileMock();
+    const confirm = vi.fn(async () => 'cancel' as const);
+    const manager = controller(nativeFiles, confirm);
+    await openCurrentSession(manager, nativeFiles);
+    const current = manager.getState().session!;
+    current.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+
+    expect(await manager.open()).toEqual({ status: 'canceled' });
+
+    expect(confirm).toHaveBeenCalledWith('skin.png');
+    expect(nativeFiles.openSkinPng).toHaveBeenCalledTimes(1);
+    expect(manager.getState().session).toBe(current);
+    expect(current.document.isDirty).toBe(true);
+    expect(manager.getState().canUndo).toBe(true);
+  });
+
+  it("opens B after Don't Save without mutating A first", async () => {
+    const nativeFiles = nativeFileMock();
+    const manager = controller(nativeFiles, async () => 'discard');
+    await openCurrentSession(manager, nativeFiles);
+    const previous = manager.getState().session!;
+    previous.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+    nativeFiles.openSkinPng.mockResolvedValueOnce(
+      openedFile('C:\\skins\\b.png', 'b.png'),
+    );
+
+    expect(await manager.open()).toEqual({ status: 'success' });
+
+    expect(manager.getState().session?.displayName).toBe('b.png');
+    expect(previous.document.isDirty).toBe(true);
+  });
+
+  it('saves dirty A before atomically opening B', async () => {
+    const nativeFiles = nativeFileMock();
+    const manager = controller(nativeFiles, async () => 'save');
+    await openCurrentSession(manager, nativeFiles);
+    const previous = manager.getState().session!;
+    previous.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+    nativeFiles.openSkinPng.mockResolvedValueOnce(
+      openedFile('C:\\skins\\b.png', 'b.png'),
+    );
+
+    expect(await manager.open()).toEqual({ status: 'success' });
+
+    expect(nativeFiles.saveSkinPng).toHaveBeenCalledTimes(1);
+    expect(previous.document.isDirty).toBe(false);
+    expect(manager.getState().session?.displayName).toBe('b.png');
+  });
+
+  it('aborts replacement and preserves dirty A when Save fails', async () => {
+    const nativeFiles = nativeFileMock();
+    const manager = controller(nativeFiles, async () => 'save');
+    await openCurrentSession(manager, nativeFiles);
+    const current = manager.getState().session!;
+    current.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+    nativeFiles.saveSkinPng.mockResolvedValueOnce({
+      status: 'error',
+      error: { code: 'write_failed', message: 'Disk is unavailable.' },
+    });
+    nativeFiles.openSkinPng.mockResolvedValueOnce(
+      openedFile('C:\\skins\\b.png', 'b.png'),
+    );
+
+    expect((await manager.open()).status).toBe('error');
+
+    expect(nativeFiles.openSkinPng).toHaveBeenCalledTimes(1);
+    expect(manager.getState().session).toBe(current);
+    expect(current.document.isDirty).toBe(true);
+    expect(manager.getState().error?.message).toBe('Disk is unavailable.');
+  });
+
+  it('aborts when dirty untitled Save requires a canceled Save As', async () => {
+    const nativeFiles = nativeFileMock();
+    const session = untitledSession();
+    session.history.editPixel(2, 2, { r: 4, g: 3, b: 2, a: 1 });
+    const manager = controller(nativeFiles, async () => 'save', session);
+
+    expect(await manager.prepareToClose()).toBe(false);
+
+    expect(nativeFiles.saveSkinPng).not.toHaveBeenCalled();
+    expect(nativeFiles.saveSkinPngAs).toHaveBeenCalledTimes(1);
+    expect(manager.getState().session).toBe(session);
+    expect(session.document.isDirty).toBe(true);
+  });
+});
+
+describe('window-close preparation', () => {
+  it('allows a clean close without prompting', async () => {
+    const nativeFiles = nativeFileMock();
+    const confirm = vi.fn(async () => 'cancel' as const);
+    const manager = controller(nativeFiles, confirm);
+    await openCurrentSession(manager, nativeFiles);
+
+    expect(await manager.prepareToClose()).toBe(true);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['cancel', false, true],
+    ['discard', true, true],
+    ['save', true, false],
+  ] as const)(
+    'handles dirty close decision %s',
+    async (decision, expectedClose, expectedDirty) => {
+      const nativeFiles = nativeFileMock();
+      const manager = controller(nativeFiles, async () => decision);
+      await openCurrentSession(manager, nativeFiles);
+      const session = manager.getState().session!;
+      session.history.editPixel(3, 3, { r: 9, g: 8, b: 7, a: 6 });
+
+      expect(await manager.prepareToClose()).toBe(expectedClose);
+      expect(session.document.isDirty).toBe(expectedDirty);
+    },
+  );
+
+  it('keeps the window open after a failed close-time Save', async () => {
+    const nativeFiles = nativeFileMock();
+    const manager = controller(nativeFiles, async () => 'save');
+    await openCurrentSession(manager, nativeFiles);
+    const session = manager.getState().session!;
+    session.history.editPixel(3, 3, { r: 9, g: 8, b: 7, a: 6 });
+    nativeFiles.saveSkinPng.mockResolvedValueOnce({
+      status: 'error',
+      error: { code: 'write_failed', message: 'Write failed.' },
+    });
+
+    expect(await manager.prepareToClose()).toBe(false);
+    expect(session.document.isDirty).toBe(true);
+    expect(manager.getState().error?.message).toBe('Write failed.');
   });
 });

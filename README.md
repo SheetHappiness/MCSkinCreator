@@ -92,6 +92,23 @@ Higher-resolution skins are not part of v0.1.
 
 # v0.1 Feature Scope
 
+## Roadmap 1 status
+
+The foundational editor roadmap is complete and includes:
+
+- desktop shell;
+- canonical `SkinDocument`;
+- PNG open/save with unsaved-change protection;
+- pixel-perfect 2D viewport;
+- transactional Undo/Redo history;
+- Pencil, Eraser, Fill, and Eyedropper;
+- canonical Minecraft skin specification;
+- live Classic/Slim 3D preview;
+- lifecycle, accessibility, and desktop UX hardening.
+
+Advanced artist, palette, AI, browser, cloud, and community features remain
+intentionally deferred beyond the core editor.
+
 ## File operations
 
 - Open PNG

@@ -65,11 +65,13 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
       <header className="skin-preview-toolbar">
         <span className="skin-preview-title">3D Preview</span>
         <div className="model-selector" role="group" aria-label="Skin model">
+          <span className="model-selector__label">Model</span>
           {MODEL_OPTIONS.map(({ model, label }) => (
             <button
               key={model}
               type="button"
               aria-pressed={document.model === model}
+              title={`${label} arm geometry`}
               onClick={() => changeSkinModel(document, history, model)}
             >
               {label}
@@ -81,12 +83,17 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
       <footer className="skin-preview-controls">
         <button
           type="button"
+          aria-label="Show outer layer"
           aria-pressed={outerVisible}
           onClick={toggleOuterLayer}
         >
           Outer
         </button>
-        <button type="button" onClick={() => rendererRef.current?.resetView()}>
+        <button
+          type="button"
+          title="Reset 3D camera"
+          onClick={() => rendererRef.current?.resetView()}
+        >
           Reset view
         </button>
       </footer>
