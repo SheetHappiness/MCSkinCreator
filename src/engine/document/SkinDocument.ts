@@ -1,10 +1,12 @@
+import type { SkinModel } from '../minecraft-skin-spec/types';
+
 export const SKIN_WIDTH = 64 as const;
 export const SKIN_HEIGHT = 64 as const;
 export const RGBA_CHANNEL_COUNT = 4 as const;
 export const SKIN_PIXEL_BUFFER_LENGTH =
   SKIN_WIDTH * SKIN_HEIGHT * RGBA_CHANNEL_COUNT;
 
-export type SkinModel = 'classic' | 'slim';
+export type { SkinModel } from '../minecraft-skin-spec/types';
 
 export interface RgbaColor {
   readonly r: number;

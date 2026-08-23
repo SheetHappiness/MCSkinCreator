@@ -80,6 +80,10 @@ Initial support:
 - base layer
 - outer layer
 
+The implementation contract for modern Java UV regions, model geometry, face
+orientation, and Classic/Slim differences is documented in
+[`docs/MINECRAFT_SKIN_SPEC.md`](docs/MINECRAFT_SKIN_SPEC.md).
+
 Legacy 64×32 skins are not part of v0.1.
 
 Higher-resolution skins are not part of v0.1.
