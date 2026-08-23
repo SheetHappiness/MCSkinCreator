@@ -3,6 +3,7 @@ import type {
   NativeSkinFileApi,
 } from '../../../electron/fileContract';
 import { SkinDocument } from '../../engine/document';
+import { DocumentHistory } from '../../engine/history';
 import {
   SkinPngError,
   decodeSkinPng,
@@ -12,6 +13,7 @@ import {
 
 export interface DocumentSession {
   readonly document: SkinDocument;
+  readonly history: DocumentHistory;
   readonly filePath?: string;
   readonly displayName: string;
 }
@@ -34,6 +36,8 @@ export interface DocumentSessionState {
   readonly session?: DocumentSession;
   readonly error?: FileLifecycleError;
   readonly isBusy: boolean;
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
 }
 
 export type DocumentSessionListener = (state: DocumentSessionState) => void;
@@ -61,8 +65,13 @@ function ensurePngName(displayName: string): string {
  * enter the domain model.
  */
 export class DocumentSessionController {
-  private state: DocumentSessionState = { isBusy: false };
+  private state: DocumentSessionState = {
+    isBusy: false,
+    canUndo: false,
+    canRedo: false,
+  };
   private readonly listeners = new Set<DocumentSessionListener>();
+  private unsubscribeHistory: (() => void) | undefined;
 
   constructor(
     private readonly nativeFiles: NativeSkinFileApi,
@@ -99,6 +108,13 @@ export class DocumentSessionController {
     return { status: 'error', error };
   }
 
+  private attachHistory(session: DocumentSession): void {
+    this.unsubscribeHistory?.();
+    this.unsubscribeHistory = session.history.subscribe((historyState) => {
+      this.publish({ ...this.state, ...historyState });
+    });
+  }
+
   async open(): Promise<FileCommandOutcome> {
     if (!this.begin()) {
       return { status: 'ignored' };
@@ -127,11 +143,35 @@ export class DocumentSessionController {
 
     const session: DocumentSession = {
       document,
+      history: new DocumentHistory(document),
       filePath: result.filePath,
       displayName: result.displayName,
     };
-    this.publish({ session, error: undefined, isBusy: false });
+    this.attachHistory(session);
+    this.publish({
+      session,
+      error: undefined,
+      isBusy: false,
+      canUndo: false,
+      canRedo: false,
+    });
     return { status: 'success' };
+  }
+
+  undo(): boolean {
+    if (this.state.isBusy || this.state.session === undefined) {
+      return false;
+    }
+
+    return this.state.session.history.undo();
+  }
+
+  redo(): boolean {
+    if (this.state.isBusy || this.state.session === undefined) {
+      return false;
+    }
+
+    return this.state.session.history.redo();
   }
 
   async save(): Promise<FileCommandOutcome> {
@@ -164,7 +204,7 @@ export class DocumentSessionController {
     }
 
     session.document.markSaved();
-    this.publish({ session, error: undefined, isBusy: false });
+    this.publish({ ...this.state, session, error: undefined, isBusy: false });
     return { status: 'success' };
   }
 
@@ -204,11 +244,17 @@ export class DocumentSessionController {
 
     const nextSession: DocumentSession = {
       document: session.document,
+      history: session.history,
       filePath: result.filePath,
       displayName: result.displayName,
     };
     session.document.markSaved();
-    this.publish({ session: nextSession, error: undefined, isBusy: false });
+    this.publish({
+      ...this.state,
+      session: nextSession,
+      error: undefined,
+      isBusy: false,
+    });
     return { status: 'success' };
   }
 }

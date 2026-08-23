@@ -5,7 +5,18 @@ export const SKIN_FILE_CHANNELS = {
   command: 'skin-file:command',
 } as const;
 
+export const SKIN_EDIT_CHANNELS = {
+  command: 'skin-edit:command',
+  state: 'skin-edit:state',
+} as const;
+
 export type FileCommand = 'open' | 'save' | 'saveAs';
+export type EditCommand = 'undo' | 'redo';
+
+export interface EditCommandState {
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+}
 
 export interface NativeFileError {
   readonly code: 'read_failed' | 'write_failed';
@@ -50,4 +61,9 @@ export interface NativeSkinFileApi {
   saveSkinPng(request: SaveSkinPngRequest): Promise<SaveSkinPngResult>;
   saveSkinPngAs(request: SaveSkinPngAsRequest): Promise<SaveSkinPngAsResult>;
   onFileCommand(listener: (command: FileCommand) => void): () => void;
+}
+
+export interface NativeSkinEditApi {
+  setCommandState(state: EditCommandState): void;
+  onEditCommand(listener: (command: EditCommand) => void): () => void;
 }

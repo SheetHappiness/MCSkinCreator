@@ -1,12 +1,19 @@
 import {
   app,
   BrowserWindow,
+  ipcMain,
   Menu,
   type MenuItemConstructorOptions,
 } from 'electron';
 import path from 'node:path';
 
-import { SKIN_FILE_CHANNELS, type FileCommand } from './fileContract';
+import {
+  SKIN_EDIT_CHANNELS,
+  SKIN_FILE_CHANNELS,
+  type EditCommand,
+  type EditCommandState,
+  type FileCommand,
+} from './fileContract';
 import { registerSkinFileIpc } from './skinFileIpc';
 
 const DEVELOPMENT_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
@@ -50,6 +57,36 @@ function sendFileCommand(command: FileCommand): void {
   targetWindow?.webContents.send(SKIN_FILE_CHANNELS.command, command);
 }
 
+function sendEditCommand(command: EditCommand): void {
+  const targetWindow =
+    BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  targetWindow?.webContents.send(SKIN_EDIT_CHANNELS.command, command);
+}
+
+function setEditCommandState(state: EditCommandState): void {
+  const menu = Menu.getApplicationMenu();
+  const undo = menu?.getMenuItemById('edit-undo');
+  const redo = menu?.getMenuItemById('edit-redo');
+
+  if (undo != null) {
+    undo.enabled = state.canUndo;
+  }
+  if (redo != null) {
+    redo.enabled = state.canRedo;
+  }
+}
+
+function isEditCommandState(value: unknown): value is EditCommandState {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const state = value as Partial<EditCommandState>;
+  return (
+    typeof state.canUndo === 'boolean' && typeof state.canRedo === 'boolean'
+  );
+}
+
 function installApplicationMenu(): void {
   const template: MenuItemConstructorOptions[] = [
     ...(process.platform === 'darwin'
@@ -85,7 +122,30 @@ function installApplicationMenu(): void {
             ] satisfies MenuItemConstructorOptions[])),
       ],
     },
-    { role: 'editMenu' },
+    {
+      label: 'Edit',
+      submenu: [
+        {
+          id: 'edit-undo',
+          label: 'Undo',
+          accelerator: 'CmdOrCtrl+Z',
+          enabled: false,
+          click: () => sendEditCommand('undo'),
+        },
+        {
+          id: 'edit-redo',
+          label: 'Redo',
+          accelerator: 'CmdOrCtrl+Y',
+          enabled: false,
+          click: () => sendEditCommand('redo'),
+        },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
     { role: 'viewMenu' },
     { role: 'windowMenu' },
   ];
@@ -96,6 +156,11 @@ function installApplicationMenu(): void {
 app.whenReady().then(async () => {
   registerSkinFileIpc();
   installApplicationMenu();
+  ipcMain.on(SKIN_EDIT_CHANNELS.state, (_event, value: unknown) => {
+    if (isEditCommandState(value)) {
+      setEditCommandState(value);
+    }
+  });
   await createMainWindow();
 
   app.on('activate', () => {

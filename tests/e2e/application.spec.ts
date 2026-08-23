@@ -12,17 +12,30 @@ test('launches the production Electron application shell', async () => {
     const rendererBoundary = await window.evaluate(() => {
       const browserGlobal = globalThis as typeof globalThis & {
         skinFiles?: Record<string, unknown>;
+        skinEdits?: Record<string, unknown>;
       };
       return {
         hasCommonJsRequire: 'require' in globalThis,
         hasElectronBridge: 'electron' in globalThis,
         fileApiMethods: Object.keys(browserGlobal.skinFiles ?? {}).sort(),
+        editApiMethods: Object.keys(browserGlobal.skinEdits ?? {}).sort(),
       };
     });
     const fileMenu = await application.evaluate(({ Menu }) =>
       ['file-open', 'file-save', 'file-save-as'].map((id) => {
         const item = Menu.getApplicationMenu()?.getMenuItemById(id);
         return { id, label: item?.label, accelerator: item?.accelerator };
+      }),
+    );
+    const editMenu = await application.evaluate(({ Menu }) =>
+      ['edit-undo', 'edit-redo'].map((id) => {
+        const item = Menu.getApplicationMenu()?.getMenuItemById(id);
+        return {
+          id,
+          label: item?.label,
+          accelerator: item?.accelerator,
+          enabled: item?.enabled,
+        };
       }),
     );
 
@@ -42,6 +55,7 @@ test('launches the production Electron application shell', async () => {
         'saveSkinPng',
         'saveSkinPngAs',
       ],
+      editApiMethods: ['onEditCommand', 'setCommandState'],
     });
     expect(fileMenu).toEqual([
       { id: 'file-open', label: 'Open…', accelerator: 'CmdOrCtrl+O' },
@@ -50,6 +64,20 @@ test('launches the production Electron application shell', async () => {
         id: 'file-save-as',
         label: 'Save As…',
         accelerator: 'CmdOrCtrl+Shift+S',
+      },
+    ]);
+    expect(editMenu).toEqual([
+      {
+        id: 'edit-undo',
+        label: 'Undo',
+        accelerator: 'CmdOrCtrl+Z',
+        enabled: false,
+      },
+      {
+        id: 'edit-redo',
+        label: 'Redo',
+        accelerator: 'CmdOrCtrl+Y',
+        enabled: false,
       },
     ]);
   } finally {
@@ -115,6 +143,10 @@ test('opens and saves a 64x64 PNG through the native file lifecycle', async () =
     );
     await expect(window.getByLabel('Texture coordinates')).toHaveText(
       'X: 32 Y: 32',
+    );
+    await window.mouse.click(
+      canvasBox!.x + textureLeft + 32.5 * zoom,
+      canvasBox!.y + textureTop + 32.5 * zoom,
     );
 
     await window.getByRole('button', { name: 'Save As…' }).click();

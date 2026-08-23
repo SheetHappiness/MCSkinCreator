@@ -1,7 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 import type {
+  EditCommand,
+  EditCommandState,
   FileCommand,
+  NativeSkinEditApi,
   NativeSkinFileApi,
   OpenSkinPngResult,
   SaveSkinPngAsRequest,
@@ -17,6 +20,11 @@ const SKIN_FILE_CHANNELS = {
   save: 'skin-file:save',
   saveAs: 'skin-file:save-as',
   command: 'skin-file:command',
+} as const;
+
+const SKIN_EDIT_CHANNELS = {
+  command: 'skin-edit:command',
+  state: 'skin-edit:state',
 } as const;
 
 const skinFileApi: NativeSkinFileApi = {
@@ -56,4 +64,26 @@ const skinFileApi: NativeSkinFileApi = {
   },
 };
 
+const skinEditApi: NativeSkinEditApi = {
+  setCommandState(state: EditCommandState): void {
+    ipcRenderer.send(SKIN_EDIT_CHANNELS.state, state);
+  },
+  onEditCommand(listener: (command: EditCommand) => void): () => void {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      command: EditCommand,
+    ) => {
+      if (command === 'undo' || command === 'redo') {
+        listener(command);
+      }
+    };
+
+    ipcRenderer.on(SKIN_EDIT_CHANNELS.command, handler);
+    return () => {
+      ipcRenderer.removeListener(SKIN_EDIT_CHANNELS.command, handler);
+    };
+  },
+};
+
 contextBridge.exposeInMainWorld('skinFiles', skinFileApi);
+contextBridge.exposeInMainWorld('skinEdits', skinEditApi);

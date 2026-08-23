@@ -2,7 +2,9 @@ import { createStore } from 'zustand/vanilla';
 import { useStore } from 'zustand';
 
 import type {
+  EditCommand,
   FileCommand,
+  NativeSkinEditApi,
   NativeSkinFileApi,
 } from '../../../electron/fileContract';
 import {
@@ -45,6 +47,15 @@ const unavailableNativeApi: NativeSkinFileApi = {
 
 const nativeFiles = window.skinFiles ?? unavailableNativeApi;
 
+const unavailableEditApi: NativeSkinEditApi = {
+  setCommandState() {},
+  onEditCommand() {
+    return () => undefined;
+  },
+};
+
+const nativeEdits = window.skinEdits ?? unavailableEditApi;
+
 export const documentSessionController = new DocumentSessionController(
   nativeFiles,
   () => crypto.randomUUID(),
@@ -56,7 +67,13 @@ const documentSessionStore = createStore<DocumentSessionState>(() =>
 
 documentSessionController.subscribe((state) => {
   documentSessionStore.setState(state, true);
+  nativeEdits.setCommandState({
+    canUndo: state.canUndo,
+    canRedo: state.canRedo,
+  });
 });
+
+nativeEdits.setCommandState({ canUndo: false, canRedo: false });
 
 function runFileCommand(command: FileCommand): void {
   if (command === 'open') {
@@ -69,6 +86,16 @@ function runFileCommand(command: FileCommand): void {
 }
 
 nativeFiles.onFileCommand(runFileCommand);
+
+function runEditCommand(command: EditCommand): void {
+  if (command === 'undo') {
+    documentSessionController.undo();
+  } else {
+    documentSessionController.redo();
+  }
+}
+
+nativeEdits.onEditCommand(runEditCommand);
 
 export function useDocumentSessionState(): DocumentSessionState {
   return useStore(documentSessionStore);
