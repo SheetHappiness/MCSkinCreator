@@ -1,0 +1,96 @@
+:root {
+  color: #e8e9eb;
+  background: #202225;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  min-width: 800px;
+  min-height: 560px;
+  overflow: hidden;
+}
+
+.application-shell {
+  display: grid;
+  grid-template-rows: 40px 1fr 24px;
+  width: 100%;
+  height: 100%;
+  background: #202225;
+}
+
+.title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  border-bottom: 1px solid #34373b;
+  background: #292b2f;
+}
+
+.title-bar h1 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.milestone {
+  color: #9da1a8;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.workspace {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+}
+
+.workspace-placeholder {
+  max-width: 360px;
+  color: #aeb1b7;
+  text-align: center;
+}
+
+.workspace-placeholder h2 {
+  margin: 0 0 8px;
+  color: #d7d9dc;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.workspace-placeholder p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-top: 1px solid #34373b;
+  color: #9da1a8;
+  background: #292b2f;
+  font-size: 11px;
+}
