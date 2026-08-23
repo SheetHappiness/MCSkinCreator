@@ -34,7 +34,7 @@ export function App() {
               </button>
             </>
           )}
-          <span className="milestone">M5</span>
+          <span className="milestone">M7</span>
         </div>
       </header>
 

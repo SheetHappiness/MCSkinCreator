@@ -117,15 +117,30 @@ test('paints, erases, undoes, redoes, and saves exact RGBA pixels', async () => 
     await window.getByRole('button', { name: 'Open PNG' }).click();
     const editorStatus = window.getByLabel('Editor status');
     const canvas = window.getByRole('img', { name: '2D skin canvas' });
+    const preview = window.getByRole('img', { name: '3D skin preview' });
     const zoomValue = window.getByTestId('zoom-value');
 
     await expect(canvas).toBeVisible();
+    await expect(preview).toBeVisible();
+    await expect(preview).toHaveAttribute('data-preview-ready', 'true');
+    await expect(preview).toHaveAttribute('data-skin-model', 'classic');
     await expect(editorStatus.getByText('input-skin.png')).toBeVisible();
     await expect(editorStatus.getByText('64×64')).toBeVisible();
     await expect(window.getByLabel('Texture coordinates')).toHaveText(
       'X: — Y: —',
     );
     await expect(zoomValue).not.toHaveText('100%');
+
+    await window.getByRole('button', { name: 'Slim' }).click();
+    await expect(preview).toHaveAttribute('data-skin-model', 'slim');
+    await expect(editorStatus.getByText('input-skin.png •')).toBeVisible();
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('edit-undo')?.click();
+    });
+    await expect(preview).toHaveAttribute('data-skin-model', 'classic');
+    await expect(
+      editorStatus.getByText('input-skin.png', { exact: true }),
+    ).toBeVisible();
 
     const initialZoom = await zoomValue.textContent();
     expect(initialZoom).not.toBeNull();
@@ -155,7 +170,16 @@ test('paints, erases, undoes, redoes, and saves exact RGBA pixels', async () => 
     await expect(window.getByLabel('Texture coordinates')).toHaveText(
       'X: 32 Y: 32',
     );
-    await window.mouse.click(center.x, center.y);
+    const previewRevisionBeforeStroke = await preview.getAttribute(
+      'data-document-revision',
+    );
+    expect(previewRevisionBeforeStroke).not.toBeNull();
+    await window.mouse.down();
+    await expect(preview).not.toHaveAttribute(
+      'data-document-revision',
+      previewRevisionBeforeStroke!,
+    );
+    await window.mouse.up();
     await expect(editorStatus.getByText('input-skin.png •')).toBeVisible();
 
     await application.evaluate(({ Menu }) => {

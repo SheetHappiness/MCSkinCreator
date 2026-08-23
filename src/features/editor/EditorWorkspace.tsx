@@ -31,6 +31,7 @@ import {
   type ViewportState,
 } from '../../engine/viewport';
 import { renderSkinCanvas } from '../../renderers/canvas2d';
+import { SkinPreviewPanel } from '../preview/SkinPreviewPanel';
 import { registerActiveEditorInteraction } from './activeEditorInteraction';
 import {
   setActiveEditorTool,
@@ -559,6 +560,8 @@ export function EditorWorkspace({
             onWheel={handleWheel}
           />
         </div>
+
+        <SkinPreviewPanel document={skinDocument} history={history} />
       </div>
 
       <footer className="editor-status-bar" aria-label="Editor status">
