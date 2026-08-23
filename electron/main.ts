@@ -1,5 +1,13 @@
-import { app, BrowserWindow } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  type MenuItemConstructorOptions,
+} from 'electron';
 import path from 'node:path';
+
+import { SKIN_FILE_CHANNELS, type FileCommand } from './fileContract';
+import { registerSkinFileIpc } from './skinFileIpc';
 
 const DEVELOPMENT_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 
@@ -36,7 +44,58 @@ async function createMainWindow(): Promise<void> {
   }
 }
 
+function sendFileCommand(command: FileCommand): void {
+  const targetWindow =
+    BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  targetWindow?.webContents.send(SKIN_FILE_CHANNELS.command, command);
+}
+
+function installApplicationMenu(): void {
+  const template: MenuItemConstructorOptions[] = [
+    ...(process.platform === 'darwin'
+      ? ([{ role: 'appMenu' }] satisfies MenuItemConstructorOptions[])
+      : []),
+    {
+      label: 'File',
+      submenu: [
+        {
+          id: 'file-open',
+          label: 'Open…',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => sendFileCommand('open'),
+        },
+        { type: 'separator' },
+        {
+          id: 'file-save',
+          label: 'Save',
+          accelerator: 'CmdOrCtrl+S',
+          click: () => sendFileCommand('save'),
+        },
+        {
+          id: 'file-save-as',
+          label: 'Save As…',
+          accelerator: 'CmdOrCtrl+Shift+S',
+          click: () => sendFileCommand('saveAs'),
+        },
+        ...(process.platform === 'darwin'
+          ? []
+          : ([
+              { type: 'separator' },
+              { role: 'quit' },
+            ] satisfies MenuItemConstructorOptions[])),
+      ],
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 app.whenReady().then(async () => {
+  registerSkinFileIpc();
+  installApplicationMenu();
   await createMainWindow();
 
   app.on('activate', () => {

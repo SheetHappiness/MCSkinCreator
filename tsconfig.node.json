@@ -19,6 +19,7 @@
     "vite.config.mts",
     "vitest.config.mts",
     "playwright.config.ts",
+    "electron/fileContract.ts",
     "tests/**/*.ts"
   ]
 }
