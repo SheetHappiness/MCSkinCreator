@@ -47,6 +47,8 @@ export interface CloneSkinDocumentOptions {
   readonly id?: string;
 }
 
+export type SkinDocumentMutationListener = () => void;
+
 const COLOR_CHANNELS = ['r', 'g', 'b', 'a'] as const;
 
 function assertDocumentId(id: string): void {
@@ -134,6 +136,7 @@ export class SkinDocument {
   private savedPixels: Uint8ClampedArray;
   private savedModel: SkinModel;
   private savedRevisionValue: number;
+  private readonly mutationListeners = new Set<SkinDocumentMutationListener>();
 
   private constructor(state: SkinDocumentState) {
     this.id = state.id;
@@ -191,6 +194,15 @@ export class SkinDocument {
     };
   }
 
+  /**
+   * Subscribes a renderer to canonical document mutations without routing the
+   * high-frequency pixel buffer through React state.
+   */
+  subscribeToMutations(listener: SkinDocumentMutationListener): () => void {
+    this.mutationListeners.add(listener);
+    return () => this.mutationListeners.delete(listener);
+  }
+
   /** Returns whether the canonical document content changed. */
   writePixel(x: number, y: number, color: RgbaColor): boolean {
     assertCoordinate(x, 'x');
@@ -213,6 +225,7 @@ export class SkinDocument {
     this.pixels[offset + 2] = color.b;
     this.pixels[offset + 3] = color.a;
     this.revisionValue += 1;
+    this.publishMutation();
 
     return true;
   }
@@ -227,6 +240,7 @@ export class SkinDocument {
 
     this.modelValue = model;
     this.revisionValue += 1;
+    this.publishMutation();
 
     return true;
   }
@@ -241,6 +255,12 @@ export class SkinDocument {
   /** Returns a defensive copy; mutating it cannot change this document. */
   copyPixelData(): Uint8ClampedArray {
     return new Uint8ClampedArray(this.pixels);
+  }
+
+  private publishMutation(): void {
+    for (const listener of this.mutationListeners) {
+      listener();
+    }
   }
 
   /**

@@ -99,6 +99,8 @@ export class DocumentSessionController {
       return false;
     }
 
+    this.state.session?.history.cancelActiveTransaction();
+
     this.publish({ ...this.state, error: undefined, isBusy: true });
     return true;
   }
@@ -163,6 +165,7 @@ export class DocumentSessionController {
       return false;
     }
 
+    this.state.session.history.cancelActiveTransaction();
     return this.state.session.history.undo();
   }
 
@@ -171,6 +174,7 @@ export class DocumentSessionController {
       return false;
     }
 
+    this.state.session.history.cancelActiveTransaction();
     return this.state.session.history.redo();
   }
 

@@ -271,6 +271,16 @@ export class DocumentHistory {
     return transaction;
   }
 
+  /** Cancels and rolls back the current transient edit, when one exists. */
+  cancelActiveTransaction(): boolean {
+    if (this.activeTransaction === undefined) {
+      return false;
+    }
+
+    this.activeTransaction.cancel();
+    return true;
+  }
+
   editPixel(x: number, y: number, color: RgbaColor): boolean {
     const transaction = this.beginTransaction();
     const changed = transaction.writePixel(x, y, color);
@@ -305,9 +315,7 @@ export class DocumentHistory {
   }
 
   clear(): void {
-    if (this.activeTransaction !== undefined) {
-      this.activeTransaction.cancel();
-    }
+    this.cancelActiveTransaction();
     const changed = this.undoStack.length > 0 || this.redoStack.length > 0;
     this.undoStack.length = 0;
     this.redoStack.length = 0;

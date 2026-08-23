@@ -11,6 +11,7 @@ import {
   DocumentSessionController,
   type DocumentSessionState,
 } from './documentSession';
+import { cancelActiveEditorInteraction } from '../editor/activeEditorInteraction';
 
 const unavailableNativeApi: NativeSkinFileApi = {
   async openSkinPng() {
@@ -76,6 +77,7 @@ documentSessionController.subscribe((state) => {
 nativeEdits.setCommandState({ canUndo: false, canRedo: false });
 
 function runFileCommand(command: FileCommand): void {
+  cancelActiveEditorInteraction();
   if (command === 'open') {
     void documentSessionController.open();
   } else if (command === 'save') {
@@ -88,6 +90,7 @@ function runFileCommand(command: FileCommand): void {
 nativeFiles.onFileCommand(runFileCommand);
 
 function runEditCommand(command: EditCommand): void {
+  cancelActiveEditorInteraction();
   if (command === 'undo') {
     documentSessionController.undo();
   } else {

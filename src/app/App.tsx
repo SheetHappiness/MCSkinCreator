@@ -34,7 +34,7 @@ export function App() {
               </button>
             </>
           )}
-          <span className="milestone">M4</span>
+          <span className="milestone">M5</span>
         </div>
       </header>
 
@@ -71,7 +71,9 @@ export function App() {
           <>
             <EditorWorkspace
               document={session.document}
+              history={session.history}
               displayName={session.displayName}
+              isDirty={session.document.isDirty}
             />
             {error === undefined ? null : (
               <p className="workspace-error" role="alert">

@@ -258,6 +258,23 @@ describe('SkinDocument saved-state foundation', () => {
     expect(document.revision).toBe(1);
   });
 
+  it('notifies narrow render subscribers only for effective mutations', () => {
+    const document = createBlank();
+    let notifications = 0;
+    const unsubscribe = document.subscribeToMutations(() => {
+      notifications += 1;
+    });
+
+    document.writePixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+    document.writePixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+    document.setModel('slim');
+    expect(notifications).toBe(2);
+
+    unsubscribe();
+    document.writePixel(2, 2, { r: 5, g: 6, b: 7, a: 8 });
+    expect(notifications).toBe(2);
+  });
+
   it('marks the exact current content as saved', () => {
     const document = createBlank();
 

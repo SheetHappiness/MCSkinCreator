@@ -8,7 +8,7 @@ import type {
   SaveSkinPngRequest,
   SaveSkinPngResult,
 } from '../../../electron/fileContract';
-import { SkinDocument } from '../../engine/document';
+import { SkinDocument, TRANSPARENT_RGBA } from '../../engine/document';
 import { encodeSkinPng } from '../../engine/png';
 import { DocumentSessionController } from './documentSession';
 
@@ -174,6 +174,23 @@ describe('document Open lifecycle', () => {
     expect(manager.getState().session).toBe(current);
     expect(manager.getState().canUndo).toBe(true);
     expect(manager.undo()).toBe(true);
+  });
+
+  it('rolls back an unfinished edit before attempting document replacement', async () => {
+    const nativeFiles = nativeFileMock();
+    const manager = controller(nativeFiles);
+    await openCurrentSession(manager, nativeFiles);
+    const current = manager.getState().session!;
+    const transaction = current.history.beginTransaction();
+    transaction.writePixel(2, 2, { r: 10, g: 20, b: 30, a: 40 });
+    nativeFiles.openSkinPng.mockResolvedValueOnce({ status: 'canceled' });
+
+    await manager.open();
+
+    expect(transaction.isActive).toBe(false);
+    expect(current.document.readPixel(2, 2)).toEqual(TRANSPARENT_RGBA);
+    expect(current.document.isDirty).toBe(false);
+    expect(current.history.canUndo).toBe(false);
   });
 
   it('preserves active history when replacement Open fails validation', async () => {

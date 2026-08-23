@@ -85,7 +85,7 @@ test('launches the production Electron application shell', async () => {
   }
 });
 
-test('opens and saves a 64x64 PNG through the native file lifecycle', async () => {
+test('paints, erases, undoes, redoes, and saves exact RGBA pixels', async () => {
   const temporaryDirectory = await mkdtemp(
     path.join(tmpdir(), 'minecraft-skin-editor-e2e-'),
   );
@@ -93,8 +93,9 @@ test('opens and saves a 64x64 PNG through the native file lifecycle', async () =
   const requestedOutputPath = path.join(temporaryDirectory, 'saved-copy');
   const outputPath = `${requestedOutputPath}.png`;
   const pixels = new Uint8Array(64 * 64 * 4);
+  const eraserPixelOffset = (40 * 64 + 40) * 4;
   pixels.set([12, 34, 56, 78], 0);
-  pixels.set([210, 220, 230, 255], pixels.length - 4);
+  pixels.set([210, 220, 230, 255], eraserPixelOffset);
   await writeFile(
     inputPath,
     encode({ width: 64, height: 64, data: pixels, channels: 4, depth: 8 }),
@@ -131,23 +132,51 @@ test('opens and saves a 64x64 PNG through the native file lifecycle', async () =
     await window.getByRole('button', { name: 'Zoom in' }).click();
     await expect(zoomValue).not.toHaveText(initialZoom!);
 
+    const pencil = window.getByRole('button', { name: 'Pencil' });
+    await expect(pencil).toHaveAttribute('aria-pressed', 'true');
+    await window.getByLabel('Paint color', { exact: true }).fill('#123456');
+    await window.getByLabel('Paint alpha').fill('128');
+    await expect(window.getByLabel('Selected RGBA color')).toHaveText(
+      '#123456 · A 128',
+    );
+
     const canvasBox = await canvas.boundingBox();
     expect(canvasBox).not.toBeNull();
     const zoom =
       Number.parseInt((await zoomValue.textContent()) ?? '', 10) / 100;
     const textureLeft = (canvasBox!.width - 64 * zoom) / 2;
     const textureTop = (canvasBox!.height - 64 * zoom) / 2;
-    await window.mouse.move(
-      canvasBox!.x + textureLeft + 32.5 * zoom,
-      canvasBox!.y + textureTop + 32.5 * zoom,
-    );
+    const texturePoint = (x: number, y: number) => ({
+      x: canvasBox!.x + textureLeft + (x + 0.5) * zoom,
+      y: canvasBox!.y + textureTop + (y + 0.5) * zoom,
+    });
+    const center = texturePoint(32, 32);
+    await window.mouse.move(center.x, center.y);
     await expect(window.getByLabel('Texture coordinates')).toHaveText(
       'X: 32 Y: 32',
     );
-    await window.mouse.click(
-      canvasBox!.x + textureLeft + 32.5 * zoom,
-      canvasBox!.y + textureTop + 32.5 * zoom,
-    );
+    await window.mouse.click(center.x, center.y);
+    await expect(editorStatus.getByText('input-skin.png •')).toBeVisible();
+
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('edit-undo')?.click();
+    });
+    await expect(
+      editorStatus.getByText('input-skin.png', { exact: true }),
+    ).toBeVisible();
+    await expect(editorStatus.getByText('input-skin.png •')).toHaveCount(0);
+
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('edit-redo')?.click();
+    });
+    await expect(editorStatus.getByText('input-skin.png •')).toBeVisible();
+
+    await window.keyboard.press('e');
+    await expect(
+      window.getByRole('button', { name: 'Eraser' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    const eraserTarget = texturePoint(40, 40);
+    await window.mouse.click(eraserTarget.x, eraserTarget.y);
 
     await window.getByRole('button', { name: 'Save As…' }).click();
     await expect(editorStatus.getByText('saved-copy.png')).toBeVisible();
@@ -155,6 +184,8 @@ test('opens and saves a 64x64 PNG through the native file lifecycle', async () =
     const saved = decode(await readFile(outputPath), { checkCrc: true });
     expect(saved.width).toBe(64);
     expect(saved.height).toBe(64);
+    pixels.set([0x12, 0x34, 0x56, 128], (32 * 64 + 32) * 4);
+    pixels.set([0, 0, 0, 0], eraserPixelOffset);
     expect(new Uint8Array(saved.data.buffer)).toEqual(pixels);
   } finally {
     await application.close();

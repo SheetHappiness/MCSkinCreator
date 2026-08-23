@@ -176,6 +176,17 @@ describe('DocumentHistory transaction semantics', () => {
     expect(history.canUndo).toBe(false);
   });
 
+  it('allows lifecycle commands to cancel the active transient transaction', () => {
+    const { document, history } = createEditor();
+    const transaction = history.beginTransaction();
+    transaction.writePixel(1, 2, RED);
+
+    expect(history.cancelActiveTransaction()).toBe(true);
+    expect(history.cancelActiveTransaction()).toBe(false);
+    expect(document.readPixel(1, 2)).toEqual(TRANSPARENT_RGBA);
+    expect(history.canUndo).toBe(false);
+  });
+
   it('rolls back valid writes when a later change is invalid', () => {
     const { document, history } = createEditor();
     const transaction = history.beginTransaction();
