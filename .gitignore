@@ -3,6 +3,9 @@ dist/
 coverage/
 test-results/
 playwright-report/
+automation/runs/
+automation/state.json
+__pycache__/
 
 .env
 .env.*
