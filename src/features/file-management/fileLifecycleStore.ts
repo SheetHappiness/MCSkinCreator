@@ -10,6 +10,7 @@ import type {
 } from '../../../electron/fileContract';
 import {
   DocumentSessionController,
+  type FileCommandOutcome,
   type DocumentSessionState,
 } from './documentSession';
 import { cancelActiveEditorInteraction } from '../editor/activeEditorInteraction';
@@ -109,6 +110,9 @@ documentSessionController.subscribe((state) => {
       ? {}
       : { displayName: state.session.displayName }),
     isDirty: state.session?.document.isDirty ?? false,
+    hasDirtyDocuments: state.sessions.some(
+      (session) => session.document.isDirty,
+    ),
     isBusy: state.isBusy,
   });
 });
@@ -117,6 +121,7 @@ nativeEdits.setCommandState({ canUndo: false, canRedo: false });
 nativeLifecycle.setDocumentState({
   hasDocument: false,
   isDirty: false,
+  hasDirtyDocuments: false,
   isBusy: false,
 });
 
@@ -128,6 +133,8 @@ function runFileCommand(command: FileCommand): void {
     void documentSessionController.open();
   } else if (command === 'save') {
     void documentSessionController.save();
+  } else if (command === 'saveAll') {
+    void documentSessionController.saveAll();
   } else {
     void documentSessionController.saveAs();
   }
@@ -159,4 +166,14 @@ export function useDocumentSessionState(): DocumentSessionState {
 
 export function useNewSkinDialogOpen(): boolean {
   return useStore(newSkinDialogStore, (state) => state.isOpen);
+}
+
+export function activateDocument(documentId: string): boolean {
+  cancelActiveEditorInteraction();
+  return documentSessionController.activateDocument(documentId);
+}
+
+export function closeDocument(documentId: string): Promise<FileCommandOutcome> {
+  cancelActiveEditorInteraction();
+  return documentSessionController.closeDocument(documentId);
 }

@@ -160,7 +160,7 @@ describe('document Open lifecycle', () => {
     expect(manager.getState().error?.code).toBe('read_failed');
   });
 
-  it('creates new history only after a replacement document opens successfully', async () => {
+  it('opens another document without sharing its history with the active one', async () => {
     const nativeFiles = nativeFileMock();
     const manager = controller(nativeFiles);
     await openCurrentSession(manager, nativeFiles);
@@ -176,10 +176,8 @@ describe('document Open lifecycle', () => {
     const current = manager.getState().session!;
     expect(current).not.toBe(previous);
     expect(current.history).not.toBe(previous.history);
-    expect(manager.getState()).toMatchObject({
-      canUndo: false,
-      canRedo: false,
-    });
+    expect(manager.getState().sessions).toHaveLength(2);
+    expect(manager.getState().canUndo).toBe(false);
     expect(manager.undo()).toBe(false);
     expect(current.document.readPixel(1, 1)).toEqual({
       r: 0,
@@ -188,7 +186,13 @@ describe('document Open lifecycle', () => {
       a: 0,
     });
 
-    previous.history.undo();
+    expect(previous.history.undo()).toBe(true);
+    expect(previous.document.readPixel(1, 1)).toEqual({
+      r: 0,
+      g: 0,
+      b: 0,
+      a: 0,
+    });
     expect(current.document.readPixel(1, 1)).toEqual({
       r: 0,
       g: 0,
@@ -197,7 +201,7 @@ describe('document Open lifecycle', () => {
     });
   });
 
-  it('preserves active history when replacement Open is canceled', async () => {
+  it('leaves the active history untouched when Open is canceled', async () => {
     const nativeFiles = nativeFileMock();
     const manager = controller(nativeFiles);
     await openCurrentSession(manager, nativeFiles);
@@ -212,7 +216,7 @@ describe('document Open lifecycle', () => {
     expect(manager.undo()).toBe(true);
   });
 
-  it('rolls back an unfinished edit before attempting document replacement', async () => {
+  it('rolls back an unfinished edit before attempting another Open', async () => {
     const nativeFiles = nativeFileMock();
     const manager = controller(nativeFiles);
     await openCurrentSession(manager, nativeFiles);
@@ -229,7 +233,7 @@ describe('document Open lifecycle', () => {
     expect(current.history.canUndo).toBe(false);
   });
 
-  it('preserves active history when replacement Open fails validation', async () => {
+  it('preserves active history when another Open fails validation', async () => {
     const nativeFiles = nativeFileMock();
     const manager = controller(nativeFiles);
     await openCurrentSession(manager, nativeFiles);
@@ -301,33 +305,27 @@ describe('document New lifecycle', () => {
     expect(session.history.getTimelineState().savedIndex).toBe(0);
   });
 
-  it.each(['cancel', 'discard', 'save'] as const)(
-    'uses the existing dirty guard for New with a %s decision',
-    async (decision) => {
-      const nativeFiles = nativeFileMock();
-      const confirm = vi.fn(async () => decision);
-      const manager = controller(nativeFiles, confirm);
-      await openCurrentSession(manager, nativeFiles);
-      const previous = manager.getState().session!;
-      previous.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+  it('adds a new session without guarding or mutating the current document', async () => {
+    const nativeFiles = nativeFileMock();
+    const confirm = vi.fn(async () => 'cancel' as const);
+    const manager = controller(nativeFiles, confirm);
+    await openCurrentSession(manager, nativeFiles);
+    const previous = manager.getState().session!;
+    previous.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
 
-      const outcome = await manager.newSkin('slim');
+    expect(await manager.newSkin('slim')).toEqual({ status: 'success' });
 
-      expect(confirm).toHaveBeenCalledWith('skin.png');
-      if (decision === 'cancel') {
-        expect(outcome).toEqual({ status: 'canceled' });
-        expect(manager.getState().session).toBe(previous);
-        expect(previous.document.isDirty).toBe(true);
-      } else {
-        expect(outcome).toEqual({ status: 'success' });
-        expect(manager.getState().session).not.toBe(previous);
-        expect(manager.getState().session?.document.model).toBe('slim');
-        expect(previous.document.isDirty).toBe(
-          decision === 'save' ? false : true,
-        );
-      }
-    },
-  );
+    expect(confirm).not.toHaveBeenCalled();
+    expect(manager.getState().sessions).toHaveLength(2);
+    expect(manager.getState().session?.document.model).toBe('slim');
+    expect(previous.document.isDirty).toBe(true);
+    expect(previous.document.readPixel(1, 1)).toEqual({
+      r: 1,
+      g: 2,
+      b: 3,
+      a: 4,
+    });
+  });
 });
 
 describe('document drag-and-drop lifecycle', () => {
@@ -409,7 +407,7 @@ describe('document drag-and-drop lifecycle', () => {
     expect(manager.getState().session).toBe(current);
   });
 
-  it('applies the same dirty guard to a dropped PNG', async () => {
+  it('opens a dropped PNG without guarding the still-open active document', async () => {
     const nativeFiles = nativeFileMock();
     const confirm = vi.fn(async () => 'cancel' as const);
     const manager = controller(nativeFiles, confirm);
@@ -422,9 +420,10 @@ describe('document drag-and-drop lifecycle', () => {
       readBytes: async () => validPng(),
     });
 
-    expect(outcome).toEqual({ status: 'canceled' });
-    expect(confirm).toHaveBeenCalledWith('skin.png');
-    expect(manager.getState().session).toBe(current);
+    expect(outcome).toEqual({ status: 'success' });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(manager.getState().session).not.toBe(current);
+    expect(manager.getState().sessions).toHaveLength(2);
     expect(current.document.isDirty).toBe(true);
   });
 });
@@ -570,28 +569,12 @@ describe('document Save As lifecycle', () => {
   });
 });
 
-describe('unsaved destructive lifecycle', () => {
-  it('keeps dirty A untouched when replacement Open is canceled', async () => {
+describe('multi-document lifecycle', () => {
+  it('opens B without prompting and keeps dirty A independent', async () => {
     const nativeFiles = nativeFileMock();
     const confirm = vi.fn(async () => 'cancel' as const);
     const manager = controller(nativeFiles, confirm);
     await openCurrentSession(manager, nativeFiles);
-    const current = manager.getState().session!;
-    current.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
-
-    expect(await manager.open()).toEqual({ status: 'canceled' });
-
-    expect(confirm).toHaveBeenCalledWith('skin.png');
-    expect(nativeFiles.openSkinPng).toHaveBeenCalledTimes(1);
-    expect(manager.getState().session).toBe(current);
-    expect(current.document.isDirty).toBe(true);
-    expect(manager.getState().canUndo).toBe(true);
-  });
-
-  it("opens B after Don't Save without mutating A first", async () => {
-    const nativeFiles = nativeFileMock();
-    const manager = controller(nativeFiles, async () => 'discard');
-    await openCurrentSession(manager, nativeFiles);
     const previous = manager.getState().session!;
     previous.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
     nativeFiles.openSkinPng.mockResolvedValueOnce(
@@ -600,47 +583,191 @@ describe('unsaved destructive lifecycle', () => {
 
     expect(await manager.open()).toEqual({ status: 'success' });
 
-    expect(manager.getState().session?.displayName).toBe('b.png');
+    const active = manager.getState().session!;
+    expect(confirm).not.toHaveBeenCalled();
+    expect(manager.getState().sessions).toHaveLength(2);
+    expect(active.displayName).toBe('b.png');
+    expect(active.document.isDirty).toBe(false);
     expect(previous.document.isDirty).toBe(true);
+    expect(previous.document.readPixel(1, 1)).toEqual({
+      r: 1,
+      g: 2,
+      b: 3,
+      a: 4,
+    });
   });
 
-  it('saves dirty A before atomically opening B', async () => {
+  it('switches active documents without crossing history or pixels', async () => {
     const nativeFiles = nativeFileMock();
-    const manager = controller(nativeFiles, async () => 'save');
+    const manager = controller(nativeFiles);
     await openCurrentSession(manager, nativeFiles);
-    const previous = manager.getState().session!;
-    previous.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+    const first = manager.getState().session!;
+    first.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
     nativeFiles.openSkinPng.mockResolvedValueOnce(
       openedFile('C:\\skins\\b.png', 'b.png'),
     );
+    await manager.open();
+    const second = manager.getState().session!;
+    second.history.editPixel(2, 2, { r: 5, g: 6, b: 7, a: 8 });
 
-    expect(await manager.open()).toEqual({ status: 'success' });
+    expect(manager.activateDocument(first.document.id)).toBe(true);
+    expect(manager.getState().session).toBe(first);
+    expect(manager.getState().canUndo).toBe(true);
+    expect(manager.undo()).toBe(true);
+    expect(first.document.readPixel(1, 1)).toEqual(TRANSPARENT_RGBA);
+    expect(second.document.readPixel(2, 2)).toEqual({
+      r: 5,
+      g: 6,
+      b: 7,
+      a: 8,
+    });
 
-    expect(nativeFiles.saveSkinPng).toHaveBeenCalledTimes(1);
-    expect(previous.document.isDirty).toBe(false);
-    expect(manager.getState().session?.displayName).toBe('b.png');
+    expect(manager.activateDocument(second.document.id)).toBe(true);
+    expect(manager.getState().session).toBe(second);
+    expect(manager.getState().canUndo).toBe(true);
+    expect(second.document.readPixel(1, 1)).toEqual(TRANSPARENT_RGBA);
   });
 
-  it('aborts replacement and preserves dirty A when Save fails', async () => {
+  it('reactivates an already open path without replacing its dirty document', async () => {
+    const nativeFiles = nativeFileMock();
+    const manager = controller(nativeFiles);
+    await openCurrentSession(manager, nativeFiles);
+    const first = manager.getState().session!;
+    first.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+    await manager.newSkin('slim');
+
+    nativeFiles.openSkinPng.mockResolvedValueOnce(openedFile());
+    expect(await manager.open()).toEqual({ status: 'success' });
+
+    expect(manager.getState().session).toBe(first);
+    expect(manager.getState().sessions).toHaveLength(2);
+    expect(first.document.isDirty).toBe(true);
+    expect(first.document.readPixel(1, 1)).toEqual({
+      r: 1,
+      g: 2,
+      b: 3,
+      a: 4,
+    });
+  });
+
+  it("closes a dirty tab using the shared Save, Don't Save, Cancel guard", async () => {
+    const nativeFiles = nativeFileMock();
+    const confirm = vi.fn(async () => 'cancel' as const);
+    const manager = controller(nativeFiles, confirm);
+    await openCurrentSession(manager, nativeFiles);
+    const session = manager.getState().session!;
+    session.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+
+    expect(await manager.closeDocument()).toEqual({ status: 'canceled' });
+    expect(confirm).toHaveBeenCalledWith('skin.png');
+    expect(manager.getState().sessions).toHaveLength(1);
+    expect(manager.getState().session).toBe(session);
+    expect(session.document.isDirty).toBe(true);
+  });
+
+  it('removes a discarded active tab and activates its neighboring document', async () => {
+    const nativeFiles = nativeFileMock();
+    const confirm = vi.fn(async () => 'discard' as const);
+    const manager = controller(nativeFiles, confirm);
+    await openCurrentSession(manager, nativeFiles);
+    const first = manager.getState().session!;
+    await manager.newSkin('slim');
+    const second = manager.getState().session!;
+    second.history.editPixel(2, 2, { r: 5, g: 6, b: 7, a: 8 });
+
+    expect(await manager.closeDocument(second.document.id)).toEqual({
+      status: 'success',
+    });
+    expect(manager.getState().sessions).toEqual([first]);
+    expect(manager.getState().session).toBe(first);
+    expect(confirm).toHaveBeenCalledWith('Untitled.png');
+  });
+
+  it('saves a dirty tab before closing it when Save is selected', async () => {
     const nativeFiles = nativeFileMock();
     const manager = controller(nativeFiles, async () => 'save');
     await openCurrentSession(manager, nativeFiles);
-    const current = manager.getState().session!;
-    current.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+    const session = manager.getState().session!;
+    session.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+
+    expect(await manager.closeDocument()).toEqual({ status: 'success' });
+    expect(nativeFiles.saveSkinPng).toHaveBeenCalledWith({
+      filePath: 'C:\\skins\\skin.png',
+      bytes: expect.any(Uint8Array),
+    });
+    expect(manager.getState().sessions).toHaveLength(0);
+  });
+
+  it('saves all dirty sessions in tab order', async () => {
+    const nativeFiles = nativeFileMock();
+    const manager = controller(nativeFiles);
+    await openCurrentSession(manager, nativeFiles);
+    const first = manager.getState().session!;
+    first.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+    await manager.newSkin('slim');
+    const second = manager.getState().session!;
+    second.history.editPixel(2, 2, { r: 5, g: 6, b: 7, a: 8 });
+    nativeFiles.saveSkinPngAs.mockResolvedValueOnce({
+      status: 'success',
+      filePath: 'C:\\skins\\second.png',
+      displayName: 'second.png',
+    });
+
+    expect(await manager.saveAll()).toEqual({
+      status: 'success',
+      savedDocumentIds: [first.document.id, second.document.id],
+    });
+    expect(nativeFiles.saveSkinPng).toHaveBeenCalledTimes(1);
+    expect(nativeFiles.saveSkinPngAs).toHaveBeenCalledTimes(1);
+    expect(first.document.isDirty).toBe(false);
+    expect(second.document.isDirty).toBe(false);
+  });
+
+  it('reports partial Save All completion when an untitled Save As is canceled', async () => {
+    const nativeFiles = nativeFileMock();
+    const manager = controller(nativeFiles);
+    await openCurrentSession(manager, nativeFiles);
+    const first = manager.getState().session!;
+    first.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+    await manager.newSkin('slim');
+    const second = manager.getState().session!;
+    second.history.editPixel(2, 2, { r: 5, g: 6, b: 7, a: 8 });
+    nativeFiles.saveSkinPngAs.mockResolvedValueOnce({ status: 'canceled' });
+
+    expect(await manager.saveAll()).toEqual({
+      status: 'canceled',
+      savedDocumentIds: [first.document.id],
+    });
+    expect(first.document.isDirty).toBe(false);
+    expect(second.document.isDirty).toBe(true);
+    expect(manager.getState().isBusy).toBe(false);
+  });
+
+  it('reports partial Save All completion when a later write fails', async () => {
+    const nativeFiles = nativeFileMock();
+    const manager = controller(nativeFiles);
+    await openCurrentSession(manager, nativeFiles);
+    const first = manager.getState().session!;
+    first.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+    nativeFiles.openSkinPng.mockResolvedValueOnce(
+      openedFile('C:\\skins\\b.png', 'b.png'),
+    );
+    await manager.open();
+    const second = manager.getState().session!;
+    second.history.editPixel(2, 2, { r: 5, g: 6, b: 7, a: 8 });
+    nativeFiles.saveSkinPng.mockResolvedValueOnce({ status: 'success' });
     nativeFiles.saveSkinPng.mockResolvedValueOnce({
       status: 'error',
       error: { code: 'write_failed', message: 'Disk is unavailable.' },
     });
-    nativeFiles.openSkinPng.mockResolvedValueOnce(
-      openedFile('C:\\skins\\b.png', 'b.png'),
-    );
 
-    expect((await manager.open()).status).toBe('error');
-
-    expect(nativeFiles.openSkinPng).toHaveBeenCalledTimes(1);
-    expect(manager.getState().session).toBe(current);
-    expect(current.document.isDirty).toBe(true);
-    expect(manager.getState().error?.message).toBe('Disk is unavailable.');
+    expect(await manager.saveAll()).toEqual({
+      status: 'error',
+      error: { code: 'write_failed', message: 'Disk is unavailable.' },
+      savedDocumentIds: [first.document.id],
+    });
+    expect(first.document.isDirty).toBe(false);
+    expect(second.document.isDirty).toBe(true);
   });
 
   it('aborts when dirty untitled Save requires a canceled Save As', async () => {
@@ -701,5 +828,31 @@ describe('window-close preparation', () => {
     expect(await manager.prepareToClose()).toBe(false);
     expect(session.document.isDirty).toBe(true);
     expect(manager.getState().error?.message).toBe('Write failed.');
+  });
+
+  it('checks multiple dirty sessions in tab order and stops after cancellation', async () => {
+    const nativeFiles = nativeFileMock();
+    const confirm = vi
+      .fn<ConfirmUnsavedChanges>()
+      .mockResolvedValueOnce('save')
+      .mockResolvedValueOnce('cancel');
+    const manager = controller(nativeFiles, confirm);
+    await openCurrentSession(manager, nativeFiles);
+    const first = manager.getState().session!;
+    first.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+    nativeFiles.openSkinPng.mockResolvedValueOnce(
+      openedFile('C:\\skins\\b.png', 'b.png'),
+    );
+    await manager.open();
+    const second = manager.getState().session!;
+    second.history.editPixel(2, 2, { r: 5, g: 6, b: 7, a: 8 });
+
+    expect(await manager.prepareToClose()).toBe(false);
+    expect(confirm).toHaveBeenNthCalledWith(1, 'skin.png');
+    expect(confirm).toHaveBeenNthCalledWith(2, 'b.png');
+    expect(nativeFiles.saveSkinPng).toHaveBeenCalledTimes(1);
+    expect(first.document.isDirty).toBe(false);
+    expect(second.document.isDirty).toBe(true);
+    expect(manager.getState().isBusy).toBe(false);
   });
 });

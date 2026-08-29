@@ -21,6 +21,7 @@ import {
   type UnsavedChangesRequest,
 } from './fileContract';
 import { registerSkinFileIpc } from './skinFileIpc';
+import { registerSkinLibraryIpc } from './skinLibraryIpc';
 import { WindowCloseCoordinator } from './windowCloseCoordinator';
 
 const DEVELOPMENT_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
@@ -60,7 +61,7 @@ async function createMainWindow(): Promise<void> {
   windowLifecycleStates.set(webContentsId, lifecycleState);
 
   mainWindow.on('close', (event) => {
-    if (lifecycleState.presentation?.isDirty !== true) {
+    if (lifecycleState.presentation?.hasDirtyDocuments !== true) {
       return;
     }
 
@@ -134,11 +135,15 @@ function setDocumentPresentationState(
   const menu = Menu.getApplicationMenu();
   const save = menu?.getMenuItemById('file-save');
   const saveAs = menu?.getMenuItemById('file-save-as');
+  const saveAll = menu?.getMenuItemById('file-save-all');
   if (save != null) {
     save.enabled = state.hasDocument && state.isDirty && !state.isBusy;
   }
   if (saveAs != null) {
     saveAs.enabled = state.hasDocument && !state.isBusy;
+  }
+  if (saveAll != null) {
+    saveAll.enabled = state.hasDirtyDocuments && !state.isBusy;
   }
 
   const documentName = state.hasDocument ? state.displayName : undefined;
@@ -171,6 +176,7 @@ function isDocumentPresentationState(
   return (
     typeof state.hasDocument === 'boolean' &&
     typeof state.isDirty === 'boolean' &&
+    typeof state.hasDirtyDocuments === 'boolean' &&
     typeof state.isBusy === 'boolean' &&
     (state.displayName === undefined ||
       (typeof state.displayName === 'string' &&
@@ -309,6 +315,13 @@ function installApplicationMenu(): void {
           enabled: false,
           click: () => sendFileCommand('saveAs'),
         },
+        {
+          id: 'file-save-all',
+          label: 'Save All',
+          accelerator: 'CmdOrCtrl+Alt+S',
+          enabled: false,
+          click: () => sendFileCommand('saveAll'),
+        },
         ...(process.platform === 'darwin'
           ? []
           : ([
@@ -350,6 +363,7 @@ function installApplicationMenu(): void {
 
 app.whenReady().then(async () => {
   registerSkinFileIpc();
+  registerSkinLibraryIpc();
   registerAppLifecycleIpc();
   installApplicationMenu();
   ipcMain.on(SKIN_EDIT_CHANNELS.state, (_event, value: unknown) => {

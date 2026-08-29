@@ -1,6 +1,13 @@
 import { _electron as electron, expect, test } from '@playwright/test';
 import { decode, encode } from 'fast-png';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -12,6 +19,7 @@ test('launches the production Electron application shell', async () => {
     const rendererBoundary = await window.evaluate(() => {
       const browserGlobal = globalThis as typeof globalThis & {
         skinFiles?: Record<string, unknown>;
+        skinLibrary?: Record<string, unknown>;
         skinEdits?: Record<string, unknown>;
         appLifecycle?: Record<string, unknown>;
       };
@@ -19,6 +27,7 @@ test('launches the production Electron application shell', async () => {
         hasCommonJsRequire: 'require' in globalThis,
         hasElectronBridge: 'electron' in globalThis,
         fileApiMethods: Object.keys(browserGlobal.skinFiles ?? {}).sort(),
+        libraryApiMethods: Object.keys(browserGlobal.skinLibrary ?? {}).sort(),
         editApiMethods: Object.keys(browserGlobal.skinEdits ?? {}).sort(),
         lifecycleApiMethods: Object.keys(
           browserGlobal.appLifecycle ?? {},
@@ -26,7 +35,13 @@ test('launches the production Electron application shell', async () => {
       };
     });
     const fileMenu = await application.evaluate(({ Menu }) =>
-      ['file-new', 'file-open', 'file-save', 'file-save-as'].map((id) => {
+      [
+        'file-new',
+        'file-open',
+        'file-save',
+        'file-save-as',
+        'file-save-all',
+      ].map((id) => {
         const item = Menu.getApplicationMenu()?.getMenuItemById(id);
         return {
           id,
@@ -65,6 +80,14 @@ test('launches the production Electron application shell', async () => {
         'saveSkinPng',
         'saveSkinPngAs',
       ],
+      libraryApiMethods: [
+        'copySkinToLibrary',
+        'deleteLibrarySkin',
+        'duplicateLibrarySkin',
+        'listLibrarySkins',
+        'openLibrarySkin',
+        'renameLibrarySkin',
+      ],
       editApiMethods: ['onEditCommand', 'setCommandState'],
       lifecycleApiMethods: [
         'confirmUnsavedChanges',
@@ -96,6 +119,12 @@ test('launches the production Electron application shell', async () => {
         id: 'file-save-as',
         label: 'Save As…',
         accelerator: 'CmdOrCtrl+Shift+S',
+        enabled: false,
+      },
+      {
+        id: 'file-save-all',
+        label: 'Save All',
+        accelerator: 'CmdOrCtrl+Alt+S',
         enabled: false,
       },
     ]);
@@ -877,6 +906,165 @@ test('applies Lighten to one exact picked 3D texel', async () => {
   }
 });
 
+test('keeps multiple documents independent and manages the local library', async () => {
+  const temporaryDirectory = await mkdtemp(
+    path.join(tmpdir(), 'minecraft-skin-editor-library-e2e-'),
+  );
+  const libraryDirectory = path.join(temporaryDirectory, 'library');
+  const firstPath = path.join(temporaryDirectory, 'first.png');
+  const secondSaveAsPath = path.join(temporaryDirectory, 'second-saved');
+  const libraryEntryPath = path.join(libraryDirectory, 'library-one.png');
+  const firstPixels = new Uint8Array(64 * 64 * 4);
+  firstPixels.set([11, 22, 33, 255], 0);
+  const libraryPixels = new Uint8Array(64 * 64 * 4);
+  libraryPixels.set([44, 55, 66, 255], 0);
+  await mkdir(libraryDirectory, { recursive: true });
+  await writeFile(
+    firstPath,
+    encode({
+      width: 64,
+      height: 64,
+      data: firstPixels,
+      channels: 4,
+      depth: 8,
+    }),
+  );
+  await writeFile(
+    libraryEntryPath,
+    encode({
+      width: 64,
+      height: 64,
+      data: libraryPixels,
+      channels: 4,
+      depth: 8,
+    }),
+  );
+
+  const application = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      MINECRAFT_SKIN_EDITOR_E2E: '1',
+      MINECRAFT_SKIN_EDITOR_E2E_OPEN_PATH: firstPath,
+      MINECRAFT_SKIN_EDITOR_E2E_SAVE_AS_PATH: secondSaveAsPath,
+      MINECRAFT_SKIN_EDITOR_E2E_LIBRARY_DIR: libraryDirectory,
+    },
+  });
+
+  try {
+    const window = await application.firstWindow();
+    await expect(
+      window.getByRole('button', { name: 'Open library-one.png' }),
+    ).toBeVisible();
+
+    await window.getByRole('button', { name: 'Open PNG' }).click();
+    const firstTab = window.getByRole('tab', { name: /first\.png/ });
+    await expect(firstTab).toBeVisible();
+    await window.getByRole('button', { name: 'Slim', exact: true }).click();
+
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('file-new')?.click();
+    });
+    const newSkinDialog = window.getByRole('dialog', { name: 'New Skin' });
+    await expect(newSkinDialog).toBeVisible();
+    await newSkinDialog
+      .getByRole('button', { name: 'Create', exact: true })
+      .click();
+    const secondTab = window.getByRole('tab', { name: /Untitled\.png/ });
+    await expect(secondTab).toBeVisible();
+
+    const canvas = window.getByRole('img', { name: '2D skin canvas' });
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox).not.toBeNull();
+    await window.mouse.click(
+      canvasBox!.x + canvasBox!.width / 2,
+      canvasBox!.y + canvasBox!.height / 2,
+    );
+    await expect(secondTab).toContainText('•');
+
+    await firstTab.click();
+    await expect(
+      window.getByRole('img', { name: '3D skin preview' }),
+    ).toHaveAttribute('data-skin-model', 'slim');
+    await expect(window.locator('.skin-preview-canvas')).toHaveCount(1);
+    await secondTab.click();
+    await expect(
+      window.getByRole('img', { name: '3D skin preview' }),
+    ).toHaveAttribute('data-skin-model', 'classic');
+    await expect(window.locator('.skin-preview-canvas')).toHaveCount(1);
+
+    await window.getByRole('button', { name: 'Save All', exact: true }).click();
+    await expect(firstTab).not.toContainText('•');
+    const savedSecondTab = window.getByRole('tab', {
+      name: /second-saved\.png/,
+    });
+    await expect(savedSecondTab).not.toContainText('•');
+    const savedSecond = decode(await readFile(`${secondSaveAsPath}.png`), {
+      checkCrc: true,
+    });
+    expect(savedSecond.width).toBe(64);
+    expect(savedSecond.height).toBe(64);
+
+    const invalidLibraryPath = await window.evaluate(async () => {
+      const browser = globalThis as typeof globalThis & {
+        skinLibrary?: {
+          openLibrarySkin(filePath: string): Promise<unknown>;
+        };
+      };
+      return browser.skinLibrary?.openLibrarySkin('../outside.png');
+    });
+    expect(invalidLibraryPath).toEqual({
+      status: 'error',
+      error: {
+        code: 'read_failed',
+        message:
+          'The selected library entry is not a valid PNG in the application library.',
+      },
+    });
+
+    await window
+      .getByRole('button', { name: 'Open library-one.png' })
+      .dragTo(window.locator('.application-shell'));
+    const libraryTab = window.getByRole('tab', { name: /library-one\.png/ });
+    await expect(libraryTab).toBeVisible();
+    await window
+      .getByRole('button', { name: 'Rename library-one.png' })
+      .click();
+    await window
+      .getByLabel('New name for library-one.png')
+      .fill('library-renamed.png');
+    await window
+      .getByRole('button', { name: 'Save rename for library-one.png' })
+      .click();
+    await expect(
+      window.getByRole('button', { name: 'Open library-renamed.png' }),
+    ).toBeVisible();
+
+    await window
+      .getByRole('button', { name: 'Duplicate library-renamed.png' })
+      .click();
+    await expect(
+      window.getByRole('button', { name: 'Open library-renamed Copy.png' }),
+    ).toBeVisible();
+
+    await window
+      .getByRole('button', { name: 'Delete library-renamed.png' })
+      .click();
+    await window
+      .getByRole('button', { name: 'Confirm delete library-renamed.png' })
+      .click();
+    await expect(
+      window.getByRole('button', { name: 'Open library-renamed.png' }),
+    ).toHaveCount(0);
+    expect(await readdir(libraryDirectory)).toEqual([
+      'library-renamed Copy.png',
+    ]);
+  } finally {
+    await application.close();
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
 test('keeps the 2D-first layout coherent across supported desktop sizes', async () => {
   const temporaryDirectory = await mkdtemp(
     path.join(tmpdir(), 'minecraft-skin-editor-layout-e2e-'),
@@ -981,7 +1169,7 @@ test('keeps the 2D-first layout coherent across supported desktop sizes', async 
   }
 });
 
-test('guards dirty Open and window close without duplicate native dialogs', async () => {
+test('guards quit with multiple dirty documents without duplicate native dialogs', async () => {
   const temporaryDirectory = await mkdtemp(
     path.join(tmpdir(), 'minecraft-skin-editor-guard-e2e-'),
   );
@@ -1009,9 +1197,14 @@ test('guards dirty Open and window close without duplicate native dialogs', asyn
     await expect(window).toHaveTitle('guarded.png • — Minecraft Skin Editor');
 
     await application.evaluate(({ Menu }) => {
-      Menu.getApplicationMenu()?.getMenuItemById('file-open')?.click();
+      Menu.getApplicationMenu()?.getMenuItemById('file-new')?.click();
     });
-    await expect(window).toHaveTitle('guarded.png • — Minecraft Skin Editor');
+    const dialog = window.getByRole('dialog', { name: 'New Skin' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+    await window.getByRole('button', { name: 'Slim', exact: true }).click();
+    await expect(window).toHaveTitle('Untitled.png • — Minecraft Skin Editor');
+    await expect(window.getByRole('tab')).toHaveCount(2);
     await expect(
       window.getByRole('button', { name: 'Slim', exact: true }),
     ).toHaveAttribute('aria-pressed', 'true');
@@ -1021,7 +1214,8 @@ test('guards dirty Open and window close without duplicate native dialogs', asyn
       BrowserWindow.getAllWindows()[0]?.close();
     });
     await expect(window.locator('body')).toBeVisible();
-    await expect(window).toHaveTitle('guarded.png • — Minecraft Skin Editor');
+    await expect(window).toHaveTitle('Untitled.png • — Minecraft Skin Editor');
+    await expect(window.getByRole('tab')).toHaveCount(2);
   } finally {
     await application.evaluate(({ app }) => app.exit(0)).catch(() => undefined);
     await rm(temporaryDirectory, { recursive: true, force: true });

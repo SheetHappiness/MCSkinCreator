@@ -117,12 +117,18 @@ intentionally deferred beyond the core editor.
 - Validate dimensions and format
 - Save
 - Save As
+- Multiple open document tabs with independent history
+- Save All across dirty tabs
+- Offline local skin library: list, open, rename, duplicate, delete, and copy
+  the active document
 - Ctrl+N for New Skin
 - Track unsaved changes
 - Warn before destructive close when appropriate
 
 New and drag-and-drop workflows are documented in
 [`docs/NEW_SKIN_AND_DROP.md`](docs/NEW_SKIN_AND_DROP.md).
+Multi-document and local-library behavior is documented in
+[`docs/LOCAL_LIBRARY_MULTI_DOCUMENT.md`](docs/LOCAL_LIBRARY_MULTI_DOCUMENT.md).
 
 Example unsaved-state treatment:
 

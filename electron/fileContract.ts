@@ -5,6 +5,15 @@ export const SKIN_FILE_CHANNELS = {
   command: 'skin-file:command',
 } as const;
 
+export const SKIN_LIBRARY_CHANNELS = {
+  list: 'skin-library:list',
+  open: 'skin-library:open',
+  rename: 'skin-library:rename',
+  duplicate: 'skin-library:duplicate',
+  delete: 'skin-library:delete',
+  copyIn: 'skin-library:copy-in',
+} as const;
+
 export const APP_LIFECYCLE_CHANNELS = {
   confirmUnsaved: 'app-lifecycle:confirm-unsaved',
   documentState: 'app-lifecycle:document-state',
@@ -17,7 +26,7 @@ export const SKIN_EDIT_CHANNELS = {
   state: 'skin-edit:state',
 } as const;
 
-export type FileCommand = 'new' | 'open' | 'save' | 'saveAs';
+export type FileCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAll';
 export type EditCommand = 'undo' | 'redo';
 
 export interface EditCommandState {
@@ -72,6 +81,51 @@ export interface NativeSkinFileApi {
   onFileCommand(listener: (command: FileCommand) => void): () => void;
 }
 
+export interface SkinLibraryEntry {
+  readonly filePath: string;
+  readonly displayName: string;
+  readonly byteLength: number;
+}
+
+export type SkinLibraryListResult =
+  | {
+      readonly status: 'success';
+      readonly rootDisplayName: string;
+      readonly entries: readonly SkinLibraryEntry[];
+    }
+  | { readonly status: 'error'; readonly error: NativeFileError };
+
+export type SkinLibraryMutationResult =
+  | { readonly status: 'success'; readonly entry: SkinLibraryEntry }
+  | { readonly status: 'error'; readonly error: NativeFileError };
+
+export interface RenameSkinLibraryRequest {
+  readonly filePath: string;
+  readonly displayName: string;
+}
+
+export interface CopySkinToLibraryRequest {
+  readonly suggestedName: string;
+  readonly bytes: Uint8Array;
+}
+
+export type SkinLibraryActionResult =
+  | { readonly status: 'success' }
+  | { readonly status: 'error'; readonly error: NativeFileError };
+
+export interface NativeSkinLibraryApi {
+  listLibrarySkins(): Promise<SkinLibraryListResult>;
+  openLibrarySkin(filePath: string): Promise<OpenSkinPngResult>;
+  renameLibrarySkin(
+    request: RenameSkinLibraryRequest,
+  ): Promise<SkinLibraryMutationResult>;
+  duplicateLibrarySkin(filePath: string): Promise<SkinLibraryMutationResult>;
+  deleteLibrarySkin(filePath: string): Promise<SkinLibraryActionResult>;
+  copySkinToLibrary(
+    request: CopySkinToLibraryRequest,
+  ): Promise<SkinLibraryMutationResult>;
+}
+
 export interface NativeSkinEditApi {
   setCommandState(state: EditCommandState): void;
   onEditCommand(listener: (command: EditCommand) => void): () => void;
@@ -87,6 +141,7 @@ export interface DocumentPresentationState {
   readonly hasDocument: boolean;
   readonly displayName?: string;
   readonly isDirty: boolean;
+  readonly hasDirtyDocuments: boolean;
   readonly isBusy: boolean;
 }
 

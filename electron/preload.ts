@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 import type {
   CloseRequestResponse,
+  CopySkinToLibraryRequest,
   DocumentPresentationState,
   EditCommand,
   EditCommandState,
@@ -9,11 +10,16 @@ import type {
   NativeAppLifecycleApi,
   NativeSkinEditApi,
   NativeSkinFileApi,
+  NativeSkinLibraryApi,
   OpenSkinPngResult,
+  RenameSkinLibraryRequest,
   SaveSkinPngAsRequest,
   SaveSkinPngAsResult,
   SaveSkinPngRequest,
   SaveSkinPngResult,
+  SkinLibraryActionResult,
+  SkinLibraryListResult,
+  SkinLibraryMutationResult,
   UnsavedChangesDecision,
   UnsavedChangesRequest,
 } from './fileContract';
@@ -30,6 +36,15 @@ const SKIN_FILE_CHANNELS = {
 const SKIN_EDIT_CHANNELS = {
   command: 'skin-edit:command',
   state: 'skin-edit:state',
+} as const;
+
+const SKIN_LIBRARY_CHANNELS = {
+  list: 'skin-library:list',
+  open: 'skin-library:open',
+  rename: 'skin-library:rename',
+  duplicate: 'skin-library:duplicate',
+  delete: 'skin-library:delete',
+  copyIn: 'skin-library:copy-in',
 } as const;
 
 const APP_LIFECYCLE_CHANNELS = {
@@ -77,7 +92,8 @@ const skinFileApi: NativeSkinFileApi = {
         command === 'new' ||
         command === 'open' ||
         command === 'save' ||
-        command === 'saveAs'
+        command === 'saveAs' ||
+        command === 'saveAll'
       ) {
         listener(command);
       }
@@ -87,6 +103,50 @@ const skinFileApi: NativeSkinFileApi = {
     return () => {
       ipcRenderer.removeListener(SKIN_FILE_CHANNELS.command, handler);
     };
+  },
+};
+
+const skinLibraryApi: NativeSkinLibraryApi = {
+  async listLibrarySkins(): Promise<SkinLibraryListResult> {
+    return ipcRenderer.invoke(
+      SKIN_LIBRARY_CHANNELS.list,
+    ) as Promise<SkinLibraryListResult>;
+  },
+  async openLibrarySkin(filePath: string): Promise<OpenSkinPngResult> {
+    return ipcRenderer.invoke(
+      SKIN_LIBRARY_CHANNELS.open,
+      filePath,
+    ) as Promise<OpenSkinPngResult>;
+  },
+  async renameLibrarySkin(
+    request: RenameSkinLibraryRequest,
+  ): Promise<SkinLibraryMutationResult> {
+    return ipcRenderer.invoke(
+      SKIN_LIBRARY_CHANNELS.rename,
+      request,
+    ) as Promise<SkinLibraryMutationResult>;
+  },
+  async duplicateLibrarySkin(
+    filePath: string,
+  ): Promise<SkinLibraryMutationResult> {
+    return ipcRenderer.invoke(
+      SKIN_LIBRARY_CHANNELS.duplicate,
+      filePath,
+    ) as Promise<SkinLibraryMutationResult>;
+  },
+  async deleteLibrarySkin(filePath: string): Promise<SkinLibraryActionResult> {
+    return ipcRenderer.invoke(
+      SKIN_LIBRARY_CHANNELS.delete,
+      filePath,
+    ) as Promise<SkinLibraryActionResult>;
+  },
+  async copySkinToLibrary(
+    request: CopySkinToLibraryRequest,
+  ): Promise<SkinLibraryMutationResult> {
+    return ipcRenderer.invoke(
+      SKIN_LIBRARY_CHANNELS.copyIn,
+      request,
+    ) as Promise<SkinLibraryMutationResult>;
   },
 };
 
@@ -140,5 +200,6 @@ const appLifecycleApi: NativeAppLifecycleApi = {
 };
 
 contextBridge.exposeInMainWorld('skinFiles', skinFileApi);
+contextBridge.exposeInMainWorld('skinLibrary', skinLibraryApi);
 contextBridge.exposeInMainWorld('skinEdits', skinEditApi);
 contextBridge.exposeInMainWorld('appLifecycle', appLifecycleApi);
