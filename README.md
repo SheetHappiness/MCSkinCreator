@@ -106,8 +106,18 @@ The foundational editor roadmap is complete and includes:
 - live Classic/Slim 3D preview;
 - lifecycle, accessibility, and desktop UX hardening.
 
-Advanced artist, palette, AI, browser, cloud, and community features remain
-intentionally deferred beyond the core editor.
+Broader advanced-artist, palette-intelligence, AI, browser, cloud, and
+community features remain intentionally deferred beyond the core editor. The
+completed Roadmap 2 slice adds the deterministic artist features that are in
+scope for this release:
+direct 3D editing, body-part and layer visibility, primary/secondary colors,
+advanced color controls, swatches, advanced paint tools, contextual tool
+options, history timeline, multi-document local workflows, and pop-out
+preview utilities.
+
+The formal MCSkin3D comparison, compatibility boundary, and explicit
+exclusions are recorded in
+[`docs/MCSKIN3D_PARITY.md`](docs/MCSKIN3D_PARITY.md).
 
 ## File operations
 
@@ -199,7 +209,9 @@ The UI must allow users to:
 - edit them intentionally;
 - understand which layer is active.
 
-Future versions may provide body-part isolation and more advanced structural editing.
+The current editor provides body-part visibility and isolation. Selection-
+based structural editing and other broader transformations remain outside the
+current parity slice.
 
 ---
 
@@ -667,9 +679,11 @@ This is a structural reference, not a final visual design.
 
 ---
 
-# Explicit v0.1 Non-Goals
+# Initial v0.1 Non-Goals
 
-Do **not** implement these during the initial editor phase:
+This section records the original narrow v0.1 boundary. Roadmap 2 later
+implemented direct 3D painting and advanced deterministic editing while
+keeping the following broader product areas out of scope:
 
 - AI generation;
 - AI chat;
@@ -689,7 +703,6 @@ Do **not** implement these during the initial editor phase:
 - plugins;
 - marketplace;
 - animation;
-- direct 3D painting;
 - custom model geometry;
 - 128×128 support;
 - mobile;
@@ -716,22 +729,21 @@ Save
 
 ---
 
-## Stage 2 — Advanced Artist Tools
+## Stage 2 — Further Artist Tools
 
-Potential features:
+The defined Roadmap 2 parity slice is complete. The ideas below are possible
+future work beyond that slice and require separate scope:
 
 - selections;
-- body-part isolation;
 - symmetry;
 - mirroring;
 - advanced fill;
 - replace color;
-- reusable palettes;
 - palette ramps;
 - custom workspaces;
 - reference panel;
-- advanced history;
-- direct interaction between 2D and 3D views.
+- selection-based transformations;
+- richer brush and shape workflows.
 
 Examples:
 
