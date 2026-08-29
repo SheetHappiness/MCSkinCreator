@@ -13,12 +13,16 @@ import {
   useLocalSkinLibrary,
 } from './localSkinLibrary';
 
+interface LibraryPanelProps {
+  readonly onCollapse?: () => void;
+}
+
 function formatByteLength(byteLength: number): string {
   if (byteLength < 1024) return `${byteLength} B`;
   return `${Math.ceil(byteLength / 1024)} KB`;
 }
 
-export function LibraryPanel() {
+export function LibraryPanel({ onCollapse }: LibraryPanelProps = {}) {
   const { entries, rootDisplayName, isBusy, error } = useLocalSkinLibrary();
   const { session } = useDocumentSessionState();
   const [renamingPath, setRenamingPath] = useState<string | undefined>();
@@ -59,21 +63,38 @@ export function LibraryPanel() {
   };
 
   return (
-    <aside className="library-panel" aria-label="Local skin library">
+    <aside
+      id="local-library-panel"
+      className="library-panel"
+      aria-label="Local skin library"
+    >
       <header className="library-panel__header">
         <div>
           <h2>Local Library</h2>
           <span>{rootDisplayName}</span>
         </div>
-        <button
-          type="button"
-          aria-label="Refresh local library"
-          title="Refresh local library"
-          disabled={isBusy}
-          onClick={() => void refreshLibrary()}
-        >
-          ↻
-        </button>
+        <div className="library-panel__header-actions">
+          {onCollapse === undefined ? null : (
+            <button
+              type="button"
+              className="library-panel__collapse-button"
+              aria-label="Collapse Local Library"
+              title="Collapse Local Library"
+              onClick={onCollapse}
+            >
+              ‹
+            </button>
+          )}
+          <button
+            type="button"
+            aria-label="Refresh local library"
+            title="Refresh local library"
+            disabled={isBusy}
+            onClick={() => void refreshLibrary()}
+          >
+            ↻
+          </button>
+        </div>
       </header>
 
       {error === undefined ? null : (

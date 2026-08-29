@@ -29,12 +29,22 @@ import {
   screenToTexture,
   zoomViewportAroundPoint,
   type Point,
-  type Size,
   type TextureCoordinate,
   type ViewportState,
 } from '../../engine/viewport';
 import { renderSkinCanvas } from '../../renderers/canvas2d';
 import { SkinPreviewPanel } from '../preview/SkinPreviewPanel';
+import {
+  COLLAPSED_PANEL_SIZE,
+  CollapsedWorkspacePanel,
+  DEFAULT_WORKSPACE_LAYOUT,
+  TOOL_RAIL_WIDTH,
+  WORKSPACE_SPLITTER_SIZE,
+  WorkspaceSplitter,
+  clampWorkspaceDimension,
+  getRightPanelWidthBounds,
+  useElementSize,
+} from '../workspace';
 import {
   cancelActiveEditorInteraction,
   registerActiveEditorInteraction,
@@ -65,6 +75,13 @@ interface EditorWorkspaceProps {
   readonly history: DocumentHistory;
   readonly displayName: string;
   readonly isDirty: boolean;
+  readonly rightPanelWidth?: number;
+  readonly rightPanelCollapsed?: boolean;
+  readonly rightInspectorHeight?: number;
+  readonly onRightPanelWidthChange?: (value: number) => void;
+  readonly onRightPanelCollapse?: () => void;
+  readonly onRightPanelRestore?: () => void;
+  readonly onRightInspectorHeightChange?: (value: number) => void;
 }
 
 interface PanGesture {
@@ -94,39 +111,8 @@ const TOOLS: readonly ToolDefinition[] = [
   { tool: 'stamp', label: 'Stamp', shortcut: 'T' },
 ];
 
-const EMPTY_SIZE: Size = { width: 0, height: 0 };
 const INITIAL_VIEWPORT: ViewportState = { zoom: 1, offsetX: 0, offsetY: 0 };
 const WHEEL_ZOOM_SENSITIVITY = 0.0015;
-
-function getElementSize(element: HTMLElement): Size {
-  const bounds = element.getBoundingClientRect();
-  return { width: bounds.width, height: bounds.height };
-}
-
-function useElementSize(elementRef: React.RefObject<HTMLElement | null>): Size {
-  const [size, setSize] = useState<Size>(EMPTY_SIZE);
-
-  useLayoutEffect(() => {
-    const element = elementRef.current;
-    if (element === null) return;
-
-    const updateSize = () => {
-      const next = getElementSize(element);
-      setSize((current) =>
-        current.width === next.width && current.height === next.height
-          ? current
-          : next,
-      );
-    };
-
-    updateSize();
-    const observer = new ResizeObserver(updateSize);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [elementRef]);
-
-  return size;
-}
 
 function normalizeWheelDelta(event: ReactWheelEvent): number {
   if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * 16;
@@ -240,8 +226,16 @@ export function EditorWorkspace({
   history,
   displayName,
   isDirty,
+  rightPanelWidth = DEFAULT_WORKSPACE_LAYOUT.rightPanelWidth,
+  rightPanelCollapsed = DEFAULT_WORKSPACE_LAYOUT.rightCollapsed,
+  rightInspectorHeight = DEFAULT_WORKSPACE_LAYOUT.rightInspectorHeight,
+  onRightPanelWidthChange,
+  onRightPanelCollapse,
+  onRightPanelRestore,
+  onRightInspectorHeightChange,
 }: EditorWorkspaceProps) {
   const stageRef = useRef<HTMLDivElement>(null);
+  const editorMainRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderFrameRef = useRef<number | undefined>(undefined);
   const panGestureRef = useRef<PanGesture | undefined>(undefined);
@@ -252,6 +246,7 @@ export function EditorWorkspace({
   >(undefined);
   const fittedDocumentIdRef = useRef<string | undefined>(undefined);
   const size = useElementSize(stageRef);
+  const editorMainSize = useElementSize(editorMainRef);
   const activeTool = useActiveEditorTool();
   const activeColorSlot = useActiveColorSlot();
   const primaryColor = usePrimaryEditorColor();
@@ -266,6 +261,10 @@ export function EditorWorkspace({
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [temporaryEyedropper, setTemporaryEyedropper] = useState(false);
+  const rightPanelBounds = getRightPanelWidthBounds(editorMainSize.width);
+  const effectiveRightPanelWidth = rightPanelCollapsed
+    ? COLLAPSED_PANEL_SIZE
+    : clampWorkspaceDimension(rightPanelWidth, rightPanelBounds);
 
   const fitToView = useCallback(() => {
     if (size.width <= 0 || size.height <= 0) return;
@@ -614,7 +613,13 @@ export function EditorWorkspace({
 
   return (
     <section className="editor-workspace" aria-label="2D editor viewport">
-      <div className="editor-main">
+      <div
+        ref={editorMainRef}
+        className="editor-main"
+        style={{
+          gridTemplateColumns: `${TOOL_RAIL_WIDTH}px minmax(0, 1fr) ${WORKSPACE_SPLITTER_SIZE}px ${effectiveRightPanelWidth}px`,
+        }}
+      >
         <aside className="tool-rail" aria-label="Painting tools">
           <div className="tool-list">
             {TOOLS.map(({ tool, label, shortcut }) => (
@@ -686,11 +691,36 @@ export function EditorWorkspace({
           />
         </div>
 
-        <SkinPreviewPanel
-          document={skinDocument}
-          history={history}
-          displayName={displayName}
+        <WorkspaceSplitter
+          axis="vertical"
+          value={effectiveRightPanelWidth}
+          bounds={rightPanelBounds}
+          deltaSign={-1}
+          label="Resize 3D Preview"
+          controls="right-preview-panel"
+          disabled={rightPanelCollapsed}
+          testId="workspace-splitter-right"
+          onChange={(value) => onRightPanelWidthChange?.(value)}
         />
+
+        <div
+          className={`workspace-side-slot workspace-side-slot--right${rightPanelCollapsed ? ' is-collapsed' : ''}`}
+        >
+          <SkinPreviewPanel
+            document={skinDocument}
+            history={history}
+            displayName={displayName}
+            rightInspectorHeight={rightInspectorHeight}
+            onInspectorHeightChange={onRightInspectorHeightChange}
+            onCollapse={onRightPanelCollapse}
+          />
+          <CollapsedWorkspacePanel
+            side="right"
+            panelLabel="3D Preview"
+            shortLabel="3D"
+            onRestore={() => onRightPanelRestore?.()}
+          />
+        </div>
       </div>
 
       <footer className="editor-status-bar" aria-label="Editor status">

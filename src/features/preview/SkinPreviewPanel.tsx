@@ -46,11 +46,22 @@ import {
   publishPopoutPreview,
   savePreviewSnapshot,
 } from './popoutPreviewController';
+import {
+  DEFAULT_WORKSPACE_LAYOUT,
+  WORKSPACE_SPLITTER_SIZE,
+  WorkspaceSplitter,
+  clampWorkspaceDimension,
+  getRightInspectorHeightBounds,
+  useElementSize,
+} from '../workspace';
 
 interface SkinPreviewPanelProps {
   readonly document: SkinDocument;
   readonly history: DocumentHistory;
   readonly displayName: string;
+  readonly rightInspectorHeight?: number;
+  readonly onInspectorHeightChange?: (value: number) => void;
+  readonly onCollapse?: () => void;
 }
 
 const MODEL_OPTIONS: readonly {
@@ -111,9 +122,17 @@ export function SkinPreviewPanel({
   document,
   history,
   displayName,
+  rightInspectorHeight,
+  onInspectorHeightChange,
+  onCollapse,
 }: SkinPreviewPanelProps) {
+  const panelRef = useRef<HTMLElement>(null);
   const mountRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<SkinPreviewRenderer | undefined>(undefined);
+  const panelSize = useElementSize(panelRef);
+  const [localInspectorHeight, setLocalInspectorHeight] = useState(
+    DEFAULT_WORKSPACE_LAYOUT.rightInspectorHeight,
+  );
   const activeTool = useActiveEditorTool();
   const activeColorSlot = useActiveColorSlot();
   const primaryColor = usePrimaryEditorColor();
@@ -142,6 +161,12 @@ export function SkinPreviewPanel({
   const [hoveredPick, setHoveredPick] = useState<SkinPickResult | undefined>();
   const [temporaryEyedropper, setTemporaryEyedropper] = useState(false);
   const [previewNotice, setPreviewNotice] = useState<string | undefined>();
+  const preferredInspectorHeight = rightInspectorHeight ?? localInspectorHeight;
+  const inspectorBounds = getRightInspectorHeightBounds(panelSize.height);
+  const effectiveInspectorHeight = clampWorkspaceDimension(
+    preferredInspectorHeight,
+    inspectorBounds,
+  );
 
   useEffect(() => {
     activeToolRef.current = activeTool;
@@ -349,141 +374,188 @@ export function SkinPreviewPanel({
     }
   };
 
+  const handleInspectorHeightChange = (value: number) => {
+    if (onInspectorHeightChange === undefined) {
+      setLocalInspectorHeight(value);
+      return;
+    }
+    onInspectorHeightChange(value);
+  };
+
   return (
-    <aside className="skin-preview-panel" aria-label="3D preview panel">
-      <header className="skin-preview-toolbar">
-        <span className="skin-preview-title">3D Preview</span>
-        <div className="model-selector" role="group" aria-label="Skin model">
-          <span className="model-selector__label">Model</span>
-          {MODEL_OPTIONS.map(({ model, label }) => (
+    <aside
+      ref={panelRef}
+      id="right-preview-panel"
+      className="skin-preview-panel"
+      style={{
+        gridTemplateRows: `${effectiveInspectorHeight}px ${WORKSPACE_SPLITTER_SIZE}px minmax(0, 1fr)`,
+      }}
+      aria-label="3D preview panel"
+    >
+      <div className="skin-preview-inspector">
+        <header className="skin-preview-toolbar">
+          <div className="skin-preview-toolbar__leading">
+            <span className="skin-preview-title">3D Preview</span>
+            {onCollapse === undefined ? null : (
+              <button
+                type="button"
+                className="skin-preview-collapse-button"
+                aria-label="Collapse 3D Preview"
+                title="Collapse 3D Preview"
+                onClick={onCollapse}
+              >
+                ›
+              </button>
+            )}
+          </div>
+          <div className="model-selector" role="group" aria-label="Skin model">
+            <span className="model-selector__label">Model</span>
+            {MODEL_OPTIONS.map(({ model, label }) => (
+              <button
+                key={model}
+                type="button"
+                aria-pressed={document.model === model}
+                title={`${label} arm geometry`}
+                onClick={() => {
+                  cancelActiveEditorInteraction();
+                  changeSkinModel(document, history, model);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </header>
+        <section
+          className="skin-preview-visibility-panel"
+          aria-label="Visibility and focus"
+        >
+          <div
+            className="skin-preview-visibility-row"
+            role="group"
+            aria-label="Layers"
+          >
+            <span className="skin-preview-visibility-label">Layers</span>
             <button
-              key={model}
               type="button"
-              aria-pressed={document.model === model}
-              title={`${label} arm geometry`}
-              onClick={() => {
-                cancelActiveEditorInteraction();
-                changeSkinModel(document, history, model);
-              }}
+              aria-label="Show base layer"
+              aria-pressed={viewState.layers.base}
+              onClick={() =>
+                updateViewState((state) =>
+                  setLayerVisibility(state, 'base', !state.layers.base),
+                )
+              }
             >
-              {label}
+              Base
             </button>
-          ))}
-        </div>
-      </header>
-      <section
-        className="skin-preview-visibility-panel"
-        aria-label="Visibility and focus"
+            <button
+              type="button"
+              aria-label="Show outer layer"
+              aria-pressed={viewState.layers.outer}
+              onClick={() =>
+                updateViewState((state) =>
+                  setLayerVisibility(state, 'outer', !state.layers.outer),
+                )
+              }
+            >
+              Outer
+            </button>
+            <button
+              type="button"
+              aria-label="Restore all visibility"
+              onClick={() => updateViewState(() => restoreAllVisibility())}
+            >
+              All
+            </button>
+          </div>
+          <div
+            className="skin-preview-visibility-row skin-preview-body-parts"
+            role="group"
+            aria-label="Body parts"
+          >
+            <span className="skin-preview-visibility-label">Parts</span>
+            {BODY_PART_OPTIONS.map((bodyPart) => {
+              const label = BODY_PART_LABELS[bodyPart];
+              const visible = viewState.bodyParts[bodyPart];
+              return (
+                <div className="skin-preview-body-part" key={bodyPart}>
+                  <button
+                    type="button"
+                    aria-label={`${visible ? 'Hide' : 'Show'} ${label}`}
+                    aria-pressed={visible}
+                    onClick={() =>
+                      updateViewState((state) =>
+                        setBodyPartVisibility(state, bodyPart, !visible),
+                      )
+                    }
+                  >
+                    {label}
+                  </button>
+                  <button
+                    type="button"
+                    className="skin-preview-isolate-button"
+                    aria-label={`Isolate ${label}`}
+                    aria-pressed={viewState.isolatedBodyPart === bodyPart}
+                    onClick={() =>
+                      updateViewState((state) =>
+                        isolateBodyPart(state, bodyPart),
+                      )
+                    }
+                  >
+                    Isolate
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+        <ToolOptionsInspector activeTool={activeTool} />
+        <HistoryTimeline history={history} />
+      </div>
+      <WorkspaceSplitter
+        axis="horizontal"
+        value={effectiveInspectorHeight}
+        bounds={inspectorBounds}
+        label="Resize 3D controls and preview"
+        controls="skin-preview-viewport"
+        testId="workspace-splitter-inspector"
+        onChange={handleInspectorHeightChange}
+      />
+      <div
+        id="skin-preview-viewport"
+        className={`skin-preview-viewport${previewNotice === undefined ? '' : ' has-notice'}`}
       >
-        <div
-          className="skin-preview-visibility-row"
-          role="group"
-          aria-label="Layers"
-        >
-          <span className="skin-preview-visibility-label">Layers</span>
-          <button
-            type="button"
-            aria-label="Show base layer"
-            aria-pressed={viewState.layers.base}
-            onClick={() =>
-              updateViewState((state) =>
-                setLayerVisibility(state, 'base', !state.layers.base),
-              )
-            }
+        <div ref={mountRef} className="skin-preview-mount" />
+        {previewNotice === undefined ? null : (
+          <p className="skin-preview-notice" role="status">
+            {previewNotice}
+          </p>
+        )}
+        <footer className="skin-preview-controls">
+          <output
+            className="skin-preview-pick-readout"
+            aria-label="3D pick"
+            data-testid="preview-pick"
           >
-            Base
-          </button>
-          <button
-            type="button"
-            aria-label="Show outer layer"
-            aria-pressed={viewState.layers.outer}
-            onClick={() =>
-              updateViewState((state) =>
-                setLayerVisibility(state, 'outer', !state.layers.outer),
-              )
-            }
-          >
-            Outer
-          </button>
-          <button
-            type="button"
-            aria-label="Restore all visibility"
-            onClick={() => updateViewState(() => restoreAllVisibility())}
-          >
-            All
-          </button>
-        </div>
-        <div
-          className="skin-preview-visibility-row skin-preview-body-parts"
-          role="group"
-          aria-label="Body parts"
-        >
-          <span className="skin-preview-visibility-label">Parts</span>
-          {BODY_PART_OPTIONS.map((bodyPart) => {
-            const label = BODY_PART_LABELS[bodyPart];
-            const visible = viewState.bodyParts[bodyPart];
-            return (
-              <div className="skin-preview-body-part" key={bodyPart}>
-                <button
-                  type="button"
-                  aria-label={`${visible ? 'Hide' : 'Show'} ${label}`}
-                  aria-pressed={visible}
-                  onClick={() =>
-                    updateViewState((state) =>
-                      setBodyPartVisibility(state, bodyPart, !visible),
-                    )
-                  }
-                >
-                  {label}
-                </button>
-                <button
-                  type="button"
-                  className="skin-preview-isolate-button"
-                  aria-label={`Isolate ${label}`}
-                  aria-pressed={viewState.isolatedBodyPart === bodyPart}
-                  onClick={() =>
-                    updateViewState((state) => isolateBodyPart(state, bodyPart))
-                  }
-                >
-                  Isolate
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-      <ToolOptionsInspector activeTool={activeTool} />
-      <HistoryTimeline history={history} />
-      <div ref={mountRef} className="skin-preview-mount" />
-      {previewNotice === undefined ? null : (
-        <p className="skin-preview-notice" role="status">
-          {previewNotice}
-        </p>
-      )}
-      <footer className="skin-preview-controls">
-        <output
-          className="skin-preview-pick-readout"
-          aria-label="3D pick"
-          data-testid="preview-pick"
-        >
-          {formatPick(hoveredPick)}
-        </output>
-        <div className="skin-preview-actions">
-          <button type="button" onClick={() => void handleOpenPopout()}>
-            Pop Out
-          </button>
-          <button type="button" onClick={() => void handleSnapshot()}>
-            Snapshot
-          </button>
-          <button
-            type="button"
-            title="Reset 3D camera"
-            onClick={() => rendererRef.current?.resetView()}
-          >
-            Reset view
-          </button>
-        </div>
-      </footer>
+            {formatPick(hoveredPick)}
+          </output>
+          <div className="skin-preview-actions">
+            <button type="button" onClick={() => void handleOpenPopout()}>
+              Pop Out
+            </button>
+            <button type="button" onClick={() => void handleSnapshot()}>
+              Snapshot
+            </button>
+            <button
+              type="button"
+              title="Reset 3D camera"
+              onClick={() => rendererRef.current?.resetView()}
+            >
+              Reset view
+            </button>
+          </div>
+        </footer>
+      </div>
     </aside>
   );
 }

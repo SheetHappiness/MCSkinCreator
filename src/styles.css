@@ -54,9 +54,134 @@ body {
 
 .application-body {
   display: grid;
-  grid-template-columns: clamp(172px, 18vw, 224px) minmax(0, 1fr);
+  grid-template-columns: 200px 8px minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
+}
+
+.workspace-side-slot {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace-side-slot > .library-panel,
+.workspace-side-slot > .skin-preview-panel,
+.workspace-side-slot > .workspace-collapsed-panel {
+  position: absolute;
+  inset: 0;
+}
+
+.workspace-side-slot.is-collapsed > .library-panel,
+.workspace-side-slot.is-collapsed > .skin-preview-panel {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.workspace-side-slot:not(.is-collapsed) > .workspace-collapsed-panel {
+  display: none;
+}
+
+.workspace-splitter {
+  position: relative;
+  z-index: 3;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  touch-action: none;
+  user-select: none;
+}
+
+.workspace-splitter::before {
+  position: absolute;
+  background: var(--color-separator);
+  content: '';
+}
+
+.workspace-splitter:hover::before,
+.workspace-splitter:focus-visible::before {
+  background: var(--color-focus);
+}
+
+.workspace-splitter--vertical {
+  cursor: col-resize;
+}
+
+.workspace-splitter--vertical::before {
+  inset: 0 3px;
+}
+
+.workspace-splitter--horizontal {
+  cursor: row-resize;
+}
+
+.workspace-splitter--horizontal::before {
+  inset: 3px 0;
+}
+
+.workspace-splitter[aria-disabled='true'] {
+  cursor: default;
+  pointer-events: none;
+}
+
+.workspace-collapsed-panel {
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 3px;
+  color: var(--color-text-muted);
+  background: #24262a;
+}
+
+.workspace-collapsed-panel--right {
+  background: var(--color-preview);
+}
+
+.workspace-collapsed-panel button {
+  flex: 0 0 25px;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  color: #cfd1d4;
+  background: var(--color-raised);
+  font: 17px/21px inherit;
+}
+
+.workspace-collapsed-panel button:hover {
+  border-color: #62666d;
+  color: #e2e5e9;
+  background: #383b40;
+}
+
+.workspace-collapsed-panel > span {
+  color: var(--color-text-muted);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  writing-mode: vertical-rl;
+}
+
+body.is-workspace-resizing,
+body.is-workspace-resizing * {
+  user-select: none !important;
+}
+
+body.is-workspace-resizing-vertical,
+body.is-workspace-resizing-vertical * {
+  cursor: col-resize !important;
+}
+
+body.is-workspace-resizing-horizontal,
+body.is-workspace-resizing-horizontal * {
+  cursor: row-resize !important;
 }
 
 .workspace-column {
@@ -149,7 +274,6 @@ body {
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
   min-height: 0;
-  border-right: 1px solid var(--color-separator);
   background: #24262a;
 }
 
@@ -175,6 +299,17 @@ body {
   white-space: nowrap;
 }
 
+.library-panel__header > div:first-child {
+  min-width: 0;
+}
+
+.library-panel__header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+}
+
 .library-panel__header span {
   display: block;
   margin-top: 3px;
@@ -185,7 +320,7 @@ body {
   white-space: nowrap;
 }
 
-.library-panel__header > button,
+.library-panel__header-actions button,
 .library-panel__footer button,
 .library-entry__actions button,
 .library-entry__rename button {
@@ -198,7 +333,7 @@ body {
   font: 9px/19px inherit;
 }
 
-.library-panel__header > button {
+.library-panel__header-actions button {
   flex: 0 0 24px;
   padding: 0;
   font-size: 14px;
@@ -376,7 +511,9 @@ body {
 .tool-options-inspector select:focus-visible,
 .history-timeline button:focus-visible,
 .new-skin-dialog button:focus-visible,
-.skin-canvas:focus-visible {
+.skin-canvas:focus-visible,
+.workspace-splitter:focus-visible,
+.workspace-collapsed-panel button:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: -2px;
 }
@@ -622,7 +759,7 @@ body {
 
 .editor-main {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) clamp(244px, 27vw, 420px);
+  grid-template-columns: 48px minmax(0, 1fr) 8px clamp(244px, 27vw, 420px);
   min-width: 0;
   min-height: 0;
 }
@@ -1205,11 +1342,31 @@ body {
 
 .skin-preview-panel {
   display: grid;
-  grid-template-rows: 34px auto auto auto minmax(0, 1fr) auto 30px;
+  grid-template-rows: 260px 8px minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
-  border-left: 1px solid var(--color-separator);
   background: var(--color-preview);
+}
+
+.skin-preview-inspector {
+  display: grid;
+  grid-template-rows: auto auto auto auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--color-preview);
+}
+
+.skin-preview-viewport {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) 30px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.skin-preview-viewport.has-notice {
+  grid-template-rows: minmax(0, 1fr) auto 30px;
 }
 
 .skin-preview-toolbar,
@@ -1218,6 +1375,13 @@ body {
   align-items: center;
   padding: 0 8px;
   background: #292b2f;
+}
+
+.skin-preview-toolbar__leading {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
 }
 
 .skin-preview-toolbar {
@@ -1235,6 +1399,13 @@ body {
   text-transform: uppercase;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.skin-preview-collapse-button {
+  flex: 0 0 21px;
+  width: 21px;
+  padding: 0 !important;
+  font-size: 15px !important;
 }
 
 .skin-preview-visibility-panel {

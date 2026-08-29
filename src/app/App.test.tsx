@@ -1,7 +1,20 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import {
+  DEFAULT_WORKSPACE_LAYOUT,
+  WORKSPACE_LAYOUT_STORAGE_KEY,
+} from '../features/workspace';
 import { App } from './App';
+
+beforeEach(() => {
+  localStorage.removeItem(WORKSPACE_LAYOUT_STORAGE_KEY);
+});
+
+afterEach(() => {
+  cleanup();
+  localStorage.removeItem(WORKSPACE_LAYOUT_STORAGE_KEY);
+});
 
 describe('App', () => {
   it('renders the neutral core-editor shell with a useful empty state', () => {
@@ -17,5 +30,65 @@ describe('App', () => {
     expect(screen.getByLabelText('Application status')).toHaveTextContent(
       'No document open',
     );
+  });
+
+  it('keeps panel collapse, resize, persistence, and reset outside document state', () => {
+    render(<App />);
+
+    const applicationBody = document.querySelector('.application-body');
+    expect(applicationBody).toHaveStyle(
+      'grid-template-columns: 200px 8px minmax(0, 1fr)',
+    );
+
+    fireEvent.pointerDown(screen.getByTestId('workspace-splitter-left'), {
+      button: 0,
+      pointerId: 1,
+      clientX: 200,
+    });
+    fireEvent.pointerMove(screen.getByTestId('workspace-splitter-left'), {
+      pointerId: 1,
+      clientX: 248,
+    });
+    fireEvent.pointerUp(screen.getByTestId('workspace-splitter-left'), {
+      pointerId: 1,
+    });
+    expect(applicationBody).toHaveStyle(
+      'grid-template-columns: 248px 8px minmax(0, 1fr)',
+    );
+    expect(
+      JSON.parse(localStorage.getItem(WORKSPACE_LAYOUT_STORAGE_KEY)!),
+    ).toEqual({
+      version: 1,
+      ...DEFAULT_WORKSPACE_LAYOUT,
+      leftPanelWidth: 248,
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Collapse Local Library' }),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Expand Local Library' }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('workspace-splitter-left')).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Layout' }));
+    expect(
+      screen.getByRole('button', { name: 'Collapse Local Library' }),
+    ).toBeInTheDocument();
+    expect(
+      document.querySelector('.workspace-side-slot--left'),
+    ).not.toHaveClass('is-collapsed');
+    expect(applicationBody).toHaveStyle(
+      'grid-template-columns: 200px 8px minmax(0, 1fr)',
+    );
+    expect(
+      JSON.parse(localStorage.getItem(WORKSPACE_LAYOUT_STORAGE_KEY)!),
+    ).toEqual({
+      version: 1,
+      ...DEFAULT_WORKSPACE_LAYOUT,
+    });
   });
 });

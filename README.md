@@ -399,6 +399,11 @@ Initial application:
 
 The editor should remain fully usable offline.
 
+The resizable artist workspace stores validated local panel preferences and
+derives clamped effective sizes for temporarily smaller windows. Its defaults,
+collapse behavior, and view-state boundary are documented in
+[`docs/WORKSPACE_LAYOUT.md`](docs/WORKSPACE_LAYOUT.md).
+
 ---
 
 ## Testing

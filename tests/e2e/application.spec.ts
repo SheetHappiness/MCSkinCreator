@@ -1420,6 +1420,167 @@ test('keeps the 2D-first layout coherent across supported desktop sizes', async 
   }
 });
 
+test('resizes, collapses, restores, persists, and resets the artist workspace', async () => {
+  const temporaryDirectory = await mkdtemp(
+    path.join(tmpdir(), 'minecraft-skin-editor-workspace-e2e-'),
+  );
+  const inputPath = path.join(temporaryDirectory, 'workspace.png');
+  await writeFile(
+    inputPath,
+    encode({
+      width: 64,
+      height: 64,
+      data: new Uint8Array(64 * 64 * 4),
+      channels: 4,
+      depth: 8,
+    }),
+  );
+  const application = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      MINECRAFT_SKIN_EDITOR_E2E: '1',
+      MINECRAFT_SKIN_EDITOR_E2E_OPEN_PATH: inputPath,
+    },
+  });
+
+  try {
+    const window = await application.firstWindow();
+    const resetLayout = window.getByRole('button', { name: 'Reset Layout' });
+    await expect(resetLayout).toBeVisible({ timeout: 15_000 });
+    await resetLayout.click();
+    await window.getByRole('button', { name: 'Open PNG' }).click();
+
+    const preview = window.getByRole('img', { name: '3D skin preview' });
+    const previewCanvas = window.locator('.skin-preview-canvas');
+    const canvas = window.getByRole('img', { name: '2D skin canvas' });
+    const leftSlot = window.locator('.workspace-side-slot--left');
+    const rightSlot = window.locator('.workspace-side-slot--right');
+    const leftSplitter = window.getByTestId('workspace-splitter-left');
+    const rightSplitter = window.getByTestId('workspace-splitter-right');
+    const inspectorSplitter = window.getByTestId(
+      'workspace-splitter-inspector',
+    );
+
+    await expect(canvas).toBeVisible();
+    await expect(preview).toHaveAttribute('data-document-revision', '0');
+    await expect(leftSplitter).toHaveAttribute('aria-valuenow', '200');
+    await expect(rightSplitter).toHaveAttribute('aria-valuenow', '300');
+    await expect(inspectorSplitter).toHaveAttribute('aria-valuenow', '260');
+
+    const leftBefore = await leftSlot.boundingBox();
+    expect(leftBefore).not.toBeNull();
+    const leftHandle = await leftSplitter.boundingBox();
+    expect(leftHandle).not.toBeNull();
+    await window.mouse.move(
+      leftHandle!.x + leftHandle!.width / 2,
+      leftHandle!.y + leftHandle!.height / 2,
+    );
+    await window.mouse.down();
+    await window.mouse.move(
+      leftHandle!.x + leftHandle!.width / 2 + 40,
+      leftHandle!.y + leftHandle!.height / 2,
+    );
+    await window.mouse.up();
+    await expect(leftSplitter).toHaveAttribute('aria-valuenow', '240');
+    const leftAfter = await leftSlot.boundingBox();
+    expect(leftAfter?.width).toBeGreaterThan(leftBefore!.width);
+
+    const rightBefore = await rightSlot.boundingBox();
+    expect(rightBefore).not.toBeNull();
+    const rightHandle = await rightSplitter.boundingBox();
+    expect(rightHandle).not.toBeNull();
+    await window.mouse.move(
+      rightHandle!.x + rightHandle!.width / 2,
+      rightHandle!.y + rightHandle!.height / 2,
+    );
+    await window.mouse.down();
+    await window.mouse.move(
+      rightHandle!.x + rightHandle!.width / 2 - 32,
+      rightHandle!.y + rightHandle!.height / 2,
+    );
+    await window.mouse.up();
+    await expect(rightSplitter).toHaveAttribute('aria-valuenow', '332');
+    const rightAfter = await rightSlot.boundingBox();
+    expect(rightAfter?.width).toBeGreaterThan(rightBefore!.width);
+
+    const inspectorBefore = await window
+      .getByTestId('workspace-splitter-inspector')
+      .boundingBox();
+    expect(inspectorBefore).not.toBeNull();
+    await window.mouse.move(
+      inspectorBefore!.x + inspectorBefore!.width / 2,
+      inspectorBefore!.y + inspectorBefore!.height / 2,
+    );
+    await window.mouse.down();
+    await window.mouse.move(
+      inspectorBefore!.x + inspectorBefore!.width / 2,
+      inspectorBefore!.y + inspectorBefore!.height / 2 + 32,
+    );
+    await window.mouse.up();
+    await expect(inspectorSplitter).toHaveAttribute('aria-valuenow', '292');
+
+    const revisionBeforeCollapse = await preview.getAttribute(
+      'data-document-revision',
+    );
+    await window
+      .getByRole('button', { name: 'Collapse Local Library' })
+      .click();
+    await expect(
+      window.getByRole('button', { name: 'Expand Local Library' }),
+    ).toBeVisible();
+    await expect(leftSplitter).toHaveAttribute('aria-disabled', 'true');
+    await expect(previewCanvas).toHaveAttribute(
+      'data-document-revision',
+      revisionBeforeCollapse!,
+    );
+    await window.getByRole('button', { name: 'Expand Local Library' }).click();
+    await expect(
+      window.getByRole('button', { name: 'Collapse Local Library' }),
+    ).toBeVisible();
+
+    await window.getByRole('button', { name: 'Collapse 3D Preview' }).click();
+    await expect(
+      window.getByRole('button', { name: 'Expand 3D Preview' }),
+    ).toBeVisible();
+    await expect(rightSplitter).toHaveAttribute('aria-disabled', 'true');
+    await expect(previewCanvas).toHaveAttribute(
+      'data-document-revision',
+      revisionBeforeCollapse!,
+    );
+    await window.getByRole('button', { name: 'Expand 3D Preview' }).click();
+
+    const persisted = await window.evaluate(() =>
+      JSON.parse(
+        localStorage.getItem('minecraft-skin-editor.workspace-layout.v1') ??
+          '{}',
+      ),
+    );
+    expect(persisted).toMatchObject({
+      version: 1,
+      leftPanelWidth: 240,
+      rightPanelWidth: 332,
+      rightInspectorHeight: 292,
+      leftCollapsed: false,
+      rightCollapsed: false,
+    });
+
+    await resetLayout.click();
+    await expect(leftSplitter).toHaveAttribute('aria-valuenow', '200');
+    await expect(rightSplitter).toHaveAttribute('aria-valuenow', '300');
+    await expect(inspectorSplitter).toHaveAttribute('aria-valuenow', '260');
+    await expect(
+      window.getByRole('button', { name: 'Collapse Local Library' }),
+    ).toBeVisible();
+    await expect(
+      window.getByRole('button', { name: 'Collapse 3D Preview' }),
+    ).toBeVisible();
+  } finally {
+    await application.close();
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
 test('guards quit with multiple dirty documents without duplicate native dialogs', async () => {
   const temporaryDirectory = await mkdtemp(
     path.join(tmpdir(), 'minecraft-skin-editor-guard-e2e-'),

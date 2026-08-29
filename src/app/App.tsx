@@ -18,6 +18,21 @@ import {
   LOCAL_SKIN_LIBRARY_DRAG_TYPE,
   openLibraryEntryByPath,
 } from '../features/library/localSkinLibrary';
+import { cancelActiveEditorInteraction } from '../features/editor/activeEditorInteraction';
+import {
+  COLLAPSED_PANEL_SIZE,
+  DEFAULT_WORKSPACE_LAYOUT,
+  CollapsedWorkspacePanel,
+  WORKSPACE_SPLITTER_SIZE,
+  WorkspaceSplitter,
+  clampWorkspaceDimension,
+  getLeftPanelWidthBounds,
+  loadWorkspaceLayout,
+  normalizeWorkspaceLayout,
+  persistWorkspaceLayout,
+  useElementSize,
+  type WorkspaceLayout,
+} from '../features/workspace';
 
 function isEditorDrag(event: DragEvent<HTMLElement>): boolean {
   const types = Array.from(event.dataTransfer.types);
@@ -46,6 +61,11 @@ export function App() {
   const { session, sessions, activeDocumentId, error, isBusy } =
     useDocumentSessionState();
   const isNewSkinDialogOpen = useNewSkinDialogOpen();
+  const applicationBodyRef = useRef<HTMLDivElement>(null);
+  const applicationBodySize = useElementSize(applicationBodyRef);
+  const [workspaceLayout, setWorkspaceLayout] = useState<WorkspaceLayout>(() =>
+    loadWorkspaceLayout(),
+  );
   const [isDragOver, setIsDragOver] = useState(false);
   const [dropNotice, setDropNotice] = useState<string | undefined>(undefined);
   const dragDepthRef = useRef(0);
@@ -56,6 +76,14 @@ export function App() {
     session === undefined
       ? 'No document open'
       : `${session.displayName}${session.document.isDirty ? ' •' : ''}`;
+  const leftPanelBounds = getLeftPanelWidthBounds(applicationBodySize.width);
+  const leftPanelWidth = workspaceLayout.leftCollapsed
+    ? COLLAPSED_PANEL_SIZE
+    : clampWorkspaceDimension(workspaceLayout.leftPanelWidth, leftPanelBounds);
+
+  useEffect(() => {
+    persistWorkspaceLayout(workspaceLayout);
+  }, [workspaceLayout]);
 
   useEffect(() => {
     document.title =
@@ -67,6 +95,18 @@ export function App() {
   const handleNewSkin = async (model: SkinModel) => {
     const outcome = await documentSessionController.newSkin(model);
     if (outcome.status === 'success') closeNewSkinDialog();
+  };
+
+  const updateWorkspaceLayout = (update: Partial<WorkspaceLayout>) => {
+    cancelActiveEditorInteraction();
+    setWorkspaceLayout((current) =>
+      normalizeWorkspaceLayout({ ...current, ...update }),
+    );
+  };
+
+  const resetWorkspaceLayout = () => {
+    cancelActiveEditorInteraction();
+    setWorkspaceLayout(normalizeWorkspaceLayout(DEFAULT_WORKSPACE_LAYOUT));
   };
 
   const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
@@ -168,12 +208,47 @@ export function App() {
               </button>
             </>
           )}
+          <button
+            type="button"
+            title="Reset Layout"
+            onClick={resetWorkspaceLayout}
+          >
+            Reset Layout
+          </button>
         </div>
       </header>
 
-      <div className="application-body">
-        <LibraryPanel />
-        <div className="workspace-column">
+      <div
+        ref={applicationBodyRef}
+        className="application-body"
+        style={{
+          gridTemplateColumns: `${leftPanelWidth}px ${WORKSPACE_SPLITTER_SIZE}px minmax(0, 1fr)`,
+        }}
+      >
+        <div
+          className={`workspace-side-slot workspace-side-slot--left${workspaceLayout.leftCollapsed ? ' is-collapsed' : ''}`}
+        >
+          <LibraryPanel
+            onCollapse={() => updateWorkspaceLayout({ leftCollapsed: true })}
+          />
+          <CollapsedWorkspacePanel
+            side="left"
+            panelLabel="Local Library"
+            shortLabel="LIB"
+            onRestore={() => updateWorkspaceLayout({ leftCollapsed: false })}
+          />
+        </div>
+        <WorkspaceSplitter
+          axis="vertical"
+          value={leftPanelWidth}
+          bounds={leftPanelBounds}
+          label="Resize Local Library"
+          controls="workspace-column"
+          disabled={workspaceLayout.leftCollapsed}
+          testId="workspace-splitter-left"
+          onChange={(value) => updateWorkspaceLayout({ leftPanelWidth: value })}
+        />
+        <div id="workspace-column" className="workspace-column">
           <DocumentTabs
             sessions={sessions}
             activeDocumentId={activeDocumentId}
@@ -226,6 +301,21 @@ export function App() {
                   history={session.history}
                   displayName={session.displayName}
                   isDirty={session.document.isDirty}
+                  rightPanelWidth={workspaceLayout.rightPanelWidth}
+                  rightPanelCollapsed={workspaceLayout.rightCollapsed}
+                  rightInspectorHeight={workspaceLayout.rightInspectorHeight}
+                  onRightPanelWidthChange={(value) =>
+                    updateWorkspaceLayout({ rightPanelWidth: value })
+                  }
+                  onRightPanelCollapse={() =>
+                    updateWorkspaceLayout({ rightCollapsed: true })
+                  }
+                  onRightPanelRestore={() =>
+                    updateWorkspaceLayout({ rightCollapsed: false })
+                  }
+                  onRightInspectorHeightChange={(value) =>
+                    updateWorkspaceLayout({ rightInspectorHeight: value })
+                  }
                 />
                 {error === undefined ? null : (
                   <p className="workspace-error" role="alert">
