@@ -27,6 +27,7 @@ import {
   usePrimaryEditorColor,
   useSecondaryEditorColor,
 } from '../editor/editorToolStore';
+import { ToolOptionsInspector } from '../editor/ToolOptionsInspector';
 import { changeSkinModel } from './modelSelection';
 import {
   createDefaultSkinViewState,
@@ -383,6 +384,7 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
           })}
         </div>
       </section>
+      <ToolOptionsInspector activeTool={activeTool} />
       <div ref={mountRef} className="skin-preview-mount" />
       <footer className="skin-preview-controls">
         <output

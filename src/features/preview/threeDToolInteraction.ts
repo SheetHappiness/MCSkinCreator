@@ -10,6 +10,7 @@ import {
 import type { DocumentHistory } from '../../engine/history';
 import type { SkinPickResult } from '../../renderers/three';
 import type { ColorSlot } from '../editor/editorToolStore';
+import { getToolOptions } from '../editor/toolOptions';
 
 interface SurfaceIdentity {
   readonly model: SkinPickResult['model'];
@@ -69,16 +70,28 @@ export class ThreeDToolInteraction {
     this.cancel();
 
     if (tool === 'eyedropper') {
-      this.setColor(colorSlot, samplePixel(this.document, pick));
+      const options = getToolOptions('eyedropper');
+      if (
+        options.sample === 'single-texel' &&
+        options.target === 'active-color'
+      ) {
+        this.setColor(colorSlot, samplePixel(this.document, pick));
+      }
       return true;
     }
 
     if (tool === 'fill') {
-      fillAt(this.document, this.history, pick, color);
+      const options = getToolOptions('fill');
+      if (options.mode === 'contiguous' && options.match === 'exact-rgba') {
+        fillAt(this.document, this.history, pick, color);
+      }
       return true;
     }
 
-    const strokeColor = tool === 'eraser' ? ERASER_COLOR : color;
+    const strokeColor =
+      tool === 'eraser' && getToolOptions('eraser').output === 'transparent'
+        ? ERASER_COLOR
+        : color;
     this.stroke = beginPixelStroke(this.history, strokeColor, pick);
     this.pointerId = pointerId;
     this.previousSurface = surfaceIdentity(pick);

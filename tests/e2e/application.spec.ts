@@ -195,6 +195,16 @@ test('paints, erases, undoes, redoes, and saves exact RGBA pixels', async () => 
 
     const pencil = window.getByRole('button', { name: 'Pencil' });
     await expect(pencil).toHaveAttribute('aria-pressed', 'true');
+    const toolOptions = window.getByLabel('Tool options');
+    await expect(toolOptions).toHaveAttribute('data-tool', 'pencil');
+    await expect(toolOptions.getByLabel('Size option')).toHaveText('1 px');
+    await window.getByRole('button', { name: 'Fill' }).click();
+    await expect(toolOptions).toHaveAttribute('data-tool', 'fill');
+    await expect(toolOptions.getByLabel('Match option')).toHaveText(
+      'Exact RGBA',
+    );
+    await window.keyboard.press('p');
+    await expect(toolOptions).toHaveAttribute('data-tool', 'pencil');
     await window.getByLabel('Paint color', { exact: true }).fill('#123456');
     await window.getByLabel('Paint alpha').fill('128');
     await expect(window.getByLabel('Selected RGBA color')).toHaveText(

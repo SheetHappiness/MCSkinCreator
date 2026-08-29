@@ -55,6 +55,7 @@ import {
   getEditorToolShortcut,
   getPointerAction,
 } from './editorShortcuts';
+import { getToolOptions } from './toolOptions';
 
 interface EditorWorkspaceProps {
   readonly document: SkinDocument;
@@ -458,15 +459,28 @@ export function EditorWorkspace({
         : pointerColorSlot;
     const color = colorSlot === 'primary' ? primaryColor : secondaryColor;
     if (effectiveTool === 'eyedropper') {
-      setEditorColor(colorSlot, samplePixel(skinDocument, point));
+      const options = getToolOptions('eyedropper');
+      if (
+        options.sample === 'single-texel' &&
+        options.target === 'active-color'
+      ) {
+        setEditorColor(colorSlot, samplePixel(skinDocument, point));
+      }
       return;
     }
     if (effectiveTool === 'fill') {
-      fillAt(skinDocument, history, point, color);
+      const options = getToolOptions('fill');
+      if (options.mode === 'contiguous' && options.match === 'exact-rgba') {
+        fillAt(skinDocument, history, point, color);
+      }
       return;
     }
 
-    const strokeColor = effectiveTool === 'eraser' ? ERASER_COLOR : color;
+    const strokeColor =
+      effectiveTool === 'eraser' &&
+      getToolOptions('eraser').output === 'transparent'
+        ? ERASER_COLOR
+        : color;
     const stroke = beginPixelStroke(history, strokeColor, point);
     event.currentTarget.setPointerCapture(event.pointerId);
     strokeGestureRef.current = { pointerId: event.pointerId, stroke };
