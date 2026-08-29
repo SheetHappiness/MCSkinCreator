@@ -1,9 +1,13 @@
 import type { RgbaColor, SkinDocument } from '../../engine/document';
 import {
+  beginAdvancedPaintStroke,
   ERASER_COLOR,
   beginPixelStroke,
   fillAt,
+  isAdvancedPaintTool,
   samplePixel,
+  type AdvancedPaintColors,
+  type AdvancedPaintStroke,
   type EditorTool,
   type PixelStroke,
 } from '../../engine/tools';
@@ -47,7 +51,7 @@ function sameSurface(
  * whenever the hit leaves its canonical cube surface.
  */
 export class ThreeDToolInteraction {
-  private stroke: PixelStroke | undefined;
+  private stroke: PixelStroke | AdvancedPaintStroke | undefined;
   private pointerId: number | undefined;
   private previousSurface: SurfaceIdentity | undefined;
 
@@ -64,6 +68,7 @@ export class ThreeDToolInteraction {
     tool: EditorTool,
     color: RgbaColor,
     colorSlot: ColorSlot = 'primary',
+    colors: AdvancedPaintColors = { primary: color, secondary: color },
   ): boolean {
     if (button !== 0 || pick === undefined) return false;
 
@@ -85,6 +90,20 @@ export class ThreeDToolInteraction {
       if (options.mode === 'contiguous' && options.match === 'exact-rgba') {
         fillAt(this.document, this.history, pick, color);
       }
+      return true;
+    }
+
+    if (isAdvancedPaintTool(tool)) {
+      this.stroke = beginAdvancedPaintStroke(
+        this.document,
+        this.history,
+        tool,
+        getToolOptions(tool),
+        colors,
+        pick,
+      );
+      this.pointerId = pointerId;
+      this.previousSurface = surfaceIdentity(pick);
       return true;
     }
 

@@ -96,3 +96,50 @@ describe('core tool options', () => {
     expect(history.canRedo).toBe(false);
   });
 });
+
+describe('advanced tool options', () => {
+  it('starts with stable, typed values for each advanced tool', () => {
+    expect(getToolOptions('lighten')).toEqual({ strength: 0.25 });
+    expect(getToolOptions('darken')).toEqual({ strength: 0.25 });
+    expect(getToolOptions('noise')).toEqual({
+      strength: 0.25,
+      density: 1,
+      seed: 1337,
+    });
+    expect(getToolOptions('stamp')).toEqual({ pattern: 'checker-2x2' });
+  });
+
+  it('validates advanced ranges, seeds, and stamp patterns', () => {
+    expect(() => setToolOptions('lighten', { strength: 1.1 })).toThrow(
+      RangeError,
+    );
+    expect(() =>
+      setToolOptions('noise', { strength: 0.5, density: -0.1, seed: 7 }),
+    ).toThrow(RangeError);
+    expect(() =>
+      setToolOptions('noise', { strength: 0.5, density: 1, seed: -1 }),
+    ).toThrow(RangeError);
+    expect(() =>
+      setToolOptions('stamp', { pattern: 'unknown' as never }),
+    ).toThrow(RangeError);
+  });
+
+  it('preserves configurable values per tool until an explicit reset', () => {
+    setToolOptions('lighten', { strength: 0.8 });
+    setToolOptions('noise', { strength: 0.4, density: 0.6, seed: 99 });
+    setActiveEditorTool('noise');
+    setActiveEditorTool('lighten');
+
+    expect(getToolOptions('lighten')).toEqual({ strength: 0.8 });
+    expect(getToolOptions('noise')).toEqual({
+      strength: 0.4,
+      density: 0.6,
+      seed: 99,
+    });
+    expect(getToolOptionSummary('noise')).toEqual([
+      { key: 'strength', label: 'Strength', value: '40%', fixed: false },
+      { key: 'density', label: 'Density', value: '60%', fixed: false },
+      { key: 'seed', label: 'Seed', value: '99', fixed: false },
+    ]);
+  });
+});

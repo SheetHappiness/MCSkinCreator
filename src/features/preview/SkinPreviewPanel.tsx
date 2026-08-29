@@ -176,6 +176,10 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
           tool,
           color,
           colorSlot,
+          {
+            primary: primaryColorRef.current,
+            secondary: secondaryColorRef.current,
+          },
         );
         if (!handled) return;
         event.preventDefault();

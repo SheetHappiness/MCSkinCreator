@@ -2,11 +2,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SkinDocument, type RgbaColor } from '../../engine/document';
 import { DocumentHistory } from '../../engine/history';
+import { beginAdvancedPaintStroke, lightenColor } from '../../engine/tools';
 import type { SkinPickResult } from '../../renderers/three';
 import {
   getEditorToolState,
   resetEditorColors,
 } from '../editor/editorToolStore';
+import {
+  getToolOptions,
+  resetToolOptions,
+  setToolOptions,
+} from '../editor/toolOptions';
 import { ThreeDToolInteraction } from './threeDToolInteraction';
 
 const PAINT_COLOR: RgbaColor = { r: 220, g: 80, b: 40, a: 255 };
@@ -34,6 +40,7 @@ function pick(
 describe('direct 3D tool interaction', () => {
   afterEach(() => {
     resetEditorColors();
+    resetToolOptions();
   });
 
   it('paints a continuous same-face stroke as one undoable operation', () => {
@@ -189,6 +196,83 @@ describe('direct 3D tool interaction', () => {
       expect(document.readPixel(x, 5)).toEqual(secondaryColor);
     }
     expect(document.isDirty).toBe(true);
+    expect(history.canUndo).toBe(true);
+  });
+
+  it('uses the shared advanced stroke in 2D and 3D paths', () => {
+    const source: RgbaColor = { r: 64, g: 128, b: 192, a: 91 };
+    const colors = {
+      primary: PAINT_COLOR,
+      secondary: { r: 20, g: 40, b: 60, a: 80 },
+    };
+    setToolOptions('lighten', { strength: 0.5 });
+
+    const twoDDocument = SkinDocument.createBlank({ id: 'advanced-2d' });
+    twoDDocument.writePixel(8, 8, source);
+    twoDDocument.markSaved();
+    const twoDHistory = new DocumentHistory(twoDDocument);
+    const twoDStroke = beginAdvancedPaintStroke(
+      twoDDocument,
+      twoDHistory,
+      'lighten',
+      getToolOptions('lighten'),
+      colors,
+      { x: 8, y: 8 },
+    );
+    twoDStroke.commit();
+
+    const threeDDocument = SkinDocument.createBlank({ id: 'advanced-3d' });
+    threeDDocument.writePixel(8, 8, source);
+    threeDDocument.markSaved();
+    const threeDHistory = new DocumentHistory(threeDDocument);
+    const interaction = new ThreeDToolInteraction(
+      threeDDocument,
+      threeDHistory,
+      vi.fn(),
+    );
+    expect(
+      interaction.pointerDown(
+        1,
+        0,
+        pick(8, 8),
+        'lighten',
+        colors.primary,
+        'primary',
+        colors,
+      ),
+    ).toBe(true);
+    interaction.pointerUp(1);
+
+    expect(twoDDocument.readPixel(8, 8)).toEqual(lightenColor(source, 0.5));
+    expect(threeDDocument.readPixel(8, 8)).toEqual(
+      twoDDocument.readPixel(8, 8),
+    );
+    expect(threeDHistory.canUndo).toBe(true);
+  });
+
+  it('clips a shared stamp at the 3D atlas edge as one operation', () => {
+    const document = SkinDocument.createBlank({ id: '3d-stamp' });
+    const history = new DocumentHistory(document);
+    const colors = {
+      primary: { r: 1, g: 2, b: 3, a: 4 },
+      secondary: { r: 5, g: 6, b: 7, a: 8 },
+    };
+    const interaction = new ThreeDToolInteraction(document, history, vi.fn());
+
+    expect(
+      interaction.pointerDown(
+        2,
+        0,
+        pick(63, 63),
+        'stamp',
+        colors.primary,
+        'primary',
+        colors,
+      ),
+    ).toBe(true);
+    interaction.pointerUp(2);
+
+    expect(document.readPixel(63, 63)).toEqual(colors.primary);
     expect(history.canUndo).toBe(true);
   });
 

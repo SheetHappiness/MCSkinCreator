@@ -15,6 +15,10 @@ describe('editor tool keyboard shortcuts', () => {
     ['e', 'eraser'],
     ['G', 'fill'],
     ['i', 'eyedropper'],
+    ['l', 'lighten'],
+    ['k', 'darken'],
+    ['n', 'noise'],
+    ['t', 'stamp'],
   ] as const)('maps %s through the canonical tool path', (key, tool) => {
     expect(editorToolFromShortcut(key)).toBe(tool);
   });

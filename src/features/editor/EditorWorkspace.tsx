@@ -11,10 +11,13 @@ import {
 import type { SkinDocument } from '../../engine/document';
 import type { DocumentHistory } from '../../engine/history';
 import {
+  beginAdvancedPaintStroke,
   ERASER_COLOR,
   beginPixelStroke,
   fillAt,
+  isAdvancedPaintTool,
   samplePixel,
+  type AdvancedPaintStroke,
   type EditorTool,
   type PixelStroke,
 } from '../../engine/tools';
@@ -71,7 +74,7 @@ interface PanGesture {
 
 interface StrokeGesture {
   readonly pointerId: number;
-  readonly stroke: PixelStroke;
+  readonly stroke: PixelStroke | AdvancedPaintStroke;
 }
 
 interface ToolDefinition {
@@ -85,6 +88,10 @@ const TOOLS: readonly ToolDefinition[] = [
   { tool: 'eraser', label: 'Eraser', shortcut: 'E' },
   { tool: 'fill', label: 'Fill', shortcut: 'G' },
   { tool: 'eyedropper', label: 'Eyedropper', shortcut: 'I' },
+  { tool: 'lighten', label: 'Lighten', shortcut: 'L' },
+  { tool: 'darken', label: 'Darken', shortcut: 'K' },
+  { tool: 'noise', label: 'Noise', shortcut: 'N' },
+  { tool: 'stamp', label: 'Stamp', shortcut: 'T' },
 ];
 
 const EMPTY_SIZE: Size = { width: 0, height: 0 };
@@ -168,13 +175,62 @@ function ToolIcon({ tool }: { readonly tool: EditorTool }) {
       </svg>
     );
   }
+  if (tool === 'eyedropper') {
+    return (
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <path
+          {...common}
+          d="m11.8 3.2 5 5-2.2 2.2-1.1-1.1-5.8 5.8H4.2v-3.5L10 5.8 8.9 4.7l2.9-1.5Z"
+        />
+        <path {...common} d="M3 17h6" />
+      </svg>
+    );
+  }
+  if (tool === 'lighten') {
+    return (
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <circle {...common} cx="10" cy="10" r="3.2" />
+        <path
+          {...common}
+          d="M10 1.8v2.4M10 15.8v2.4M1.8 10h2.4M15.8 10h2.4M4.2 4.2l1.7 1.7M14.1 14.1l1.7 1.7M15.8 4.2l-1.7 1.7M5.9 14.1l-1.7 1.7"
+        />
+      </svg>
+    );
+  }
+  if (tool === 'darken') {
+    return (
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <path
+          {...common}
+          d="M14.8 3.3A6.7 6.7 0 1 0 16.7 14 6.7 6.7 0 0 1 14.8 3.3Z"
+        />
+        <path {...common} d="M4.1 15.9 2.7 17.3" />
+      </svg>
+    );
+  }
+  if (tool === 'noise') {
+    return (
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <path
+          {...common}
+          d="M4 4h2v2H4zM9 8h2v2H9zM14 4h2v2h-2zM4 14h2v2H4zM14 14h2v2h-2z"
+        />
+      </svg>
+    );
+  }
+  if (tool === 'stamp') {
+    return (
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <path
+          {...common}
+          d="M6 3.5h8v4.2l1.8 2.2v2.1H4.2V9.9L6 7.7V3.5ZM3 16.5h14M6.5 12v2.1M13.5 12v2.1"
+        />
+      </svg>
+    );
+  }
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path
-        {...common}
-        d="m11.8 3.2 5 5-2.2 2.2-1.1-1.1-5.8 5.8H4.2v-3.5L10 5.8 8.9 4.7l2.9-1.5Z"
-      />
-      <path {...common} d="M3 17h6" />
+      <path {...common} d="M4 4h12v12H4zM4 8h12M8 4v12" />
     </svg>
   );
 }
@@ -473,6 +529,20 @@ export function EditorWorkspace({
       if (options.mode === 'contiguous' && options.match === 'exact-rgba') {
         fillAt(skinDocument, history, point, color);
       }
+      return;
+    }
+
+    if (isAdvancedPaintTool(effectiveTool)) {
+      const stroke = beginAdvancedPaintStroke(
+        skinDocument,
+        history,
+        effectiveTool,
+        getToolOptions(effectiveTool),
+        { primary: primaryColor, secondary: secondaryColor },
+        point,
+      );
+      event.currentTarget.setPointerCapture(event.pointerId);
+      strokeGestureRef.current = { pointerId: event.pointerId, stroke };
       return;
     }
 

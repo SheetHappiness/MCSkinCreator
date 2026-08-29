@@ -9,6 +9,10 @@ const SHORTCUT_TO_TOOL: Readonly<Record<string, EditorTool>> = {
   e: 'eraser',
   g: 'fill',
   i: 'eyedropper',
+  l: 'lighten',
+  k: 'darken',
+  n: 'noise',
+  t: 'stamp',
 };
 
 export function isEditableKeyboardTarget(target: EventTarget | null): boolean {

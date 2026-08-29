@@ -560,6 +560,178 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
   }
 });
 
+test('applies advanced paint tools through the contextual 2D inspector', async () => {
+  const temporaryDirectory = await mkdtemp(
+    path.join(tmpdir(), 'minecraft-skin-editor-advanced-e2e-'),
+  );
+  const inputPath = path.join(temporaryDirectory, 'advanced.png');
+  const requestedOutputPath = path.join(temporaryDirectory, 'advanced-copy');
+  const outputPath = `${requestedOutputPath}.png`;
+  const pixels = new Uint8Array(64 * 64 * 4);
+  const setPixel = (x: number, y: number, color: readonly number[]) => {
+    pixels.set(color, (y * 64 + x) * 4);
+  };
+  setPixel(10, 10, [100, 100, 100, 128]);
+  setPixel(11, 10, [100, 100, 100, 64]);
+  setPixel(12, 10, [100, 100, 100, 91]);
+  await writeFile(
+    inputPath,
+    encode({ width: 64, height: 64, data: pixels, channels: 4, depth: 8 }),
+  );
+
+  const application = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      MINECRAFT_SKIN_EDITOR_E2E: '1',
+      MINECRAFT_SKIN_EDITOR_E2E_OPEN_PATH: inputPath,
+      MINECRAFT_SKIN_EDITOR_E2E_SAVE_AS_PATH: requestedOutputPath,
+      MINECRAFT_SKIN_EDITOR_E2E_UNSAVED_DECISION: 'discard',
+    },
+  });
+
+  try {
+    const window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Open PNG' }).click();
+    const canvas = window.getByRole('img', { name: '2D skin canvas' });
+    const editorStatus = window.getByLabel('Editor status');
+    const toolOptions = window.getByLabel('Tool options');
+    const zoomValue = window.getByTestId('zoom-value');
+    await expect(canvas).toBeVisible();
+
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox).not.toBeNull();
+    await window.getByRole('button', { name: 'Fit' }).click();
+    const fittedZoom =
+      Number.parseInt((await zoomValue.textContent()) ?? '', 10) / 100;
+    const fittedTextureLeft = (canvasBox!.width - 64 * fittedZoom) / 2;
+    const fittedTextureTop = (canvasBox!.height - 64 * fittedZoom) / 2;
+    const fittedTexturePoint = (x: number, y: number) => ({
+      x: canvasBox!.x + fittedTextureLeft + (x + 0.5) * fittedZoom,
+      y: canvasBox!.y + fittedTextureTop + (y + 0.5) * fittedZoom,
+    });
+
+    await window.getByRole('button', { name: 'Lighten' }).click();
+    await expect(toolOptions).toHaveAttribute('data-tool', 'lighten');
+    await window.getByLabel('Lighten strength').press('End');
+    await expect(window.getByLabel('Strength value')).toHaveText('100%');
+    const lightenTarget = fittedTexturePoint(10, 10);
+    await window.mouse.click(lightenTarget.x, lightenTarget.y);
+
+    await window.getByRole('button', { name: 'Darken' }).click();
+    await expect(toolOptions).toHaveAttribute('data-tool', 'darken');
+    await window.getByLabel('Darken strength').press('End');
+    const darkenTarget = fittedTexturePoint(11, 10);
+    await window.mouse.click(darkenTarget.x, darkenTarget.y);
+
+    await window.getByRole('button', { name: 'Noise' }).click();
+    await expect(toolOptions).toHaveAttribute('data-tool', 'noise');
+    await window.getByLabel('Noise strength').press('End');
+    await window.getByLabel('Noise seed').fill('7');
+    const noiseTarget = fittedTexturePoint(12, 10);
+    await window.mouse.click(noiseTarget.x, noiseTarget.y);
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('edit-undo')?.click();
+    });
+
+    await window.getByRole('button', { name: 'Stamp' }).click();
+    await expect(toolOptions).toHaveAttribute('data-tool', 'stamp');
+    const stampTarget = fittedTexturePoint(20, 20);
+    await window.mouse.click(stampTarget.x, stampTarget.y);
+    await expect(editorStatus.getByText('advanced.png •')).toBeVisible();
+
+    await window.getByRole('button', { name: 'Save As…' }).click();
+    await expect(editorStatus.getByText('advanced-copy.png')).toBeVisible();
+
+    const saved = decode(await readFile(outputPath), { checkCrc: true });
+    expect(saved.width).toBe(64);
+    expect(saved.height).toBe(64);
+    setPixel(10, 10, [255, 255, 255, 128]);
+    setPixel(11, 10, [0, 0, 0, 64]);
+    setPixel(20, 20, [0, 0, 0, 255]);
+    setPixel(21, 20, [255, 255, 255, 255]);
+    setPixel(20, 21, [255, 255, 255, 255]);
+    setPixel(21, 21, [0, 0, 0, 255]);
+    expect(new Uint8Array(saved.data.buffer)).toEqual(pixels);
+  } finally {
+    await application.close();
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test('applies Lighten to one exact picked 3D texel', async () => {
+  const temporaryDirectory = await mkdtemp(
+    path.join(tmpdir(), 'minecraft-skin-editor-advanced-3d-e2e-'),
+  );
+  const inputPath = path.join(temporaryDirectory, 'advanced-3d.png');
+  const requestedOutputPath = path.join(temporaryDirectory, 'advanced-3d-copy');
+  const outputPath = `${requestedOutputPath}.png`;
+  const pixels = new Uint8Array(64 * 64 * 4);
+  for (let offset = 0; offset < pixels.length; offset += 4) {
+    pixels.set([100, 100, 100, 128], offset);
+  }
+  await writeFile(
+    inputPath,
+    encode({ width: 64, height: 64, data: pixels, channels: 4, depth: 8 }),
+  );
+
+  const application = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      MINECRAFT_SKIN_EDITOR_E2E: '1',
+      MINECRAFT_SKIN_EDITOR_E2E_OPEN_PATH: inputPath,
+      MINECRAFT_SKIN_EDITOR_E2E_SAVE_AS_PATH: requestedOutputPath,
+      MINECRAFT_SKIN_EDITOR_E2E_UNSAVED_DECISION: 'discard',
+    },
+  });
+
+  try {
+    const window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Open PNG' }).click();
+    const preview = window.getByRole('img', { name: '3D skin preview' });
+    const toolOptions = window.getByLabel('Tool options');
+    const editorStatus = window.getByLabel('Editor status');
+    await expect(preview).toBeVisible();
+
+    await window.getByRole('button', { name: 'Lighten' }).click();
+    await window.getByLabel('Lighten strength').press('End');
+    const previewBox = await preview.boundingBox();
+    expect(previewBox).not.toBeNull();
+    const pointer = {
+      x: previewBox!.x + previewBox!.width / 2,
+      y: previewBox!.y + previewBox!.height / 2,
+    };
+    await window.mouse.move(pointer.x, pointer.y);
+    await expect(preview).toHaveAttribute('data-pick', /\d+,\d+$/);
+    const pickData = await preview.getAttribute('data-pick');
+    const pickMatch = pickData?.match(/:(\d+),(\d+)$/);
+    expect(pickMatch).not.toBeNull();
+    const pickedX = Number.parseInt(pickMatch![1]!, 10);
+    const pickedY = Number.parseInt(pickMatch![2]!, 10);
+    const revisionBeforePaint = await preview.getAttribute(
+      'data-document-revision',
+    );
+    await window.mouse.click(pointer.x, pointer.y);
+    await expect(preview).not.toHaveAttribute(
+      'data-document-revision',
+      revisionBeforePaint!,
+    );
+    await expect(toolOptions).toHaveAttribute('data-tool', 'lighten');
+    await expect(editorStatus.getByText('advanced-3d.png •')).toBeVisible();
+
+    await window.getByRole('button', { name: 'Save As…' }).click();
+    const saved = decode(await readFile(outputPath), { checkCrc: true });
+    expect(saved.width).toBe(64);
+    expect(saved.height).toBe(64);
+    pixels.set([255, 255, 255, 128], (pickedY * 64 + pickedX) * 4);
+    expect(new Uint8Array(saved.data.buffer)).toEqual(pixels);
+  } finally {
+    await application.close();
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
 test('keeps the 2D-first layout coherent across supported desktop sizes', async () => {
   const temporaryDirectory = await mkdtemp(
     path.join(tmpdir(), 'minecraft-skin-editor-layout-e2e-'),

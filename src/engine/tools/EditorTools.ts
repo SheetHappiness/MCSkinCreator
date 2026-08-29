@@ -10,7 +10,15 @@ import type {
 } from '../history';
 import type { TextureCoordinate } from '../viewport';
 
-export type EditorTool = 'pencil' | 'eraser' | 'fill' | 'eyedropper';
+export type EditorTool =
+  | 'pencil'
+  | 'eraser'
+  | 'fill'
+  | 'eyedropper'
+  | 'lighten'
+  | 'darken'
+  | 'noise'
+  | 'stamp';
 
 export const ERASER_COLOR = TRANSPARENT_RGBA;
 

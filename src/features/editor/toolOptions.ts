@@ -2,11 +2,19 @@ import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 
 import type { EditorTool } from '../../engine/tools';
+import {
+  STAMP_PATTERN_LABELS,
+  validateAdvancedPaintOptions,
+  type DarkenToolOptions,
+  type LightenToolOptions,
+  type NoiseToolOptions,
+  type StampToolOptions,
+} from '../../engine/tools/AdvancedPaintTools';
 
 /**
  * Core tools intentionally expose only the semantics they already implement.
  * Literal fields make an accidental fake control or unsupported option a type
- * error before P06 adds a tool with genuinely configurable values.
+ * error for a core tool while advanced tools use validated numeric options.
  */
 export interface PencilToolOptions {
   readonly size: 1;
@@ -28,11 +36,17 @@ export interface EyedropperToolOptions {
   readonly target: 'active-color';
 }
 
+export type { StampPattern } from '../../engine/tools/AdvancedPaintTools';
+
 export interface ToolOptionsByTool {
   readonly pencil: PencilToolOptions;
   readonly eraser: EraserToolOptions;
   readonly fill: FillToolOptions;
   readonly eyedropper: EyedropperToolOptions;
+  readonly lighten: LightenToolOptions;
+  readonly darken: DarkenToolOptions;
+  readonly noise: NoiseToolOptions;
+  readonly stamp: StampToolOptions;
 }
 
 export type ToolOptionsFor<T extends EditorTool> = ToolOptionsByTool[T];
@@ -45,7 +59,7 @@ export interface ToolOptionSummary {
   readonly key: string;
   readonly label: string;
   readonly value: string;
-  readonly fixed: true;
+  readonly fixed: boolean;
 }
 
 function freezeDefaultOptions(): ToolOptionsByTool {
@@ -63,6 +77,10 @@ function freezeDefaultOptions(): ToolOptionsByTool {
       sample: 'single-texel' as const,
       target: 'active-color' as const,
     }),
+    lighten: Object.freeze({ strength: 0.25 }),
+    darken: Object.freeze({ strength: 0.25 }),
+    noise: Object.freeze({ strength: 0.25, density: 1, seed: 1337 }),
+    stamp: Object.freeze({ pattern: 'checker-2x2' as const }),
   });
 }
 
@@ -143,6 +161,18 @@ export function validateToolOptions<T extends EditorTool>(
       assertFixedValue(tool, record, 'sample', 'single-texel');
       assertFixedValue(tool, record, 'target', 'active-color');
       break;
+    case 'lighten':
+      validateAdvancedPaintOptions('lighten', options as LightenToolOptions);
+      break;
+    case 'darken':
+      validateAdvancedPaintOptions('darken', options as DarkenToolOptions);
+      break;
+    case 'noise':
+      validateAdvancedPaintOptions('noise', options as NoiseToolOptions);
+      break;
+    case 'stamp':
+      validateAdvancedPaintOptions('stamp', options as StampToolOptions);
+      break;
   }
   return options;
 }
@@ -153,6 +183,10 @@ function cloneOptions(options: ToolOptionsByTool): ToolOptionsByTool {
     eraser: Object.freeze({ ...options.eraser }),
     fill: Object.freeze({ ...options.fill }),
     eyedropper: Object.freeze({ ...options.eyedropper }),
+    lighten: Object.freeze({ ...options.lighten }),
+    darken: Object.freeze({ ...options.darken }),
+    noise: Object.freeze({ ...options.noise }),
+    stamp: Object.freeze({ ...options.stamp }),
   });
 }
 
@@ -168,8 +202,8 @@ export function getToolOptionsState(): ToolOptionsState {
 
 /**
  * Replaces one tool's options without touching SkinDocument or its history.
- * P05's values are fixed, but this typed entry point gives P06 one stable
- * application-state boundary for real options.
+ * Core values are fixed, while this typed entry point gives advanced tools one
+ * stable application-state boundary for real options.
  */
 export function setToolOptions<T extends EditorTool>(
   tool: T,
@@ -271,6 +305,62 @@ export function getToolOptionSummary(
         },
       ];
     }
+    case 'lighten': {
+      const options = getToolOptions(tool);
+      return [
+        {
+          key: 'strength',
+          label: 'Strength',
+          value: `${Math.round(options.strength * 100)}%`,
+          fixed: false,
+        },
+      ];
+    }
+    case 'darken': {
+      const options = getToolOptions(tool);
+      return [
+        {
+          key: 'strength',
+          label: 'Strength',
+          value: `${Math.round(options.strength * 100)}%`,
+          fixed: false,
+        },
+      ];
+    }
+    case 'noise': {
+      const options = getToolOptions(tool);
+      return [
+        {
+          key: 'strength',
+          label: 'Strength',
+          value: `${Math.round(options.strength * 100)}%`,
+          fixed: false,
+        },
+        {
+          key: 'density',
+          label: 'Density',
+          value: `${Math.round(options.density * 100)}%`,
+          fixed: false,
+        },
+        {
+          key: 'seed',
+          label: 'Seed',
+          value: String(options.seed),
+          fixed: false,
+        },
+      ];
+    }
+    case 'stamp': {
+      const options = getToolOptions(tool);
+      return [
+        {
+          key: 'pattern',
+          label: 'Pattern',
+          value: STAMP_PATTERN_LABELS[options.pattern],
+          fixed: false,
+        },
+      ];
+    }
   }
 }
 
@@ -284,5 +374,13 @@ export function toolLabel(tool: EditorTool): string {
       return 'Fill';
     case 'eyedropper':
       return 'Eyedropper';
+    case 'lighten':
+      return 'Lighten';
+    case 'darken':
+      return 'Darken';
+    case 'noise':
+      return 'Noise';
+    case 'stamp':
+      return 'Stamp';
   }
 }
