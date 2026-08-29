@@ -686,7 +686,11 @@ export function EditorWorkspace({
           />
         </div>
 
-        <SkinPreviewPanel document={skinDocument} history={history} />
+        <SkinPreviewPanel
+          document={skinDocument}
+          history={history}
+          displayName={displayName}
+        />
       </div>
 
       <footer className="editor-status-bar" aria-label="Editor status">

@@ -22,6 +22,7 @@ import {
 } from './fileContract';
 import { registerSkinFileIpc } from './skinFileIpc';
 import { registerSkinLibraryIpc } from './skinLibraryIpc';
+import { closePopoutForOwner, registerPreviewIpc } from './previewIpc';
 import { WindowCloseCoordinator } from './windowCloseCoordinator';
 
 const DEVELOPMENT_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
@@ -79,6 +80,7 @@ async function createMainWindow(): Promise<void> {
     }
   });
   mainWindow.on('closed', () => {
+    closePopoutForOwner(webContentsId);
     windowLifecycleStates.delete(webContentsId);
   });
 
@@ -364,6 +366,7 @@ function installApplicationMenu(): void {
 app.whenReady().then(async () => {
   registerSkinFileIpc();
   registerSkinLibraryIpc();
+  registerPreviewIpc();
   registerAppLifecycleIpc();
   installApplicationMenu();
   ipcMain.on(SKIN_EDIT_CHANNELS.state, (_event, value: unknown) => {

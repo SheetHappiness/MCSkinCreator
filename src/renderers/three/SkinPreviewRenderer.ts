@@ -90,6 +90,7 @@ const DEFAULT_ENVIRONMENT: SkinPreviewRendererEnvironment = {
     new WebGLRenderer({
       antialias: true,
       alpha: false,
+      preserveDrawingBuffer: true,
       powerPreference: 'high-performance',
     }),
   createControls: (camera, canvas) => new OrbitControls(camera, canvas),
@@ -100,6 +101,7 @@ const DEFAULT_ENVIRONMENT: SkinPreviewRendererEnvironment = {
 };
 
 export class SkinPreviewRenderer {
+  private document: SkinDocument;
   private readonly scene = new Scene();
   private readonly camera = new PerspectiveCamera(32, 1, 0.1, 200);
   private readonly renderer: PreviewRendererAdapter;
@@ -108,7 +110,7 @@ export class SkinPreviewRenderer {
   private readonly raycaster = new Raycaster();
   private modelResources: SkinModelResources;
   private readonly resizeObserver: PreviewResizeObserver;
-  private readonly unsubscribeDocument: () => void;
+  private unsubscribeDocument: () => void;
   private renderFrame: number | undefined;
   private textureDirty = false;
   private currentModel: SkinDocument['model'];
@@ -130,10 +132,11 @@ export class SkinPreviewRenderer {
 
   constructor(
     private readonly mount: HTMLElement,
-    private readonly document: SkinDocument,
+    document: SkinDocument,
     private readonly environment: SkinPreviewRendererEnvironment = DEFAULT_ENVIRONMENT,
     options: SkinPreviewRendererOptions = {},
   ) {
+    this.document = document;
     this.onPickChange = options.onPickChange;
     this.onPointerDown = options.onPointerDown;
     this.onPointerMove = options.onPointerMove;
@@ -205,6 +208,45 @@ export class SkinPreviewRenderer {
     this.controls.target.copy(CAMERA_TARGET);
     this.controls.update();
     this.requestRender();
+  }
+
+  /** Switches a read-only preview source without resetting camera state. */
+  setDocument(document: SkinDocument): void {
+    if (this.disposed || document === this.document) return;
+
+    this.unsubscribeDocument();
+    this.document = document;
+    this.skinTexture.update(document);
+    if (document.model !== this.currentModel) {
+      this.modelResources.dispose();
+      this.currentModel = document.model;
+      this.modelResources = new SkinModelResources(
+        this.currentModel,
+        this.skinTexture.texture,
+      );
+      this.modelResources.setBaseVisible(this.baseVisible);
+      this.modelResources.setOuterVisible(this.outerVisible);
+      for (const [bodyPart, visible] of this.bodyPartVisibility) {
+        this.modelResources.setBodyPartVisible(bodyPart, visible);
+      }
+      this.scene.add(this.modelResources.root);
+    }
+    this.textureDirty = false;
+    this.syncDebugState();
+    this.unsubscribeDocument = document.subscribeToMutations(() =>
+      this.handleDocumentMutation(),
+    );
+    this.requestRender();
+  }
+
+  captureSnapshot(): string | undefined {
+    if (this.disposed) return undefined;
+    this.renderCurrentFrame();
+    try {
+      return this.renderer.domElement.toDataURL('image/png');
+    } catch {
+      return undefined;
+    }
   }
 
   pickAt(clientX: number, clientY: number): SkinPickResult | undefined {
@@ -431,12 +473,17 @@ export class SkinPreviewRenderer {
     this.renderFrame = this.environment.requestFrame(() => {
       this.renderFrame = undefined;
       if (this.disposed) return;
-      if (this.textureDirty) {
-        this.skinTexture.update(this.document);
-        this.textureDirty = false;
-      }
-      this.renderer.render(this.scene, this.camera);
+      this.renderCurrentFrame();
     });
+  }
+
+  private renderCurrentFrame(): void {
+    if (this.disposed) return;
+    if (this.textureDirty) {
+      this.skinTexture.update(this.document);
+      this.textureDirty = false;
+    }
+    this.renderer.render(this.scene, this.camera);
   }
 
   private syncDebugState(): void {

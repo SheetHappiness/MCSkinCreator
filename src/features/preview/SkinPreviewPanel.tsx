@@ -39,10 +39,18 @@ import {
   type SkinViewState,
 } from './skinViewState';
 import { ThreeDToolInteraction } from './threeDToolInteraction';
+import {
+  createPopoutPreviewState,
+  isPopoutBoundTo,
+  openPopoutPreview,
+  publishPopoutPreview,
+  savePreviewSnapshot,
+} from './popoutPreviewController';
 
 interface SkinPreviewPanelProps {
   readonly document: SkinDocument;
   readonly history: DocumentHistory;
+  readonly displayName: string;
 }
 
 const MODEL_OPTIONS: readonly {
@@ -94,7 +102,16 @@ function formatPick(result: SkinPickResult | undefined): string {
   return `${BODY_PART_LABELS[result.bodyPart]} · ${LAYER_LABELS[result.layer]} · ${FACE_LABELS[result.face]} · X: ${result.x} Y: ${result.y}`;
 }
 
-export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
+function snapshotName(displayName: string): string {
+  const stem = displayName.replace(/\.png$/i, '') || 'skin';
+  return `${stem}-preview.png`;
+}
+
+export function SkinPreviewPanel({
+  document,
+  history,
+  displayName,
+}: SkinPreviewPanelProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<SkinPreviewRenderer | undefined>(undefined);
   const activeTool = useActiveEditorTool();
@@ -124,6 +141,7 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
       : defaultView.state;
   const [hoveredPick, setHoveredPick] = useState<SkinPickResult | undefined>();
   const [temporaryEyedropper, setTemporaryEyedropper] = useState(false);
+  const [previewNotice, setPreviewNotice] = useState<string | undefined>();
 
   useEffect(() => {
     activeToolRef.current = activeTool;
@@ -142,11 +160,20 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
     (notify: () => void) => document.subscribeToMutations(notify),
     [document],
   );
-  useSyncExternalStore(
+  const documentRevision = useSyncExternalStore(
     subscribe,
     () => document.revision,
     () => document.revision,
   );
+
+  useEffect(() => {
+    publishPopoutPreview(
+      createPopoutPreviewState(document, displayName, documentRevision, {
+        bodyParts: viewState.bodyParts,
+        layers: viewState.layers,
+      }),
+    );
+  }, [document, displayName, documentRevision, viewState]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -286,6 +313,42 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
     });
   };
 
+  const handleOpenPopout = async () => {
+    setPreviewNotice(undefined);
+    const result = await openPopoutPreview(
+      createPopoutPreviewState(document, displayName, documentRevision, {
+        bodyParts: viewState.bodyParts,
+        layers: viewState.layers,
+      }),
+    );
+    if (result.status === 'error') {
+      setPreviewNotice(result.error.message);
+    } else if (
+      result.status === 'already_open' &&
+      !isPopoutBoundTo(document.id)
+    ) {
+      setPreviewNotice('The pop-out is already bound to another document.');
+    }
+  };
+
+  const handleSnapshot = async () => {
+    setPreviewNotice(undefined);
+    const dataUrl = rendererRef.current?.captureSnapshot();
+    if (dataUrl === undefined) {
+      setPreviewNotice('The 3D preview could not produce a PNG snapshot.');
+      return;
+    }
+    const result = await savePreviewSnapshot({
+      suggestedName: snapshotName(displayName),
+      dataUrl,
+    });
+    if (result.status === 'error') {
+      setPreviewNotice(result.error.message);
+    } else if (result.status === 'success') {
+      setPreviewNotice(`Snapshot saved as ${result.displayName}.`);
+    }
+  };
+
   return (
     <aside className="skin-preview-panel" aria-label="3D preview panel">
       <header className="skin-preview-toolbar">
@@ -392,6 +455,11 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
       <ToolOptionsInspector activeTool={activeTool} />
       <HistoryTimeline history={history} />
       <div ref={mountRef} className="skin-preview-mount" />
+      {previewNotice === undefined ? null : (
+        <p className="skin-preview-notice" role="status">
+          {previewNotice}
+        </p>
+      )}
       <footer className="skin-preview-controls">
         <output
           className="skin-preview-pick-readout"
@@ -400,13 +468,21 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
         >
           {formatPick(hoveredPick)}
         </output>
-        <button
-          type="button"
-          title="Reset 3D camera"
-          onClick={() => rendererRef.current?.resetView()}
-        >
-          Reset view
-        </button>
+        <div className="skin-preview-actions">
+          <button type="button" onClick={() => void handleOpenPopout()}>
+            Pop Out
+          </button>
+          <button type="button" onClick={() => void handleSnapshot()}>
+            Snapshot
+          </button>
+          <button
+            type="button"
+            title="Reset 3D camera"
+            onClick={() => rendererRef.current?.resetView()}
+          >
+            Reset view
+          </button>
+        </div>
       </footer>
     </aside>
   );

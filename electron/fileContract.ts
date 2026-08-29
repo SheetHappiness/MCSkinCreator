@@ -14,6 +14,15 @@ export const SKIN_LIBRARY_CHANNELS = {
   copyIn: 'skin-library:copy-in',
 } as const;
 
+export const PREVIEW_CHANNELS = {
+  openPopout: 'preview:open-popout',
+  publish: 'preview:publish',
+  ready: 'preview:ready',
+  update: 'preview:update',
+  closed: 'preview:closed',
+  saveSnapshot: 'preview:save-snapshot',
+} as const;
+
 export const APP_LIFECYCLE_CHANNELS = {
   confirmUnsaved: 'app-lifecycle:confirm-unsaved',
   documentState: 'app-lifecycle:document-state',
@@ -124,6 +133,64 @@ export interface NativeSkinLibraryApi {
   copySkinToLibrary(
     request: CopySkinToLibraryRequest,
   ): Promise<SkinLibraryMutationResult>;
+}
+
+export type PreviewBodyPart =
+  'head' | 'torso' | 'rightArm' | 'leftArm' | 'rightLeg' | 'leftLeg';
+export type PreviewSkinLayer = 'base' | 'outer';
+export type PreviewSkinModel = 'classic' | 'slim';
+
+export interface PreviewVisibilityState {
+  readonly bodyParts: Readonly<Record<PreviewBodyPart, boolean>>;
+  readonly layers: Readonly<Record<PreviewSkinLayer, boolean>>;
+}
+
+export interface PopoutPreviewState {
+  readonly documentId: string;
+  readonly displayName: string;
+  readonly model: PreviewSkinModel;
+  readonly revision: number;
+  readonly pngBytes: Uint8Array;
+  readonly visibility: PreviewVisibilityState;
+}
+
+export interface OpenPopoutPreviewRequest {
+  readonly documentId: string;
+  readonly displayName: string;
+}
+
+export type OpenPopoutPreviewResult =
+  | { readonly status: 'opened' }
+  | { readonly status: 'already_open' }
+  | { readonly status: 'error'; readonly error: NativeFileError };
+
+export interface SavePreviewSnapshotRequest {
+  readonly suggestedName: string;
+  readonly dataUrl: string;
+}
+
+export type SavePreviewSnapshotResult =
+  | { readonly status: 'canceled' }
+  | {
+      readonly status: 'success';
+      readonly filePath: string;
+      readonly displayName: string;
+    }
+  | { readonly status: 'error'; readonly error: NativeFileError };
+
+export interface NativePreviewApi {
+  openPopoutPreview(
+    request: OpenPopoutPreviewRequest,
+  ): Promise<OpenPopoutPreviewResult>;
+  publishPopoutPreview(state: PopoutPreviewState): void;
+  onPopoutPreviewState(
+    listener: (state: PopoutPreviewState) => void,
+  ): () => void;
+  notifyPopoutPreviewReady(): void;
+  onPopoutPreviewClosed(listener: () => void): () => void;
+  savePreviewSnapshot(
+    request: SavePreviewSnapshotRequest,
+  ): Promise<SavePreviewSnapshotResult>;
 }
 
 export interface NativeSkinEditApi {

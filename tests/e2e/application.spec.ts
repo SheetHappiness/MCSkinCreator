@@ -20,6 +20,7 @@ test('launches the production Electron application shell', async () => {
       const browserGlobal = globalThis as typeof globalThis & {
         skinFiles?: Record<string, unknown>;
         skinLibrary?: Record<string, unknown>;
+        preview?: Record<string, unknown>;
         skinEdits?: Record<string, unknown>;
         appLifecycle?: Record<string, unknown>;
       };
@@ -28,6 +29,7 @@ test('launches the production Electron application shell', async () => {
         hasElectronBridge: 'electron' in globalThis,
         fileApiMethods: Object.keys(browserGlobal.skinFiles ?? {}).sort(),
         libraryApiMethods: Object.keys(browserGlobal.skinLibrary ?? {}).sort(),
+        previewApiMethods: Object.keys(browserGlobal.preview ?? {}).sort(),
         editApiMethods: Object.keys(browserGlobal.skinEdits ?? {}).sort(),
         lifecycleApiMethods: Object.keys(
           browserGlobal.appLifecycle ?? {},
@@ -87,6 +89,14 @@ test('launches the production Electron application shell', async () => {
         'listLibrarySkins',
         'openLibrarySkin',
         'renameLibrarySkin',
+      ],
+      previewApiMethods: [
+        'notifyPopoutPreviewReady',
+        'onPopoutPreviewClosed',
+        'onPopoutPreviewState',
+        'openPopoutPreview',
+        'publishPopoutPreview',
+        'savePreviewSnapshot',
       ],
       editApiMethods: ['onEditCommand', 'setCommandState'],
       lifecycleApiMethods: [
@@ -1059,6 +1069,247 @@ test('keeps multiple documents independent and manages the local library', async
     expect(await readdir(libraryDirectory)).toEqual([
       'library-renamed Copy.png',
     ]);
+  } finally {
+    await application.close();
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test('exports a current 3D preview snapshot without dirtying the skin', async () => {
+  const temporaryDirectory = await mkdtemp(
+    path.join(tmpdir(), 'minecraft-skin-editor-snapshot-e2e-'),
+  );
+  const inputPath = path.join(temporaryDirectory, 'snapshot-source.png');
+  const snapshotPath = path.join(temporaryDirectory, 'preview-snapshot');
+  const canceledSnapshotPath = path.join(
+    temporaryDirectory,
+    'canceled-snapshot',
+  );
+  await writeFile(
+    inputPath,
+    encode({
+      width: 64,
+      height: 64,
+      data: new Uint8Array(64 * 64 * 4),
+      channels: 4,
+      depth: 8,
+    }),
+  );
+
+  const application = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      MINECRAFT_SKIN_EDITOR_E2E: '1',
+      MINECRAFT_SKIN_EDITOR_E2E_OPEN_PATH: inputPath,
+      MINECRAFT_SKIN_EDITOR_E2E_SNAPSHOT_PATH: snapshotPath,
+    },
+  });
+
+  try {
+    const window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Open PNG' }).click();
+    const preview = window.getByRole('img', { name: '3D skin preview' });
+    const editorStatus = window.getByLabel('Editor status');
+    await expect(preview).toHaveAttribute('data-preview-ready', 'true');
+    const viewportSize = await preview.evaluate((element) => {
+      interface BrowserCanvas {
+        readonly width: number;
+        readonly height: number;
+      }
+      const canvas = element as unknown as BrowserCanvas;
+      return {
+        width: canvas.width,
+        height: canvas.height,
+        revision: element.getAttribute('data-document-revision'),
+      };
+    });
+
+    await window.getByRole('button', { name: 'Show outer layer' }).click();
+    const previewBox = await preview.boundingBox();
+    expect(previewBox).not.toBeNull();
+    await window.mouse.move(
+      previewBox!.x + previewBox!.width / 2,
+      previewBox!.y + previewBox!.height / 2,
+    );
+    await window.mouse.down({ button: 'right' });
+    await window.mouse.move(
+      previewBox!.x + previewBox!.width * 0.68,
+      previewBox!.y + previewBox!.height * 0.42,
+    );
+    await window.mouse.up({ button: 'right' });
+
+    await window.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(
+      window.getByText('Snapshot saved as preview-snapshot.png.', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    const saved = decode(await readFile(`${snapshotPath}.png`), {
+      checkCrc: true,
+    });
+    expect(saved.width).toBe(viewportSize.width);
+    expect(saved.height).toBe(viewportSize.height);
+    expect(await preview.getAttribute('data-document-revision')).toBe(
+      viewportSize.revision,
+    );
+    await expect(
+      editorStatus.getByText('snapshot-source.png', { exact: true }),
+    ).toBeVisible();
+    await expect(editorStatus.getByText('snapshot-source.png •')).toHaveCount(
+      0,
+    );
+    await expect(
+      window.getByRole('button', { name: /^History/ }),
+    ).toContainText('1 / 1');
+  } finally {
+    await application.close();
+  }
+
+  const cancellationApplication = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      MINECRAFT_SKIN_EDITOR_E2E: '1',
+      MINECRAFT_SKIN_EDITOR_E2E_OPEN_PATH: inputPath,
+      MINECRAFT_SKIN_EDITOR_E2E_SNAPSHOT_PATH: canceledSnapshotPath,
+      MINECRAFT_SKIN_EDITOR_E2E_SNAPSHOT_CANCEL: '1',
+    },
+  });
+  try {
+    const window = await cancellationApplication.firstWindow();
+    await window.getByRole('button', { name: 'Open PNG' }).click();
+    await window.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(
+      window.getByText('Snapshot saved as canceled-snapshot.png.', {
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    expect(await readdir(temporaryDirectory)).not.toContain(
+      'canceled-snapshot.png',
+    );
+  } finally {
+    await cancellationApplication.close();
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test('opens a bound pop-out preview, propagates updates, and disposes on close', async () => {
+  const temporaryDirectory = await mkdtemp(
+    path.join(tmpdir(), 'minecraft-skin-editor-popout-e2e-'),
+  );
+  const inputPath = path.join(temporaryDirectory, 'bound-source.png');
+  const snapshotPath = path.join(temporaryDirectory, 'popout-snapshot');
+  await writeFile(
+    inputPath,
+    encode({
+      width: 64,
+      height: 64,
+      data: new Uint8Array(64 * 64 * 4),
+      channels: 4,
+      depth: 8,
+    }),
+  );
+
+  const application = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      MINECRAFT_SKIN_EDITOR_E2E: '1',
+      MINECRAFT_SKIN_EDITOR_E2E_OPEN_PATH: inputPath,
+      MINECRAFT_SKIN_EDITOR_E2E_SNAPSHOT_PATH: snapshotPath,
+      MINECRAFT_SKIN_EDITOR_E2E_UNSAVED_DECISION: 'discard',
+    },
+  });
+
+  try {
+    const window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Open PNG' }).click();
+    const firstTab = window.getByRole('tab', { name: /bound-source\.png/ });
+    const popoutPromise = application.waitForEvent('window');
+    await window.getByRole('button', { name: 'Pop Out' }).click();
+    const popout = await popoutPromise;
+    const popoutPreview = popout.getByRole('img', {
+      name: '3D skin preview',
+    });
+    await expect(popoutPreview).toBeVisible();
+    await expect(popout).toHaveTitle('bound-source.png — 3D Preview');
+    await expect(popoutPreview).toHaveAttribute('data-skin-model', 'classic');
+    await expect(popoutPreview).toHaveAttribute('data-bound-document-id', /.+/);
+    const security = await popout.evaluate(() => ({
+      hasCommonJsRequire: 'require' in globalThis,
+      hasElectronBridge: 'electron' in globalThis,
+    }));
+    expect(security).toEqual({
+      hasCommonJsRequire: false,
+      hasElectronBridge: false,
+    });
+
+    await window.getByRole('button', { name: 'Show outer layer' }).click();
+    await expect(popoutPreview).toHaveAttribute('data-outer-visible', 'false');
+
+    await window.bringToFront();
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('file-new')?.click();
+    });
+    const dialog = window.getByRole('dialog', { name: 'New Skin' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+    const secondTab = window.getByRole('tab', { name: /Untitled\.png/ });
+    await expect(secondTab).toBeVisible();
+    await window.getByRole('button', { name: 'Slim', exact: true }).click();
+    await expect(popoutPreview).toHaveAttribute('data-skin-model', 'classic');
+    await expect(popout).toHaveTitle('bound-source.png — 3D Preview');
+
+    await firstTab.click();
+    await window.getByRole('button', { name: 'Slim', exact: true }).click();
+    await expect(popoutPreview).toHaveAttribute('data-skin-model', 'slim');
+
+    const popoutBox = await popoutPreview.boundingBox();
+    expect(popoutBox).not.toBeNull();
+    await popout.mouse.move(
+      popoutBox!.x + popoutBox!.width / 2,
+      popoutBox!.y + popoutBox!.height / 2,
+    );
+    await popout.mouse.down({ button: 'right' });
+    await popout.mouse.move(
+      popoutBox!.x + popoutBox!.width * 0.64,
+      popoutBox!.y + popoutBox!.height * 0.46,
+    );
+    await popout.mouse.up({ button: 'right' });
+    await popout.getByRole('button', { name: 'Snapshot', exact: true }).click();
+    await expect(popout.getByRole('status')).toHaveText(
+      'Snapshot saved as popout-snapshot.png.',
+    );
+    const popoutSaved = decode(await readFile(`${snapshotPath}.png`), {
+      checkCrc: true,
+    });
+    const popoutSize = await popoutPreview.evaluate((element) => {
+      interface BrowserCanvas {
+        readonly width: number;
+        readonly height: number;
+      }
+      const canvas = element as unknown as BrowserCanvas;
+      return { width: canvas.width, height: canvas.height };
+    });
+    expect(popoutSaved.width).toBe(popoutSize.width);
+    expect(popoutSaved.height).toBe(popoutSize.height);
+
+    await window.bringToFront();
+    await window.getByRole('button', { name: 'Pop Out' }).click();
+    expect(application.windows()).toHaveLength(2);
+    await popout.close();
+    await expect.poll(() => application.windows().length).toBe(1);
+
+    const reopenedPromise = application.waitForEvent('window');
+    await window.bringToFront();
+    await window.getByRole('button', { name: 'Pop Out' }).click();
+    const reopened = await reopenedPromise;
+    await expect(
+      reopened.getByRole('img', { name: '3D skin preview' }),
+    ).toBeVisible();
+    await expect(reopened).toHaveTitle('bound-source.png — 3D Preview');
+    await reopened.close();
   } finally {
     await application.close();
     await rm(temporaryDirectory, { recursive: true, force: true });

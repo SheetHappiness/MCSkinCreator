@@ -8,15 +8,21 @@ import type {
   EditCommandState,
   FileCommand,
   NativeAppLifecycleApi,
+  NativePreviewApi,
   NativeSkinEditApi,
   NativeSkinFileApi,
   NativeSkinLibraryApi,
   OpenSkinPngResult,
+  OpenPopoutPreviewRequest,
+  OpenPopoutPreviewResult,
+  PopoutPreviewState,
   RenameSkinLibraryRequest,
   SaveSkinPngAsRequest,
   SaveSkinPngAsResult,
   SaveSkinPngRequest,
   SaveSkinPngResult,
+  SavePreviewSnapshotRequest,
+  SavePreviewSnapshotResult,
   SkinLibraryActionResult,
   SkinLibraryListResult,
   SkinLibraryMutationResult,
@@ -45,6 +51,15 @@ const SKIN_LIBRARY_CHANNELS = {
   duplicate: 'skin-library:duplicate',
   delete: 'skin-library:delete',
   copyIn: 'skin-library:copy-in',
+} as const;
+
+const PREVIEW_CHANNELS = {
+  openPopout: 'preview:open-popout',
+  publish: 'preview:publish',
+  ready: 'preview:ready',
+  update: 'preview:update',
+  closed: 'preview:closed',
+  saveSnapshot: 'preview:save-snapshot',
 } as const;
 
 const APP_LIFECYCLE_CHANNELS = {
@@ -150,6 +165,85 @@ const skinLibraryApi: NativeSkinLibraryApi = {
   },
 };
 
+function isPopoutPreviewState(value: unknown): value is PopoutPreviewState {
+  if (typeof value !== 'object' || value === null) return false;
+  const state = value as Partial<PopoutPreviewState>;
+  if (
+    typeof state.documentId !== 'string' ||
+    typeof state.displayName !== 'string' ||
+    (state.model !== 'classic' && state.model !== 'slim') ||
+    !Number.isSafeInteger(state.revision) ||
+    !(state.pngBytes instanceof Uint8Array) ||
+    typeof state.visibility !== 'object' ||
+    state.visibility === null
+  ) {
+    return false;
+  }
+  const visibility = state.visibility;
+  const bodyParts = [
+    'head',
+    'torso',
+    'rightArm',
+    'leftArm',
+    'rightLeg',
+    'leftLeg',
+  ] as const;
+  const layers = ['base', 'outer'] as const;
+  const visibilityRecord = visibility as {
+    bodyParts?: Record<string, unknown>;
+    layers?: Record<string, unknown>;
+  };
+  return (
+    visibilityRecord.bodyParts !== undefined &&
+    visibilityRecord.layers !== undefined &&
+    bodyParts.every(
+      (bodyPart) => typeof visibilityRecord.bodyParts?.[bodyPart] === 'boolean',
+    ) &&
+    layers.every(
+      (layer) => typeof visibilityRecord.layers?.[layer] === 'boolean',
+    )
+  );
+}
+
+const previewApi: NativePreviewApi = {
+  async openPopoutPreview(
+    request: OpenPopoutPreviewRequest,
+  ): Promise<OpenPopoutPreviewResult> {
+    return ipcRenderer.invoke(
+      PREVIEW_CHANNELS.openPopout,
+      request,
+    ) as Promise<OpenPopoutPreviewResult>;
+  },
+  publishPopoutPreview(state: PopoutPreviewState): void {
+    ipcRenderer.send(PREVIEW_CHANNELS.publish, state);
+  },
+  onPopoutPreviewState(
+    listener: (state: PopoutPreviewState) => void,
+  ): () => void {
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      if (isPopoutPreviewState(value)) listener(value);
+    };
+    ipcRenderer.on(PREVIEW_CHANNELS.update, handler);
+    return () => ipcRenderer.removeListener(PREVIEW_CHANNELS.update, handler);
+  },
+  notifyPopoutPreviewReady(): void {
+    ipcRenderer.send(PREVIEW_CHANNELS.ready);
+  },
+  onPopoutPreviewClosed(listener: () => void): () => void {
+    const handler = () => listener();
+    ipcRenderer.on(PREVIEW_CHANNELS.closed, handler);
+    return () => ipcRenderer.removeListener(PREVIEW_CHANNELS.closed, handler);
+  },
+  async savePreviewSnapshot(
+    request: SavePreviewSnapshotRequest,
+  ): Promise<SavePreviewSnapshotResult> {
+    return ipcRenderer.invoke(
+      PREVIEW_CHANNELS.saveSnapshot,
+      request,
+    ) as Promise<SavePreviewSnapshotResult>;
+  },
+};
+
 const skinEditApi: NativeSkinEditApi = {
   setCommandState(state: EditCommandState): void {
     ipcRenderer.send(SKIN_EDIT_CHANNELS.state, state);
@@ -201,5 +295,6 @@ const appLifecycleApi: NativeAppLifecycleApi = {
 
 contextBridge.exposeInMainWorld('skinFiles', skinFileApi);
 contextBridge.exposeInMainWorld('skinLibrary', skinLibraryApi);
+contextBridge.exposeInMainWorld('preview', previewApi);
 contextBridge.exposeInMainWorld('skinEdits', skinEditApi);
 contextBridge.exposeInMainWorld('appLifecycle', appLifecycleApi);

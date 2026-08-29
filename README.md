@@ -121,6 +121,8 @@ intentionally deferred beyond the core editor.
 - Save All across dirty tabs
 - Offline local skin library: list, open, rename, duplicate, delete, and copy
   the active document
+- Pop Out a read-only 3D preview bound to the current document
+- Snapshot the current 3D preview to PNG
 - Ctrl+N for New Skin
 - Track unsaved changes
 - Warn before destructive close when appropriate
@@ -129,6 +131,8 @@ New and drag-and-drop workflows are documented in
 [`docs/NEW_SKIN_AND_DROP.md`](docs/NEW_SKIN_AND_DROP.md).
 Multi-document and local-library behavior is documented in
 [`docs/LOCAL_LIBRARY_MULTI_DOCUMENT.md`](docs/LOCAL_LIBRARY_MULTI_DOCUMENT.md).
+Pop-out binding and snapshot export are documented in
+[`docs/POPOUT_PREVIEW_SNAPSHOT.md`](docs/POPOUT_PREVIEW_SNAPSHOT.md).
 
 Example unsaved-state treatment:
 
@@ -214,7 +218,8 @@ v0.1 requirements:
 - nearest-neighbor texture rendering;
 - camera rotation;
 - zoom;
-- real-time texture updates after editing.
+- real-time texture updates after editing;
+- Pop Out and Snapshot utilities.
 
 The 2D editor and 3D preview must use the same underlying document state.
 
