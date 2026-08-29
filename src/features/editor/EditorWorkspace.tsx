@@ -37,7 +37,7 @@ import {
   registerActiveEditorInteraction,
 } from './activeEditorInteraction';
 import { ColorFields } from './ColorFields';
-import { ColorSwatches } from './ColorSwatches';
+import { ColorControls } from './ColorControls';
 import { colorToHex } from './colorHex';
 import {
   resetEditorColors,
@@ -545,7 +545,7 @@ export function EditorWorkspace({
             ))}
           </div>
 
-          <ColorSwatches
+          <ColorControls
             primaryColor={primaryColor}
             secondaryColor={secondaryColor}
             activeSlot={activeColorSlot}

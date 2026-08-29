@@ -374,6 +374,7 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
     );
 
     const colors = window.getByLabel('Paint colors');
+    const colorControls = window.getByLabel('Color controls');
     await expect(
       colors.getByRole('button', { name: 'Primary color', exact: true }),
     ).toHaveAttribute('aria-pressed', 'true');
@@ -410,6 +411,52 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
     await window.getByLabel('Paint hex color').fill('#123456');
     await window.getByLabel('Paint hex color').press('Enter');
     await window.getByLabel('Paint alpha').fill('128');
+
+    await colorControls
+      .getByRole('button', { name: 'Color controls', exact: true })
+      .click();
+    const advancedColors = window.getByRole('dialog', {
+      name: 'Advanced color controls',
+    });
+    await expect(
+      advancedColors.getByRole('group', { name: 'RGB channels' }),
+    ).toBeVisible();
+    await expect(
+      advancedColors.getByRole('group', { name: 'HSV channels' }),
+    ).toBeVisible();
+    await expect(
+      advancedColors.getByLabel('Visual color picker'),
+    ).toBeVisible();
+    await colorControls
+      .getByRole('button', {
+        name: 'Add current color to swatches',
+        exact: true,
+      })
+      .click();
+    await expect(
+      advancedColors.getByRole('button', {
+        name: 'Apply #123456 swatch to Secondary',
+        exact: true,
+      }),
+    ).toBeVisible();
+    await advancedColors
+      .getByRole('button', {
+        name: 'Apply #123456 swatch to Secondary',
+        exact: true,
+      })
+      .click();
+    await colors
+      .getByRole('button', { name: 'Secondary color', exact: true })
+      .click();
+    await expect(window.getByLabel('Selected RGBA color')).toHaveText(
+      '#123456 · A 128',
+    );
+    await colors
+      .getByRole('button', { name: 'Primary color', exact: true })
+      .click();
+    await colorControls
+      .getByRole('button', { name: 'Close color', exact: true })
+      .click();
 
     await visibility
       .getByRole('button', { name: 'Hide Head', exact: true })
