@@ -9,6 +9,7 @@ import {
 } from '../../engine/tools';
 import type { DocumentHistory } from '../../engine/history';
 import type { SkinPickResult } from '../../renderers/three';
+import type { ColorSlot } from '../editor/editorToolStore';
 
 interface SurfaceIdentity {
   readonly model: SkinPickResult['model'];
@@ -52,7 +53,7 @@ export class ThreeDToolInteraction {
   constructor(
     private readonly document: SkinDocument,
     private readonly history: DocumentHistory,
-    private readonly setColor: (color: RgbaColor) => void,
+    private readonly setColor: (slot: ColorSlot, color: RgbaColor) => void,
   ) {}
 
   pointerDown(
@@ -61,13 +62,14 @@ export class ThreeDToolInteraction {
     pick: SkinPickResult | undefined,
     tool: EditorTool,
     color: RgbaColor,
+    colorSlot: ColorSlot = 'primary',
   ): boolean {
     if (button !== 0 || pick === undefined) return false;
 
     this.cancel();
 
     if (tool === 'eyedropper') {
-      this.setColor(samplePixel(this.document, pick));
+      this.setColor(colorSlot, samplePixel(this.document, pick));
       return true;
     }
 

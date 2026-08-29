@@ -147,7 +147,7 @@ export class SkinPreviewRenderer {
     this.renderer.domElement.setAttribute('role', 'img');
     this.renderer.domElement.setAttribute(
       'aria-label',
-      '3D skin preview; left drag edits, right drag orbits',
+      '3D skin preview; left drag edits, Shift plus left uses secondary, right drag orbits',
     );
     this.renderer.domElement.tabIndex = 0;
     this.renderer.domElement.setAttribute('data-preview-ready', 'true');

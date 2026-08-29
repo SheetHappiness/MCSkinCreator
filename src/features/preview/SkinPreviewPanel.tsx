@@ -20,9 +20,12 @@ import {
   registerActiveEditorInteraction,
 } from '../editor/activeEditorInteraction';
 import {
-  setSelectedEditorColor,
+  setEditorColor,
+  type ColorSlot,
   useActiveEditorTool,
-  useSelectedEditorColor,
+  useActiveColorSlot,
+  usePrimaryEditorColor,
+  useSecondaryEditorColor,
 } from '../editor/editorToolStore';
 import { changeSkinModel } from './modelSelection';
 import {
@@ -93,10 +96,14 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<SkinPreviewRenderer | undefined>(undefined);
   const activeTool = useActiveEditorTool();
-  const selectedColor = useSelectedEditorColor();
+  const activeColorSlot = useActiveColorSlot();
+  const primaryColor = usePrimaryEditorColor();
+  const secondaryColor = useSecondaryEditorColor();
   const activeToolRef = useRef<EditorTool>(activeTool);
-  const selectedColorRef = useRef<RgbaColor>(selectedColor);
+  const primaryColorRef = useRef<RgbaColor>(primaryColor);
+  const secondaryColorRef = useRef<RgbaColor>(secondaryColor);
   const temporaryEyedropperRef = useRef(false);
+  const temporaryEyedropperSlotRef = useRef<ColorSlot | undefined>(undefined);
   const interactionRef = useRef<ThreeDToolInteraction | undefined>(undefined);
   const defaultView = useMemo(
     () => ({
@@ -118,9 +125,16 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
 
   useEffect(() => {
     activeToolRef.current = activeTool;
-    selectedColorRef.current = selectedColor;
+    primaryColorRef.current = primaryColor;
+    secondaryColorRef.current = secondaryColor;
     temporaryEyedropperRef.current = temporaryEyedropper;
-  }, [activeTool, selectedColor, temporaryEyedropper]);
+  }, [
+    activeColorSlot,
+    activeTool,
+    primaryColor,
+    secondaryColor,
+    temporaryEyedropper,
+  ]);
 
   const subscribe = useCallback(
     (notify: () => void) => document.subscribeToMutations(notify),
@@ -138,7 +152,7 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
     const interaction = new ThreeDToolInteraction(
       document,
       history,
-      setSelectedEditorColor,
+      setEditorColor,
     );
     interactionRef.current = interaction;
     const renderer = new SkinPreviewRenderer(mount, document, undefined, {
@@ -147,12 +161,20 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
         const tool = temporaryEyedropperRef.current
           ? 'eyedropper'
           : activeToolRef.current;
+        const colorSlot: ColorSlot =
+          temporaryEyedropperSlotRef.current ??
+          (event.shiftKey ? 'secondary' : 'primary');
+        const color =
+          colorSlot === 'primary'
+            ? primaryColorRef.current
+            : secondaryColorRef.current;
         const handled = interaction.pointerDown(
           event.pointerId,
           event.button,
           pick,
           tool,
-          selectedColorRef.current,
+          color,
+          colorSlot,
         );
         if (!handled) return;
         event.preventDefault();
@@ -218,6 +240,7 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
         event.preventDefault();
         interactionRef.current?.cancel();
         temporaryEyedropperRef.current = true;
+        temporaryEyedropperSlotRef.current = activeColorSlot;
         setTemporaryEyedropper(true);
         rendererRef.current?.setEditingTool('eyedropper');
       }
@@ -225,6 +248,7 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
     const handleAltUp = (event: KeyboardEvent) => {
       if (event.key !== 'Alt') return;
       temporaryEyedropperRef.current = false;
+      temporaryEyedropperSlotRef.current = undefined;
       setTemporaryEyedropper(false);
       rendererRef.current?.setEditingTool(activeToolRef.current);
     };
@@ -234,7 +258,7 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
       window.removeEventListener('keydown', handleAltDown);
       window.removeEventListener('keyup', handleAltUp);
     };
-  }, [activeTool]);
+  }, [activeColorSlot, activeTool]);
 
   useEffect(
     () =>

@@ -120,6 +120,7 @@ test('paints, erases, undoes, redoes, and saves exact RGBA pixels', async () => 
   const outputPath = `${requestedOutputPath}.png`;
   const pixels = new Uint8Array(64 * 64 * 4);
   const eraserPixelOffset = (40 * 64 + 40) * 4;
+  const secondaryPixelOffset = (20 * 64 + 20) * 4;
   pixels.set([12, 34, 56, 78], 0);
   pixels.set([12, 34, 56, 78], (10 * 64 + 10) * 4);
   pixels.set([210, 220, 230, 255], eraserPixelOffset);
@@ -300,6 +301,25 @@ test('paints, erases, undoes, redoes, and saves exact RGBA pixels', async () => 
     await expect(zoomValue).toHaveText(editorZoomBeforePreview!);
     await window.getByRole('button', { name: 'Reset view' }).click();
 
+    await window.keyboard.press('p');
+    const colors = window.getByLabel('Paint colors');
+    await colors
+      .getByRole('button', { name: 'Secondary color', exact: true })
+      .click();
+    await expect(
+      window.getByLabel('Exact secondary paint color'),
+    ).toBeVisible();
+    await window.getByLabel('Paint hex color').fill('#A1B2C3');
+    await window.getByLabel('Paint hex color').press('Enter');
+    await window.getByLabel('Paint alpha').fill('64');
+    const secondaryTarget = fittedTexturePoint(20, 20);
+    await window.mouse.click(secondaryTarget.x, secondaryTarget.y, {
+      button: 'right',
+    });
+    await expect(window.getByLabel('Selected RGBA color')).toHaveText(
+      '#A1B2C3 · A 64',
+    );
+
     await window.getByRole('button', { name: 'Save As…' }).click();
     await expect(editorStatus.getByText('saved-copy.png')).toBeVisible();
 
@@ -308,6 +328,7 @@ test('paints, erases, undoes, redoes, and saves exact RGBA pixels', async () => 
     expect(saved.height).toBe(64);
     pixels.set([0x12, 0x34, 0x56, 128], (32 * 64 + 32) * 4);
     pixels.set([0, 0, 0, 0], eraserPixelOffset);
+    pixels.set([0xa1, 0xb2, 0xc3, 64], secondaryPixelOffset);
     expect(new Uint8Array(saved.data.buffer)).toEqual(pixels);
   } finally {
     await application.close();
@@ -352,6 +373,44 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
       'head,torso,rightArm,leftArm,rightLeg,leftLeg',
     );
 
+    const colors = window.getByLabel('Paint colors');
+    await expect(
+      colors.getByRole('button', { name: 'Primary color', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      colors.getByRole('button', { name: 'Secondary color', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'false');
+    await colors
+      .getByRole('button', { name: 'Secondary color', exact: true })
+      .click();
+    await expect(
+      window.getByLabel('Exact secondary paint color'),
+    ).toBeVisible();
+    await window.getByLabel('Paint hex color').fill('#ABCDEF');
+    await window.getByLabel('Paint hex color').press('Enter');
+    await window.getByLabel('Paint alpha').fill('64');
+    await expect(window.getByLabel('Selected RGBA color')).toHaveText(
+      '#ABCDEF · A 64',
+    );
+    await colors
+      .getByRole('button', { name: 'Primary color', exact: true })
+      .click();
+    await expect(window.getByLabel('Exact primary paint color')).toBeVisible();
+    await expect(window.getByLabel('Selected RGBA color')).toHaveText(
+      '#000000 · A 255',
+    );
+    await window.keyboard.press('x');
+    await expect(window.getByLabel('Selected RGBA color')).toHaveText(
+      '#ABCDEF · A 64',
+    );
+    await window.keyboard.press('d');
+    await expect(window.getByLabel('Selected RGBA color')).toHaveText(
+      '#000000 · A 255',
+    );
+    await window.getByLabel('Paint hex color').fill('#123456');
+    await window.getByLabel('Paint hex color').press('Enter');
+    await window.getByLabel('Paint alpha').fill('128');
+
     await visibility
       .getByRole('button', { name: 'Hide Head', exact: true })
       .click();
@@ -381,8 +440,6 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
       .getByRole('button', { name: 'Restore all visibility', exact: true })
       .click();
 
-    await window.getByLabel('Paint color', { exact: true }).fill('#123456');
-    await window.getByLabel('Paint alpha').fill('128');
     const previewBox = await preview.boundingBox();
     expect(previewBox).not.toBeNull();
     const pointer = {
@@ -419,13 +476,26 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
     });
     await expect(editorStatus.getByText('input-skin.png •')).toBeVisible();
 
+    await colors
+      .getByRole('button', { name: 'Secondary color', exact: true })
+      .click();
+    await window.getByLabel('Paint hex color').fill('#ABCDEF');
+    await window.getByLabel('Paint hex color').press('Enter');
+    await window.getByLabel('Paint alpha').fill('64');
+    await window.mouse.move(pointer.x, pointer.y);
+    await window.keyboard.down('Shift');
+    await window.mouse.down();
+    await window.mouse.up();
+    await window.keyboard.up('Shift');
+    await expect(editorStatus.getByText('input-skin.png •')).toBeVisible();
+
     await window.getByRole('button', { name: 'Save As…' }).click();
     await expect(editorStatus.getByText('saved-3d-copy.png')).toBeVisible();
 
     const saved = decode(await readFile(outputPath), { checkCrc: true });
     expect(saved.width).toBe(64);
     expect(saved.height).toBe(64);
-    pixels.set([0x12, 0x34, 0x56, 128], (pickedY * 64 + pickedX) * 4);
+    pixels.set([0xab, 0xcd, 0xef, 64], (pickedY * 64 + pickedX) * 4);
     expect(new Uint8Array(saved.data.buffer)).toEqual(pixels);
   } finally {
     await application.close();

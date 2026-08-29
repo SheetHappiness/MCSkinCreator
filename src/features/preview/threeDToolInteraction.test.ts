@@ -1,8 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SkinDocument, type RgbaColor } from '../../engine/document';
 import { DocumentHistory } from '../../engine/history';
 import type { SkinPickResult } from '../../renderers/three';
+import {
+  getEditorToolState,
+  resetEditorColors,
+} from '../editor/editorToolStore';
 import { ThreeDToolInteraction } from './threeDToolInteraction';
 
 const PAINT_COLOR: RgbaColor = { r: 220, g: 80, b: 40, a: 255 };
@@ -28,6 +32,10 @@ function pick(
 }
 
 describe('direct 3D tool interaction', () => {
+  afterEach(() => {
+    resetEditorColors();
+  });
+
   it('paints a continuous same-face stroke as one undoable operation', () => {
     const document = SkinDocument.createBlank({ id: '3d-pencil' });
     const history = new DocumentHistory(document);
@@ -109,10 +117,79 @@ describe('direct 3D tool interaction', () => {
     expect(
       interaction.pointerDown(1, 0, pick(9, 11), 'eyedropper', PAINT_COLOR),
     ).toBe(true);
-    expect(setColor).toHaveBeenCalledWith(sampled);
+    expect(setColor).toHaveBeenCalledWith('primary', sampled);
     expect(document.revision).toBe(revision);
     expect(document.isDirty).toBe(false);
     expect(history.canUndo).toBe(false);
+  });
+
+  it('paints and samples the secondary slot through the secondary action', () => {
+    const document = SkinDocument.createBlank({ id: '3d-secondary' });
+    const history = new DocumentHistory(document);
+    const setColor = vi.fn();
+    const interaction = new ThreeDToolInteraction(document, history, setColor);
+    const secondaryColor: RgbaColor = { r: 9, g: 19, b: 29, a: 39 };
+
+    expect(
+      interaction.pointerDown(
+        1,
+        0,
+        pick(12, 13),
+        'pencil',
+        secondaryColor,
+        'secondary',
+      ),
+    ).toBe(true);
+    interaction.pointerUp(1);
+    expect(document.readPixel(12, 13)).toEqual(secondaryColor);
+
+    document.writePixel(14, 15, { r: 101, g: 102, b: 103, a: 104 });
+    const revision = document.revision;
+    expect(
+      interaction.pointerDown(
+        2,
+        0,
+        pick(14, 15),
+        'eyedropper',
+        secondaryColor,
+        'secondary',
+      ),
+    ).toBe(true);
+    expect(setColor).toHaveBeenCalledWith('secondary', {
+      r: 101,
+      g: 102,
+      b: 103,
+      a: 104,
+    });
+    expect(document.revision).toBe(revision);
+    expect(getEditorToolState().activeColorSlot).toBe('primary');
+  });
+
+  it('uses the secondary color for a secondary fill action', () => {
+    const document = SkinDocument.createBlank({ id: '3d-secondary-fill' });
+    const history = new DocumentHistory(document);
+    const interaction = new ThreeDToolInteraction(document, history, vi.fn());
+    const sourceColor: RgbaColor = { r: 30, g: 40, b: 50, a: 255 };
+    const secondaryColor: RgbaColor = { r: 60, g: 70, b: 80, a: 90 };
+
+    for (const x of [5, 6, 7]) document.writePixel(x, 5, sourceColor);
+    document.markSaved();
+
+    expect(
+      interaction.pointerDown(
+        1,
+        0,
+        pick(6, 5),
+        'fill',
+        secondaryColor,
+        'secondary',
+      ),
+    ).toBe(true);
+    for (const x of [5, 6, 7]) {
+      expect(document.readPixel(x, 5)).toEqual(secondaryColor);
+    }
+    expect(document.isDirty).toBe(true);
+    expect(history.canUndo).toBe(true);
   });
 
   it('rolls back a canceled stroke and ignores non-primary buttons', () => {

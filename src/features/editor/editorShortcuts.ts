@@ -1,6 +1,8 @@
 import type { EditorTool } from '../../engine/tools';
 
-export type PointerAction = 'pan' | 'edit';
+export type PointerAction = 'pan' | 'edit-primary' | 'edit-secondary';
+
+export type ColorShortcutAction = 'swap' | 'reset';
 
 const SHORTCUT_TO_TOOL: Readonly<Record<string, EditorTool>> = {
   p: 'pencil',
@@ -52,6 +54,24 @@ export function getPointerAction(
   spacePressed: boolean,
 ): PointerAction | undefined {
   if (button === 1 || (button === 0 && spacePressed)) return 'pan';
-  if (button === 0) return 'edit';
+  if (button === 0) return 'edit-primary';
+  if (button === 2) return 'edit-secondary';
+  return undefined;
+}
+
+export function getColorShortcutAction(
+  input: EditorToolShortcutInput,
+): ColorShortcutAction | undefined {
+  if (
+    input.ctrlKey ||
+    input.metaKey ||
+    input.altKey ||
+    isEditableKeyboardTarget(input.target)
+  ) {
+    return undefined;
+  }
+
+  if (input.key.toLowerCase() === 'x') return 'swap';
+  if (input.key.toLowerCase() === 'd') return 'reset';
   return undefined;
 }

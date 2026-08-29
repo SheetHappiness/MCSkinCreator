@@ -8,7 +8,7 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from 'react';
 
-import type { RgbaColor, SkinDocument } from '../../engine/document';
+import type { SkinDocument } from '../../engine/document';
 import type { DocumentHistory } from '../../engine/history';
 import {
   ERASER_COLOR,
@@ -37,14 +37,24 @@ import {
   registerActiveEditorInteraction,
 } from './activeEditorInteraction';
 import { ColorFields } from './ColorFields';
+import { ColorSwatches } from './ColorSwatches';
 import { colorToHex } from './colorHex';
 import {
+  resetEditorColors,
+  setActiveColorSlot,
+  setEditorColor,
   setActiveEditorTool,
-  setSelectedEditorColor,
+  swapEditorColors,
   useActiveEditorTool,
-  useSelectedEditorColor,
+  useActiveColorSlot,
+  usePrimaryEditorColor,
+  useSecondaryEditorColor,
 } from './editorToolStore';
-import { getEditorToolShortcut, getPointerAction } from './editorShortcuts';
+import {
+  getColorShortcutAction,
+  getEditorToolShortcut,
+  getPointerAction,
+} from './editorShortcuts';
 
 interface EditorWorkspaceProps {
   readonly document: SkinDocument;
@@ -118,15 +128,6 @@ function normalizeWheelDelta(event: ReactWheelEvent): number {
   return event.deltaY;
 }
 
-function colorFromHex(hex: string, alpha: number): RgbaColor {
-  return {
-    r: Number.parseInt(hex.slice(1, 3), 16),
-    g: Number.parseInt(hex.slice(3, 5), 16),
-    b: Number.parseInt(hex.slice(5, 7), 16),
-    a: alpha,
-  };
-}
-
 function ToolIcon({ tool }: { readonly tool: EditorTool }) {
   const common = {
     fill: 'none',
@@ -189,10 +190,17 @@ export function EditorWorkspace({
   const panGestureRef = useRef<PanGesture | undefined>(undefined);
   const strokeGestureRef = useRef<StrokeGesture | undefined>(undefined);
   const spacePressedRef = useRef(false);
+  const temporaryEyedropperSlotRef = useRef<
+    'primary' | 'secondary' | undefined
+  >(undefined);
   const fittedDocumentIdRef = useRef<string | undefined>(undefined);
   const size = useElementSize(stageRef);
   const activeTool = useActiveEditorTool();
-  const selectedColor = useSelectedEditorColor();
+  const activeColorSlot = useActiveColorSlot();
+  const primaryColor = usePrimaryEditorColor();
+  const secondaryColor = useSecondaryEditorColor();
+  const selectedColor =
+    activeColorSlot === 'primary' ? primaryColor : secondaryColor;
   const [viewport, setViewport] = useState(INITIAL_VIEWPORT);
   const [showGrid, setShowGrid] = useState(true);
   const [hoveredPixel, setHoveredPixel] = useState<
@@ -330,6 +338,7 @@ export function EditorWorkspace({
     cancelStroke();
     spacePressedRef.current = false;
     setIsSpacePressed(false);
+    temporaryEyedropperSlotRef.current = undefined;
     setTemporaryEyedropper(false);
   }, [cancelStroke, finishPan]);
 
@@ -365,6 +374,21 @@ export function EditorWorkspace({
   }, [requestToolChange]);
 
   useEffect(() => {
+    const handleColorShortcut = (event: KeyboardEvent) => {
+      const action = getColorShortcutAction(event);
+      if (action === undefined) return;
+      event.preventDefault();
+      if (action === 'swap') {
+        swapEditorColors();
+      } else {
+        resetEditorColors();
+      }
+    };
+    window.addEventListener('keydown', handleColorShortcut);
+    return () => window.removeEventListener('keydown', handleColorShortcut);
+  }, []);
+
+  useEffect(() => {
     const handleAltDown = (event: KeyboardEvent) => {
       if (
         event.key === 'Alt' &&
@@ -374,11 +398,13 @@ export function EditorWorkspace({
       ) {
         event.preventDefault();
         cancelStroke();
+        temporaryEyedropperSlotRef.current = activeColorSlot;
         setTemporaryEyedropper(true);
       }
     };
     const handleAltUp = (event: KeyboardEvent) => {
       if (event.key === 'Alt') {
+        temporaryEyedropperSlotRef.current = undefined;
         setTemporaryEyedropper(false);
       }
     };
@@ -388,7 +414,7 @@ export function EditorWorkspace({
       window.removeEventListener('keydown', handleAltDown);
       window.removeEventListener('keyup', handleAltUp);
     };
-  }, [activeTool, cancelStroke]);
+  }, [activeColorSlot, activeTool, cancelStroke]);
 
   const effectiveTool: EditorTool = temporaryEyedropper
     ? 'eyedropper'
@@ -412,23 +438,36 @@ export function EditorWorkspace({
       setIsPanning(true);
       return;
     }
-    if (pointerAction !== 'edit') return;
+    if (
+      pointerAction !== 'edit-primary' &&
+      pointerAction !== 'edit-secondary'
+    ) {
+      return;
+    }
+
+    const pointerColorSlot =
+      pointerAction === 'edit-primary' ? 'primary' : 'secondary';
 
     const point = updateHoveredPixel(event.clientX, event.clientY);
     if (point === undefined) return;
 
     event.preventDefault();
+    const colorSlot =
+      effectiveTool === 'eyedropper'
+        ? (temporaryEyedropperSlotRef.current ?? pointerColorSlot)
+        : pointerColorSlot;
+    const color = colorSlot === 'primary' ? primaryColor : secondaryColor;
     if (effectiveTool === 'eyedropper') {
-      setSelectedEditorColor(samplePixel(skinDocument, point));
+      setEditorColor(colorSlot, samplePixel(skinDocument, point));
       return;
     }
     if (effectiveTool === 'fill') {
-      fillAt(skinDocument, history, point, selectedColor);
+      fillAt(skinDocument, history, point, color);
       return;
     }
 
-    const color = effectiveTool === 'eraser' ? ERASER_COLOR : selectedColor;
-    const stroke = beginPixelStroke(history, color, point);
+    const strokeColor = effectiveTool === 'eraser' ? ERASER_COLOR : color;
+    const stroke = beginPixelStroke(history, strokeColor, point);
     event.currentTarget.setPointerCapture(event.pointerId);
     strokeGestureRef.current = { pointerId: event.pointerId, stroke };
   };
@@ -506,21 +545,15 @@ export function EditorWorkspace({
             ))}
           </div>
 
-          <div className="color-control" aria-label="Selected paint color">
-            <label className="color-swatch" title="RGB color">
-              <span className="visually-hidden">Paint color</span>
-              <input
-                type="color"
-                aria-label="Paint color"
-                value={selectedHex}
-                onChange={(event) =>
-                  setSelectedEditorColor(
-                    colorFromHex(event.currentTarget.value, selectedColor.a),
-                  )
-                }
-              />
-            </label>
-          </div>
+          <ColorSwatches
+            primaryColor={primaryColor}
+            secondaryColor={secondaryColor}
+            activeSlot={activeColorSlot}
+            onSelectSlot={setActiveColorSlot}
+            onChange={setEditorColor}
+            onSwap={swapEditorColors}
+            onReset={resetEditorColors}
+          />
         </aside>
 
         <div className="canvas-stage" ref={stageRef}>
@@ -531,6 +564,7 @@ export function EditorWorkspace({
             aria-label="2D skin canvas"
             role="img"
             tabIndex={0}
+            onContextMenu={(event) => event.preventDefault()}
             onBlur={() => {
               cancelInteraction();
             }}
@@ -604,7 +638,11 @@ export function EditorWorkspace({
         <output className="coordinate-readout" aria-label="Texture coordinates">
           X: {hoveredPixel?.x ?? '—'}&nbsp;&nbsp; Y: {hoveredPixel?.y ?? '—'}
         </output>
-        <ColorFields color={selectedColor} onChange={setSelectedEditorColor} />
+        <ColorFields
+          color={selectedColor}
+          colorSlot={activeColorSlot === 'primary' ? 'Primary' : 'Secondary'}
+          onChange={(color) => setEditorColor(activeColorSlot, color)}
+        />
         <output className="visually-hidden" aria-label="Selected RGBA color">
           {selectedHex.toUpperCase()} · A {selectedColor.a}
         </output>

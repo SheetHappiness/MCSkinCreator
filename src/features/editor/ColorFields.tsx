@@ -5,10 +5,11 @@ import { colorToHex, parseExactHex } from './colorHex';
 
 interface ColorFieldsProps {
   readonly color: RgbaColor;
+  readonly colorSlot?: 'Primary' | 'Secondary';
   readonly onChange: (color: RgbaColor) => void;
 }
 
-export function ColorFields({ color, onChange }: ColorFieldsProps) {
+export function ColorFields({ color, colorSlot, onChange }: ColorFieldsProps) {
   const canonicalHex = colorToHex(color);
   const [hexDraft, setHexDraft] = useState<
     { readonly source: string; readonly value: string } | undefined
@@ -58,7 +59,14 @@ export function ColorFields({ color, onChange }: ColorFieldsProps) {
   };
 
   return (
-    <div className="color-fields" aria-label="Exact paint color">
+    <div
+      className="color-fields"
+      aria-label={
+        colorSlot === undefined
+          ? 'Exact paint color'
+          : `Exact ${colorSlot.toLowerCase()} paint color`
+      }
+    >
       <label className="color-field color-field--hex">
         <span>Hex</span>
         <input

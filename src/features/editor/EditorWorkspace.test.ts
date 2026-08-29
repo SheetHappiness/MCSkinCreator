@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   editorToolFromShortcut,
+  getColorShortcutAction,
   getEditorToolShortcut,
   getPointerAction,
   isEditableKeyboardTarget,
@@ -60,6 +61,28 @@ describe('editor tool keyboard shortcuts', () => {
       }),
     ).toBeUndefined();
   });
+
+  it('maps color swaps and resets while suppressing editable targets', () => {
+    const base = {
+      key: 'x',
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      target: document.createElement('button'),
+    };
+
+    expect(getColorShortcutAction(base)).toBe('swap');
+    expect(getColorShortcutAction({ ...base, key: 'D' })).toBe('reset');
+    expect(getColorShortcutAction({ ...base, ctrlKey: true })).toBeUndefined();
+    expect(getColorShortcutAction({ ...base, metaKey: true })).toBeUndefined();
+    expect(getColorShortcutAction({ ...base, altKey: true })).toBeUndefined();
+    expect(
+      getColorShortcutAction({
+        ...base,
+        target: document.createElement('input'),
+      }),
+    ).toBeUndefined();
+  });
 });
 
 describe('pointer input arbitration', () => {
@@ -68,12 +91,12 @@ describe('pointer input arbitration', () => {
     expect(getPointerAction(0, true)).toBe('pan');
   });
 
-  it('uses an unmodified left button for the active editing tool', () => {
-    expect(getPointerAction(0, false)).toBe('edit');
+  it('maps left and right actions to primary and secondary editing', () => {
+    expect(getPointerAction(0, false)).toBe('edit-primary');
+    expect(getPointerAction(2, false)).toBe('edit-secondary');
   });
 
-  it('ignores right and auxiliary buttons', () => {
-    expect(getPointerAction(2, false)).toBeUndefined();
+  it('ignores auxiliary buttons', () => {
     expect(getPointerAction(3, false)).toBeUndefined();
   });
 });
