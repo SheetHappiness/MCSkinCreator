@@ -486,6 +486,16 @@ body {
   cursor: grab;
 }
 
+.skin-preview-canvas[data-editing-tool='pencil'],
+.skin-preview-canvas[data-editing-tool='eraser'],
+.skin-preview-canvas[data-editing-tool='fill'] {
+  cursor: crosshair;
+}
+
+.skin-preview-canvas[data-editing-tool='eyedropper'] {
+  cursor: copy;
+}
+
 .skin-preview-canvas:active {
   cursor: grabbing;
 }

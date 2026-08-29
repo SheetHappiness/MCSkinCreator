@@ -32,7 +32,10 @@ import {
 } from '../../engine/viewport';
 import { renderSkinCanvas } from '../../renderers/canvas2d';
 import { SkinPreviewPanel } from '../preview/SkinPreviewPanel';
-import { registerActiveEditorInteraction } from './activeEditorInteraction';
+import {
+  cancelActiveEditorInteraction,
+  registerActiveEditorInteraction,
+} from './activeEditorInteraction';
 import { ColorFields } from './ColorFields';
 import { colorToHex } from './colorHex';
 import {
@@ -344,13 +347,10 @@ export function EditorWorkspace({
     return () => window.removeEventListener('blur', handleWindowBlur);
   }, [cancelInteraction]);
 
-  const requestToolChange = useCallback(
-    (tool: EditorTool) => {
-      cancelInteraction();
-      setActiveEditorTool(tool);
-    },
-    [cancelInteraction],
-  );
+  const requestToolChange = useCallback((tool: EditorTool) => {
+    cancelActiveEditorInteraction();
+    setActiveEditorTool(tool);
+  }, []);
 
   useEffect(() => {
     const handleToolShortcut = (event: KeyboardEvent) => {

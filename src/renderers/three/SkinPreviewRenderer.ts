@@ -1,4 +1,5 @@
 import {
+  MOUSE,
   PerspectiveCamera,
   Raycaster,
   Scene,
@@ -10,6 +11,7 @@ import {
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import type { SkinDocument } from '../../engine/document';
+import type { EditorTool } from '../../engine/tools';
 import { SkinModelResources } from './SkinModelBuilder';
 import { pickSkinAtClientPoint, type SkinPickResult } from './SkinPicking';
 import { SkinTexture } from './SkinTexture';
@@ -38,6 +40,11 @@ interface PreviewControlsAdapter {
   maxDistance: number;
   minPolarAngle: number;
   maxPolarAngle: number;
+  mouseButtons?: {
+    LEFT?: MOUSE | null;
+    MIDDLE?: MOUSE | null;
+    RIGHT?: MOUSE | null;
+  };
   addEventListener(type: 'change', listener: () => void): void;
   removeEventListener(type: 'change', listener: () => void): void;
   update(): void;
@@ -65,7 +72,17 @@ export interface SkinPreviewRendererEnvironment {
 
 export interface SkinPreviewRendererOptions {
   readonly onPickChange?: (result: SkinPickResult | undefined) => void;
+  readonly onPointerDown?: SkinPreviewPointerHandler;
+  readonly onPointerMove?: SkinPreviewPointerHandler;
+  readonly onPointerUp?: SkinPreviewPointerHandler;
+  readonly onPointerCancel?: SkinPreviewPointerHandler;
+  readonly onPointerLeave?: SkinPreviewPointerHandler;
 }
+
+export type SkinPreviewPointerHandler = (
+  event: PointerEvent,
+  result: SkinPickResult | undefined,
+) => void;
 
 const DEFAULT_ENVIRONMENT: SkinPreviewRendererEnvironment = {
   createRenderer: () =>
@@ -99,6 +116,11 @@ export class SkinPreviewRenderer {
   private readonly activePointerIds = new Set<number>();
   private readonly ownerWindow: Window | null;
   private readonly onPickChange: SkinPreviewRendererOptions['onPickChange'];
+  private readonly onPointerDown: SkinPreviewRendererOptions['onPointerDown'];
+  private readonly onPointerMove: SkinPreviewRendererOptions['onPointerMove'];
+  private readonly onPointerUp: SkinPreviewRendererOptions['onPointerUp'];
+  private readonly onPointerCancel: SkinPreviewRendererOptions['onPointerCancel'];
+  private readonly onPointerLeave: SkinPreviewRendererOptions['onPointerLeave'];
   private lastPickKey: string | undefined;
 
   constructor(
@@ -108,12 +130,21 @@ export class SkinPreviewRenderer {
     options: SkinPreviewRendererOptions = {},
   ) {
     this.onPickChange = options.onPickChange;
+    this.onPointerDown = options.onPointerDown;
+    this.onPointerMove = options.onPointerMove;
+    this.onPointerUp = options.onPointerUp;
+    this.onPointerCancel = options.onPointerCancel;
+    this.onPointerLeave = options.onPointerLeave;
     this.renderer = environment.createRenderer();
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.setClearColor(PREVIEW_BACKGROUND, 1);
     this.renderer.domElement.className = 'skin-preview-canvas';
     this.renderer.domElement.setAttribute('role', 'img');
-    this.renderer.domElement.setAttribute('aria-label', '3D skin preview');
+    this.renderer.domElement.setAttribute(
+      'aria-label',
+      '3D skin preview; left drag edits, right drag orbits',
+    );
+    this.renderer.domElement.tabIndex = 0;
     this.renderer.domElement.setAttribute('data-preview-ready', 'true');
     this.mount.append(this.renderer.domElement);
     this.ownerWindow = mount.ownerDocument.defaultView;
@@ -123,11 +154,11 @@ export class SkinPreviewRenderer {
     );
     this.renderer.domElement.addEventListener(
       'pointerup',
-      this.handlePointerFinished,
+      this.handlePointerUp,
     );
     this.renderer.domElement.addEventListener(
       'pointercancel',
-      this.handlePointerFinished,
+      this.handlePointerCancel,
     );
     this.renderer.domElement.addEventListener(
       'pointermove',
@@ -185,6 +216,20 @@ export class SkinPreviewRenderer {
     );
   }
 
+  getCanvas(): HTMLCanvasElement {
+    return this.renderer.domElement;
+  }
+
+  setEditingTool(tool: EditorTool): void {
+    if (this.disposed) return;
+    this.renderer.domElement.dataset.editingTool = tool;
+  }
+
+  cancelPointerInteractions(): void {
+    if (this.disposed) return;
+    this.cancelActivePointers();
+  }
+
   setOuterVisible(visible: boolean): void {
     if (this.disposed || visible === this.outerVisible) return;
     this.outerVisible = visible;
@@ -215,11 +260,11 @@ export class SkinPreviewRenderer {
     );
     this.renderer.domElement.removeEventListener(
       'pointerup',
-      this.handlePointerFinished,
+      this.handlePointerUp,
     );
     this.renderer.domElement.removeEventListener(
       'pointercancel',
-      this.handlePointerFinished,
+      this.handlePointerCancel,
     );
     this.activePointerIds.clear();
     if (this.renderFrame !== undefined) {
@@ -241,6 +286,11 @@ export class SkinPreviewRenderer {
     this.controls.maxDistance = 96;
     this.controls.minPolarAngle = 0.1;
     this.controls.maxPolarAngle = Math.PI - 0.1;
+    if (this.controls.mouseButtons !== undefined) {
+      this.controls.mouseButtons.LEFT = null;
+      this.controls.mouseButtons.MIDDLE = MOUSE.DOLLY;
+      this.controls.mouseButtons.RIGHT = MOUSE.ROTATE;
+    }
     this.controls.target.copy(CAMERA_TARGET);
     this.controls.addEventListener('change', this.handleControlsChange);
     this.controls.update();
@@ -250,18 +300,29 @@ export class SkinPreviewRenderer {
 
   private readonly handlePointerDown = (event: PointerEvent) => {
     this.activePointerIds.add(event.pointerId);
+    this.renderer.domElement.focus({ preventScroll: true });
+    this.onPointerDown?.(event, this.pickAt(event.clientX, event.clientY));
   };
 
-  private readonly handlePointerFinished = (event: PointerEvent) => {
+  private readonly handlePointerUp = (event: PointerEvent) => {
     this.activePointerIds.delete(event.pointerId);
+    this.onPointerUp?.(event, this.pickAt(event.clientX, event.clientY));
+  };
+
+  private readonly handlePointerCancel = (event: PointerEvent) => {
+    this.activePointerIds.delete(event.pointerId);
+    this.onPointerCancel?.(event, undefined);
   };
 
   private readonly handlePointerMove = (event: PointerEvent) => {
-    this.publishPick(this.pickAt(event.clientX, event.clientY));
+    const result = this.pickAt(event.clientX, event.clientY);
+    this.publishPick(result);
+    this.onPointerMove?.(event, result);
   };
 
-  private readonly handlePointerLeave = () => {
+  private readonly handlePointerLeave = (event: PointerEvent) => {
     this.publishPick(undefined);
+    this.onPointerLeave?.(event, undefined);
   };
 
   private publishPick(result: SkinPickResult | undefined): void {

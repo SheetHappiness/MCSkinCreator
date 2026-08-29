@@ -1,16 +1,14 @@
-let cancelActiveInteraction: (() => void) | undefined;
+const activeInteractionCancellers = new Set<() => void>();
 
 export function registerActiveEditorInteraction(
   cancel: () => void,
 ): () => void {
-  cancelActiveInteraction = cancel;
+  activeInteractionCancellers.add(cancel);
   return () => {
-    if (cancelActiveInteraction === cancel) {
-      cancelActiveInteraction = undefined;
-    }
+    activeInteractionCancellers.delete(cancel);
   };
 }
 
 export function cancelActiveEditorInteraction(): void {
-  cancelActiveInteraction?.();
+  for (const cancel of [...activeInteractionCancellers]) cancel();
 }

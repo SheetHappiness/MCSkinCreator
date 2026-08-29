@@ -17,7 +17,10 @@ export type {
   SkinPickingContext,
 } from './SkinPicking';
 export { SkinPreviewRenderer, MAX_PREVIEW_DPR } from './SkinPreviewRenderer';
-export type { SkinPreviewRendererOptions } from './SkinPreviewRenderer';
+export type {
+  SkinPreviewPointerHandler,
+  SkinPreviewRendererOptions,
+} from './SkinPreviewRenderer';
 export { SkinTexture } from './SkinTexture';
 export {
   createSkinCuboidGeometry,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BufferGeometry, Texture, Vector3 } from 'three';
+import { BufferGeometry, MOUSE, Texture, Vector3 } from 'three';
 
 import { SkinDocument } from '../../engine/document';
 import { DocumentHistory } from '../../engine/history';
@@ -36,6 +36,7 @@ describe('Three.js preview lifecycle', () => {
       maxDistance: 0,
       minPolarAngle: 0,
       maxPolarAngle: 0,
+      mouseButtons: {},
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
       update: vi.fn(),
@@ -77,6 +78,11 @@ describe('Three.js preview lifecycle', () => {
     expect(renderer.setSize).toHaveBeenCalledWith(280, 500, false);
     expect(requestFrame).toHaveBeenCalledTimes(1);
     expect(controls.enablePan).toBe(false);
+    expect(controls.mouseButtons).toEqual({
+      LEFT: null,
+      MIDDLE: MOUSE.DOLLY,
+      RIGHT: MOUSE.ROTATE,
+    });
     expect(controls.minDistance).toBe(30);
     expect(controls.maxDistance).toBe(96);
     expect(previewCamera?.position.toArray()).toEqual([40, 27, 60]);
@@ -151,6 +157,7 @@ describe('Three.js preview lifecycle', () => {
       maxDistance: 0,
       minPolarAngle: 0,
       maxPolarAngle: 0,
+      mouseButtons: {},
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
       update: vi.fn(),

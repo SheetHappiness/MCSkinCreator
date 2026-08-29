@@ -6,13 +6,24 @@ import {
   useSyncExternalStore,
 } from 'react';
 
-import type { SkinDocument, SkinModel } from '../../engine/document';
+import type { RgbaColor, SkinDocument, SkinModel } from '../../engine/document';
 import type { DocumentHistory } from '../../engine/history';
+import type { EditorTool } from '../../engine/tools';
 import {
   SkinPreviewRenderer,
   type SkinPickResult,
 } from '../../renderers/three';
+import {
+  cancelActiveEditorInteraction,
+  registerActiveEditorInteraction,
+} from '../editor/activeEditorInteraction';
+import {
+  setSelectedEditorColor,
+  useActiveEditorTool,
+  useSelectedEditorColor,
+} from '../editor/editorToolStore';
 import { changeSkinModel } from './modelSelection';
+import { ThreeDToolInteraction } from './threeDToolInteraction';
 
 interface SkinPreviewPanelProps {
   readonly document: SkinDocument;
@@ -59,8 +70,22 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<SkinPreviewRenderer | undefined>(undefined);
   const outerVisibleRef = useRef(true);
+  const activeTool = useActiveEditorTool();
+  const selectedColor = useSelectedEditorColor();
+  const activeToolRef = useRef<EditorTool>(activeTool);
+  const selectedColorRef = useRef<RgbaColor>(selectedColor);
+  const temporaryEyedropperRef = useRef(false);
+  const interactionRef = useRef<ThreeDToolInteraction | undefined>(undefined);
   const [outerVisible, setOuterVisible] = useState(true);
   const [hoveredPick, setHoveredPick] = useState<SkinPickResult | undefined>();
+  const [temporaryEyedropper, setTemporaryEyedropper] = useState(false);
+
+  useEffect(() => {
+    activeToolRef.current = activeTool;
+    selectedColorRef.current = selectedColor;
+    temporaryEyedropperRef.current = temporaryEyedropper;
+  }, [activeTool, selectedColor, temporaryEyedropper]);
+
   const subscribe = useCallback(
     (notify: () => void) => document.subscribeToMutations(notify),
     [document],
@@ -74,19 +99,113 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
   useEffect(() => {
     const mount = mountRef.current;
     if (mount === null) return;
+    const interaction = new ThreeDToolInteraction(
+      document,
+      history,
+      setSelectedEditorColor,
+    );
+    interactionRef.current = interaction;
     const renderer = new SkinPreviewRenderer(mount, document, undefined, {
       onPickChange: setHoveredPick,
+      onPointerDown: (event, pick) => {
+        const tool = temporaryEyedropperRef.current
+          ? 'eyedropper'
+          : activeToolRef.current;
+        const handled = interaction.pointerDown(
+          event.pointerId,
+          event.button,
+          pick,
+          tool,
+          selectedColorRef.current,
+        );
+        if (!handled) return;
+        event.preventDefault();
+        if (tool === 'pencil' || tool === 'eraser') {
+          const canvas = event.currentTarget;
+          if (canvas instanceof HTMLCanvasElement) {
+            canvas.setPointerCapture(event.pointerId);
+          }
+        }
+      },
+      onPointerMove: (event, pick) => {
+        interaction.pointerMove(event.pointerId, pick);
+      },
+      onPointerUp: (event) => {
+        interaction.pointerUp(event.pointerId);
+        const canvas = event.currentTarget;
+        if (
+          canvas instanceof HTMLCanvasElement &&
+          canvas.hasPointerCapture(event.pointerId)
+        ) {
+          canvas.releasePointerCapture(event.pointerId);
+        }
+      },
+      onPointerCancel: (event) => {
+        interaction.cancel(event.pointerId);
+      },
+      onPointerLeave: (event) => {
+        interaction.pointerMove(event.pointerId, undefined);
+      },
     });
+    renderer.setEditingTool(activeToolRef.current);
     renderer.setOuterVisible(outerVisibleRef.current);
     rendererRef.current = renderer;
     return () => {
       rendererRef.current = undefined;
+      interaction.cancel();
+      renderer.cancelPointerInteractions();
       renderer.dispose();
+      interactionRef.current = undefined;
       setHoveredPick(undefined);
     };
-  }, [document]);
+  }, [document, history]);
+
+  useEffect(() => {
+    interactionRef.current?.cancel();
+    rendererRef.current?.setEditingTool(activeTool);
+  }, [activeTool]);
+
+  useEffect(() => {
+    const handleAltDown = (event: KeyboardEvent) => {
+      const canvas = rendererRef.current?.getCanvas();
+      if (
+        event.key === 'Alt' &&
+        !event.repeat &&
+        (activeTool === 'pencil' || activeTool === 'eraser') &&
+        globalThis.document.activeElement === canvas
+      ) {
+        event.preventDefault();
+        interactionRef.current?.cancel();
+        temporaryEyedropperRef.current = true;
+        setTemporaryEyedropper(true);
+        rendererRef.current?.setEditingTool('eyedropper');
+      }
+    };
+    const handleAltUp = (event: KeyboardEvent) => {
+      if (event.key !== 'Alt') return;
+      temporaryEyedropperRef.current = false;
+      setTemporaryEyedropper(false);
+      rendererRef.current?.setEditingTool(activeToolRef.current);
+    };
+    window.addEventListener('keydown', handleAltDown);
+    window.addEventListener('keyup', handleAltUp);
+    return () => {
+      window.removeEventListener('keydown', handleAltDown);
+      window.removeEventListener('keyup', handleAltUp);
+    };
+  }, [activeTool]);
+
+  useEffect(
+    () =>
+      registerActiveEditorInteraction(() => {
+        interactionRef.current?.cancel();
+        rendererRef.current?.cancelPointerInteractions();
+      }),
+    [],
+  );
 
   const toggleOuterLayer = () => {
+    cancelActiveEditorInteraction();
     setOuterVisible((current) => {
       const next = !current;
       outerVisibleRef.current = next;
@@ -107,7 +226,10 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
               type="button"
               aria-pressed={document.model === model}
               title={`${label} arm geometry`}
-              onClick={() => changeSkinModel(document, history, model)}
+              onClick={() => {
+                cancelActiveEditorInteraction();
+                changeSkinModel(document, history, model);
+              }}
             >
               {label}
             </button>

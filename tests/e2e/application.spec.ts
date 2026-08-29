@@ -290,12 +290,12 @@ test('paints, erases, undoes, redoes, and saves exact RGBA pixels', async () => 
       previewBox!.y + previewBox!.height / 2,
     );
     const editorZoomBeforePreview = await zoomValue.textContent();
-    await window.mouse.down();
+    await window.mouse.down({ button: 'right' });
     await window.mouse.move(
       previewBox!.x + previewBox!.width * 0.65,
       previewBox!.y + previewBox!.height * 0.45,
     );
-    await window.mouse.up();
+    await window.mouse.up({ button: 'right' });
     await window.mouse.wheel(0, -120);
     await expect(zoomValue).toHaveText(editorZoomBeforePreview!);
     await window.getByRole('button', { name: 'Reset view' }).click();
@@ -308,6 +308,89 @@ test('paints, erases, undoes, redoes, and saves exact RGBA pixels', async () => 
     expect(saved.height).toBe(64);
     pixels.set([0x12, 0x34, 0x56, 128], (32 * 64 + 32) * 4);
     pixels.set([0, 0, 0, 0], eraserPixelOffset);
+    expect(new Uint8Array(saved.data.buffer)).toEqual(pixels);
+  } finally {
+    await application.close();
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async () => {
+  const temporaryDirectory = await mkdtemp(
+    path.join(tmpdir(), 'minecraft-skin-editor-3d-e2e-'),
+  );
+  const inputPath = path.join(temporaryDirectory, 'input-skin.png');
+  const requestedOutputPath = path.join(temporaryDirectory, 'saved-3d-copy');
+  const outputPath = `${requestedOutputPath}.png`;
+  const pixels = new Uint8Array(64 * 64 * 4);
+  await writeFile(
+    inputPath,
+    encode({ width: 64, height: 64, data: pixels, channels: 4, depth: 8 }),
+  );
+
+  const application = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      MINECRAFT_SKIN_EDITOR_E2E: '1',
+      MINECRAFT_SKIN_EDITOR_E2E_OPEN_PATH: inputPath,
+      MINECRAFT_SKIN_EDITOR_E2E_SAVE_AS_PATH: requestedOutputPath,
+      MINECRAFT_SKIN_EDITOR_E2E_UNSAVED_DECISION: 'discard',
+    },
+  });
+
+  try {
+    const window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Open PNG' }).click();
+    const preview = window.getByRole('img', { name: '3D skin preview' });
+    const editorStatus = window.getByLabel('Editor status');
+    await expect(preview).toBeVisible();
+
+    await window.getByLabel('Paint color', { exact: true }).fill('#123456');
+    await window.getByLabel('Paint alpha').fill('128');
+    const previewBox = await preview.boundingBox();
+    expect(previewBox).not.toBeNull();
+    const pointer = {
+      x: previewBox!.x + previewBox!.width / 2,
+      y: previewBox!.y + previewBox!.height / 2,
+    };
+    await window.mouse.move(pointer.x, pointer.y);
+    await expect(preview).toHaveAttribute('data-pick', /\d+,\d+$/);
+    const pickData = await preview.getAttribute('data-pick');
+    const pickMatch = pickData?.match(/:(\d+),(\d+)$/);
+    expect(pickMatch).not.toBeNull();
+    const pickedX = Number.parseInt(pickMatch![1]!, 10);
+    const pickedY = Number.parseInt(pickMatch![2]!, 10);
+
+    const revisionBeforePaint = await preview.getAttribute(
+      'data-document-revision',
+    );
+    await window.mouse.down();
+    await window.mouse.up();
+    await expect(preview).not.toHaveAttribute(
+      'data-document-revision',
+      revisionBeforePaint!,
+    );
+    await expect(editorStatus.getByText('input-skin.png •')).toBeVisible();
+
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('edit-undo')?.click();
+    });
+    await expect(
+      editorStatus.getByText('input-skin.png', { exact: true }),
+    ).toBeVisible();
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('edit-redo')?.click();
+    });
+    await expect(editorStatus.getByText('input-skin.png •')).toBeVisible();
+
+    await window.getByRole('button', { name: 'Save As…' }).click();
+    await expect(editorStatus.getByText('saved-3d-copy.png')).toBeVisible();
+
+    const saved = decode(await readFile(outputPath), { checkCrc: true });
+    expect(saved.width).toBe(64);
+    expect(saved.height).toBe(64);
+    pixels.set([0x12, 0x34, 0x56, 128], (pickedY * 64 + pickedX) * 4);
     expect(new Uint8Array(saved.data.buffer)).toEqual(pixels);
   } finally {
     await application.close();
