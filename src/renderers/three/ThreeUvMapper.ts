@@ -33,6 +33,23 @@ export interface SkinFaceQuad {
   readonly textureCoordinates: QuadCorners<TextureCoordinate>;
 }
 
+export interface SkinTriangleMetadata {
+  readonly face: CubeFace;
+  readonly triangle: 0 | 1;
+}
+
+export interface SkinCuboidGeometryMetadata {
+  readonly model: SkinModel;
+  readonly bodyPart: BodyPart;
+  readonly layer: SkinLayer;
+  readonly triangles: readonly SkinTriangleMetadata[];
+}
+
+const GEOMETRY_METADATA = new WeakMap<
+  BufferGeometry,
+  SkinCuboidGeometryMetadata
+>();
+
 const DIRECTION_VECTORS: Readonly<Record<ModelDirection, ModelVector3>> = {
   positiveX: { x: 1, y: 0, z: 0 },
   negativeX: { x: -1, y: 0, z: 0 },
@@ -157,6 +174,7 @@ export function createSkinCuboidGeometry(
   const positions: number[] = [];
   const textureCoordinates: number[] = [];
   const indices: number[] = [];
+  const triangles: SkinTriangleMetadata[] = [];
 
   for (const face of CUBE_FACES) {
     const quad = mapFaceDefinitionToThreeQuad(
@@ -188,6 +206,7 @@ export function createSkinCuboidGeometry(
       firstVertex + 3,
       firstVertex + 2,
     );
+    triangles.push({ face, triangle: 0 }, { face, triangle: 1 });
   }
 
   const geometry = new BufferGeometry();
@@ -198,5 +217,25 @@ export function createSkinCuboidGeometry(
   );
   geometry.setIndex(new Uint16BufferAttribute(indices, 1));
   geometry.computeVertexNormals();
+  GEOMETRY_METADATA.set(geometry, {
+    model: options.model,
+    bodyPart: options.bodyPart,
+    layer: options.layer,
+    triangles,
+  });
   return geometry;
+}
+
+export function getSkinCuboidGeometryMetadata(
+  geometry: BufferGeometry,
+): SkinCuboidGeometryMetadata | undefined {
+  return GEOMETRY_METADATA.get(geometry);
+}
+
+export function getSkinTriangleMetadata(
+  geometry: BufferGeometry,
+  triangleIndex: number,
+): SkinTriangleMetadata | undefined {
+  if (!Number.isInteger(triangleIndex) || triangleIndex < 0) return undefined;
+  return GEOMETRY_METADATA.get(geometry)?.triangles[triangleIndex];
 }

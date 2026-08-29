@@ -1,5 +1,6 @@
 import {
   PerspectiveCamera,
+  Raycaster,
   Scene,
   SRGBColorSpace,
   Vector3,
@@ -10,6 +11,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import type { SkinDocument } from '../../engine/document';
 import { SkinModelResources } from './SkinModelBuilder';
+import { pickSkinAtClientPoint, type SkinPickResult } from './SkinPicking';
 import { SkinTexture } from './SkinTexture';
 
 const PREVIEW_BACKGROUND = 0x1b1d20;
@@ -61,6 +63,10 @@ export interface SkinPreviewRendererEnvironment {
   readonly devicePixelRatio: () => number;
 }
 
+export interface SkinPreviewRendererOptions {
+  readonly onPickChange?: (result: SkinPickResult | undefined) => void;
+}
+
 const DEFAULT_ENVIRONMENT: SkinPreviewRendererEnvironment = {
   createRenderer: () =>
     new WebGLRenderer({
@@ -81,6 +87,7 @@ export class SkinPreviewRenderer {
   private readonly renderer: PreviewRendererAdapter;
   private readonly controls: PreviewControlsAdapter;
   private readonly skinTexture: SkinTexture;
+  private readonly raycaster = new Raycaster();
   private modelResources: SkinModelResources;
   private readonly resizeObserver: PreviewResizeObserver;
   private readonly unsubscribeDocument: () => void;
@@ -91,12 +98,16 @@ export class SkinPreviewRenderer {
   private disposed = false;
   private readonly activePointerIds = new Set<number>();
   private readonly ownerWindow: Window | null;
+  private readonly onPickChange: SkinPreviewRendererOptions['onPickChange'];
+  private lastPickKey: string | undefined;
 
   constructor(
     private readonly mount: HTMLElement,
     private readonly document: SkinDocument,
     private readonly environment: SkinPreviewRendererEnvironment = DEFAULT_ENVIRONMENT,
+    options: SkinPreviewRendererOptions = {},
   ) {
+    this.onPickChange = options.onPickChange;
     this.renderer = environment.createRenderer();
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.setClearColor(PREVIEW_BACKGROUND, 1);
@@ -117,6 +128,14 @@ export class SkinPreviewRenderer {
     this.renderer.domElement.addEventListener(
       'pointercancel',
       this.handlePointerFinished,
+    );
+    this.renderer.domElement.addEventListener(
+      'pointermove',
+      this.handlePointerMove,
+    );
+    this.renderer.domElement.addEventListener(
+      'pointerleave',
+      this.handlePointerLeave,
     );
     this.ownerWindow?.addEventListener('blur', this.cancelActivePointers);
 
@@ -152,6 +171,20 @@ export class SkinPreviewRenderer {
     this.requestRender();
   }
 
+  pickAt(clientX: number, clientY: number): SkinPickResult | undefined {
+    if (this.disposed) return undefined;
+    return pickSkinAtClientPoint(
+      {
+        canvas: this.renderer.domElement,
+        camera: this.camera,
+        meshes: this.modelResources.getPickableMeshes(),
+      },
+      clientX,
+      clientY,
+      this.raycaster,
+    );
+  }
+
   setOuterVisible(visible: boolean): void {
     if (this.disposed || visible === this.outerVisible) return;
     this.outerVisible = visible;
@@ -168,6 +201,14 @@ export class SkinPreviewRenderer {
     this.controls.removeEventListener('change', this.handleControlsChange);
     this.controls.dispose();
     this.ownerWindow?.removeEventListener('blur', this.cancelActivePointers);
+    this.renderer.domElement.removeEventListener(
+      'pointermove',
+      this.handlePointerMove,
+    );
+    this.renderer.domElement.removeEventListener(
+      'pointerleave',
+      this.handlePointerLeave,
+    );
     this.renderer.domElement.removeEventListener(
       'pointerdown',
       this.handlePointerDown,
@@ -190,6 +231,7 @@ export class SkinPreviewRenderer {
     this.renderer.dispose();
     this.renderer.forceContextLoss?.();
     this.renderer.domElement.remove();
+    this.publishPick(undefined);
   }
 
   private configureControls(): void {
@@ -213,6 +255,37 @@ export class SkinPreviewRenderer {
   private readonly handlePointerFinished = (event: PointerEvent) => {
     this.activePointerIds.delete(event.pointerId);
   };
+
+  private readonly handlePointerMove = (event: PointerEvent) => {
+    this.publishPick(this.pickAt(event.clientX, event.clientY));
+  };
+
+  private readonly handlePointerLeave = () => {
+    this.publishPick(undefined);
+  };
+
+  private publishPick(result: SkinPickResult | undefined): void {
+    const key =
+      result === undefined
+        ? undefined
+        : [
+            result.model,
+            result.bodyPart,
+            result.layer,
+            result.face,
+            result.x,
+            result.y,
+          ].join(':');
+    if (key === this.lastPickKey) return;
+    this.lastPickKey = key;
+    const canvas = this.renderer.domElement;
+    if (result === undefined) {
+      delete canvas.dataset.pick;
+    } else {
+      canvas.dataset.pick = `${result.bodyPart}:${result.layer}:${result.face}:${result.x},${result.y}`;
+    }
+    this.onPickChange?.(result);
+  }
 
   private readonly cancelActivePointers = () => {
     const PointerEventConstructor = globalThis.PointerEvent;

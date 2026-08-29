@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { BufferGeometry, Texture, Vector3 } from 'three';
 
 import { SkinDocument } from '../../engine/document';
+import { DocumentHistory } from '../../engine/history';
 import {
   SkinPreviewRenderer,
   type SkinPreviewRendererEnvironment,
 } from './SkinPreviewRenderer';
+import type { SkinPickResult } from './SkinPicking';
 import { SkinTexture } from './SkinTexture';
 
 describe('Three.js preview lifecycle', () => {
@@ -115,5 +117,79 @@ describe('Three.js preview lifecycle', () => {
 
     skinDocument.writePixel(4, 4, { r: 13, g: 14, b: 15, a: 16 });
     expect(canvas.dataset.documentRevision).toBe('3');
+  });
+
+  it('reports hover picks without mutating the document or history', () => {
+    const mount = document.createElement('div');
+    mount.getBoundingClientRect = () =>
+      ({ width: 280, height: 500 }) as DOMRect;
+    const canvas = document.createElement('canvas');
+    canvas.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        right: 280,
+        bottom: 500,
+        width: 280,
+        height: 500,
+      }) as DOMRect;
+    const renderer = {
+      domElement: canvas,
+      outputColorSpace: '',
+      setClearColor: vi.fn(),
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+      forceContextLoss: vi.fn(),
+    };
+    const controls = {
+      target: new Vector3(),
+      enablePan: true,
+      enableDamping: true,
+      minDistance: 0,
+      maxDistance: 0,
+      minPolarAngle: 0,
+      maxPolarAngle: 0,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      update: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const resizeObserver = { observe: vi.fn(), disconnect: vi.fn() };
+    const requestFrame = vi.fn(() => 1);
+    const environment: SkinPreviewRendererEnvironment = {
+      createRenderer: () => renderer,
+      createControls: (camera) => {
+        camera.lookAt(0, 16, 0);
+        return controls;
+      },
+      createResizeObserver: () => resizeObserver,
+      requestFrame,
+      cancelFrame: vi.fn(),
+      devicePixelRatio: () => 1,
+    };
+    const skinDocument = SkinDocument.createBlank({ id: 'pick-hover' });
+    const history = new DocumentHistory(skinDocument);
+    const picks: (SkinPickResult | undefined)[] = [];
+    const preview = new SkinPreviewRenderer(mount, skinDocument, environment, {
+      onPickChange: (result) => picks.push(result),
+    });
+
+    canvas.dispatchEvent(
+      new MouseEvent('pointermove', { clientX: 140, clientY: 250 }),
+    );
+    expect(picks.at(-1)).toMatchObject({
+      bodyPart: 'torso',
+      layer: 'outer',
+      face: 'front',
+    });
+    expect(skinDocument.revision).toBe(0);
+    expect(skinDocument.isDirty).toBe(false);
+    expect(history.canUndo).toBe(false);
+
+    canvas.dispatchEvent(new Event('pointerleave'));
+    expect(picks.at(-1)).toBeUndefined();
+    preview.dispose();
   });
 });

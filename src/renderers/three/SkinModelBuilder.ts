@@ -15,6 +15,7 @@ import {
   type ModelVector3,
   type SkinModel,
 } from '../../engine/minecraft-skin-spec';
+import { registerSkinMeshPickMetadata } from './SkinPicking';
 import { createSkinCuboidGeometry } from './ThreeUvMapper';
 
 export interface SkinPartDescriptor {
@@ -69,6 +70,7 @@ export class SkinModelResources {
   private readonly outerMaterial: MeshBasicMaterial;
   private readonly geometries: BufferGeometry[] = [];
   private readonly outerMeshes: Mesh[] = [];
+  private readonly pickableMeshes: Mesh[] = [];
 
   constructor(model: SkinModel, texture: DataTexture) {
     this.root = new Group();
@@ -110,8 +112,20 @@ export class SkinModelResources {
       outerMesh.position.copy(baseMesh.position);
       outerMesh.renderOrder = 1;
 
+      registerSkinMeshPickMetadata(baseMesh, {
+        model,
+        bodyPart: descriptor.bodyPart,
+        layer: 'base',
+      });
+      registerSkinMeshPickMetadata(outerMesh, {
+        model,
+        bodyPart: descriptor.bodyPart,
+        layer: 'outer',
+      });
+
       this.geometries.push(baseGeometry, outerGeometry);
       this.outerMeshes.push(outerMesh);
+      this.pickableMeshes.push(baseMesh, outerMesh);
       part.add(baseMesh, outerMesh);
       this.root.add(part);
     }
@@ -119,6 +133,10 @@ export class SkinModelResources {
 
   setOuterVisible(visible: boolean): void {
     for (const mesh of this.outerMeshes) mesh.visible = visible;
+  }
+
+  getPickableMeshes(): readonly Mesh[] {
+    return this.pickableMeshes;
   }
 
   dispose(): void {

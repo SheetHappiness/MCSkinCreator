@@ -495,6 +495,15 @@ body {
   border-top: 1px solid #34373b;
 }
 
+.skin-preview-pick-readout {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .editor-status-bar {
   display: grid;
   grid-template-columns: minmax(90px, 1fr) auto auto 92px auto;
