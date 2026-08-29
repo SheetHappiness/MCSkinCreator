@@ -283,6 +283,12 @@ function installApplicationMenu(): void {
       label: 'File',
       submenu: [
         {
+          id: 'file-new',
+          label: 'New',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => sendFileCommand('new'),
+        },
+        {
           id: 'file-open',
           label: 'Open…',
           accelerator: 'CmdOrCtrl+O',

@@ -17,7 +17,7 @@ export const SKIN_EDIT_CHANNELS = {
   state: 'skin-edit:state',
 } as const;
 
-export type FileCommand = 'open' | 'save' | 'saveAs';
+export type FileCommand = 'new' | 'open' | 'save' | 'saveAs';
 export type EditCommand = 'undo' | 'redo';
 
 export interface EditCommandState {
@@ -67,6 +67,8 @@ export interface NativeSkinFileApi {
   openSkinPng(): Promise<OpenSkinPngResult>;
   saveSkinPng(request: SaveSkinPngRequest): Promise<SaveSkinPngResult>;
   saveSkinPngAs(request: SaveSkinPngAsRequest): Promise<SaveSkinPngAsResult>;
+  /** Resolves an OS-backed dropped File path without exposing file access. */
+  getPathForDroppedFile?(file: unknown): string;
   onFileCommand(listener: (command: FileCommand) => void): () => void;
 }
 

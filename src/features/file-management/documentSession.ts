@@ -3,7 +3,7 @@ import type {
   NativeSkinFileApi,
   UnsavedChangesDecision,
 } from '../../../electron/fileContract';
-import { SkinDocument } from '../../engine/document';
+import { SkinDocument, type SkinModel } from '../../engine/document';
 import { DocumentHistory } from '../../engine/history';
 import {
   SkinPngError,
@@ -20,7 +20,10 @@ export interface DocumentSession {
 }
 
 export type FileLifecycleErrorCode =
-  NativeFileError['code'] | SkinPngErrorCode | 'no_document';
+  | NativeFileError['code']
+  | SkinPngErrorCode
+  | 'no_document'
+  | 'unsupported_file';
 
 export interface FileLifecycleError {
   readonly code: FileLifecycleErrorCode;
@@ -46,6 +49,12 @@ export type ConfirmUnsavedChanges = (
   displayName: string,
 ) => Promise<UnsavedChangesDecision>;
 
+export interface DroppedPngSource {
+  readonly displayName: string;
+  readonly filePath?: string;
+  readonly readBytes: () => Promise<Uint8Array>;
+}
+
 function toLifecycleError(error: unknown): FileLifecycleError {
   if (error instanceof SkinPngError) {
     return { code: error.code, message: error.message };
@@ -61,6 +70,10 @@ function ensurePngName(displayName: string): string {
   return displayName.toLowerCase().endsWith('.png')
     ? displayName
     : `${displayName}.png`;
+}
+
+function isPngDisplayName(displayName: string): boolean {
+  return displayName.trim().toLowerCase().endsWith('.png');
 }
 
 /**
@@ -136,6 +149,38 @@ export class DocumentSessionController {
     this.unsubscribeHistory = session.history.subscribe((historyState) => {
       this.publish({ ...this.state, ...historyState });
     });
+  }
+
+  private replaceSessionFromPng(source: {
+    readonly bytes: Uint8Array;
+    readonly filePath?: string;
+    readonly displayName: string;
+  }): FileCommandOutcome {
+    let document: SkinDocument;
+    try {
+      document = decodeSkinPng(source.bytes, {
+        id: this.createDocumentId(),
+        model: 'classic',
+      });
+    } catch (error) {
+      return this.fail(toLifecycleError(error));
+    }
+
+    const session: DocumentSession = {
+      document,
+      history: new DocumentHistory(document),
+      ...(source.filePath === undefined ? {} : { filePath: source.filePath }),
+      displayName: source.displayName,
+    };
+    this.attachHistory(session);
+    this.publish({
+      session,
+      error: undefined,
+      isBusy: false,
+      canUndo: false,
+      canRedo: false,
+    });
+    return { status: 'success' };
   }
 
   private async persistCurrent(
@@ -252,21 +297,31 @@ export class DocumentSessionController {
       return this.fail(result.error);
     }
 
-    let document: SkinDocument;
-    try {
-      document = decodeSkinPng(new Uint8Array(result.bytes), {
-        id: this.createDocumentId(),
-        model: 'classic',
-      });
-    } catch (error) {
-      return this.fail(toLifecycleError(error));
+    return this.replaceSessionFromPng({
+      bytes: new Uint8Array(result.bytes),
+      filePath: result.filePath,
+      displayName: result.displayName,
+    });
+  }
+
+  async newSkin(model: SkinModel): Promise<FileCommandOutcome> {
+    if (!this.beginOperation()) {
+      return { status: 'ignored' };
     }
 
+    const guardedOutcome = await this.guardUnsavedChanges();
+    if (guardedOutcome !== undefined) {
+      return guardedOutcome;
+    }
+
+    const document = SkinDocument.createBlank({
+      id: this.createDocumentId(),
+      model,
+    });
     const session: DocumentSession = {
       document,
       history: new DocumentHistory(document),
-      filePath: result.filePath,
-      displayName: result.displayName,
+      displayName: 'Untitled.png',
     };
     this.attachHistory(session);
     this.publish({
@@ -277,6 +332,47 @@ export class DocumentSessionController {
       canRedo: false,
     });
     return { status: 'success' };
+  }
+
+  async openDroppedPng(source: DroppedPngSource): Promise<FileCommandOutcome> {
+    if (this.state.isBusy) {
+      return { status: 'ignored' };
+    }
+
+    if (
+      typeof source.displayName !== 'string' ||
+      !isPngDisplayName(source.displayName)
+    ) {
+      return this.fail({
+        code: 'unsupported_file',
+        message: 'Only .png files can be opened as Minecraft skins.',
+      });
+    }
+
+    if (!this.beginOperation()) {
+      return { status: 'ignored' };
+    }
+
+    const guardedOutcome = await this.guardUnsavedChanges();
+    if (guardedOutcome !== undefined) {
+      return guardedOutcome;
+    }
+
+    let bytes: Uint8Array;
+    try {
+      bytes = new Uint8Array(await source.readBytes());
+    } catch {
+      return this.fail({
+        code: 'read_failed',
+        message: 'The dropped PNG could not be read.',
+      });
+    }
+
+    return this.replaceSessionFromPng({
+      bytes,
+      filePath: source.filePath,
+      displayName: source.displayName,
+    });
   }
 
   /** Resolves true only when a native close may resume. */

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 import type {
   CloseRequestResponse,
@@ -59,12 +59,26 @@ const skinFileApi: NativeSkinFileApi = {
       request,
     ) as Promise<SaveSkinPngAsResult>;
   },
+  getPathForDroppedFile(file: unknown): string {
+    try {
+      return webUtils.getPathForFile(
+        file as Parameters<typeof webUtils.getPathForFile>[0],
+      );
+    } catch {
+      return '';
+    }
+  },
   onFileCommand(listener: (command: FileCommand) => void): () => void {
     const handler = (
       _event: Electron.IpcRendererEvent,
       command: FileCommand,
     ) => {
-      if (command === 'open' || command === 'save' || command === 'saveAs') {
+      if (
+        command === 'new' ||
+        command === 'open' ||
+        command === 'save' ||
+        command === 'saveAs'
+      ) {
         listener(command);
       }
     };

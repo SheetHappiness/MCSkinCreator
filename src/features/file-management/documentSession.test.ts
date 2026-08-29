@@ -8,6 +8,7 @@ import type {
   SaveSkinPngRequest,
   SaveSkinPngResult,
 } from '../../../electron/fileContract';
+import { encode } from 'fast-png';
 import { SkinDocument, TRANSPARENT_RGBA } from '../../engine/document';
 import { DocumentHistory } from '../../engine/history';
 import { encodeSkinPng } from '../../engine/png';
@@ -19,6 +20,18 @@ import {
 
 function validPng(): Uint8Array {
   return encodeSkinPng(SkinDocument.createBlank({ id: 'source' }));
+}
+
+function dimensionPng(width: number, height: number): Uint8Array {
+  return new Uint8Array(
+    encode({
+      width,
+      height,
+      data: new Uint8Array(width * height * 4),
+      channels: 4,
+      depth: 8,
+    }),
+  );
 }
 
 function openedFile(
@@ -234,6 +247,185 @@ describe('document Open lifecycle', () => {
     expect(manager.getState().session).toBe(current);
     expect(manager.getState().canUndo).toBe(true);
     expect(manager.undo()).toBe(true);
+  });
+});
+
+describe('document New lifecycle', () => {
+  it.each(['classic', 'slim'] as const)(
+    'creates a clean untitled 64×64 %s skin with isolated history',
+    async (model) => {
+      const nativeFiles = nativeFileMock();
+      const manager = controller(nativeFiles);
+
+      expect(await manager.newSkin(model)).toEqual({ status: 'success' });
+
+      const session = manager.getState().session!;
+      expect(session.document.model).toBe(model);
+      expect(session.document.width).toBe(64);
+      expect(session.document.height).toBe(64);
+      expect(session.document.isDirty).toBe(false);
+      expect(session.filePath).toBeUndefined();
+      expect(session.displayName).toBe('Untitled.png');
+      expect(session.history.getTimelineState()).toMatchObject({
+        currentIndex: -1,
+        savedIndex: -1,
+        canUndo: false,
+        canRedo: false,
+      });
+    },
+  );
+
+  it('uses Save As for a dirty untitled document and keeps the checkpoint clean', async () => {
+    const nativeFiles = nativeFileMock();
+    const manager = controller(nativeFiles);
+    await manager.newSkin('slim');
+    const session = manager.getState().session!;
+    session.history.editPixel(4, 4, { r: 10, g: 20, b: 30, a: 255 });
+    nativeFiles.saveSkinPngAs.mockResolvedValueOnce({
+      status: 'success',
+      filePath: 'C:\\skins\\new-slim.png',
+      displayName: 'new-slim.png',
+    });
+
+    expect(await manager.save()).toEqual({ status: 'success' });
+
+    expect(nativeFiles.saveSkinPng).not.toHaveBeenCalled();
+    expect(nativeFiles.saveSkinPngAs).toHaveBeenCalledWith({
+      suggestedName: 'Untitled.png',
+      bytes: expect.any(Uint8Array),
+    });
+    expect(manager.getState().session?.filePath).toBe(
+      'C:\\skins\\new-slim.png',
+    );
+    expect(session.document.isDirty).toBe(false);
+    expect(session.history.getTimelineState().savedIndex).toBe(0);
+  });
+
+  it.each(['cancel', 'discard', 'save'] as const)(
+    'uses the existing dirty guard for New with a %s decision',
+    async (decision) => {
+      const nativeFiles = nativeFileMock();
+      const confirm = vi.fn(async () => decision);
+      const manager = controller(nativeFiles, confirm);
+      await openCurrentSession(manager, nativeFiles);
+      const previous = manager.getState().session!;
+      previous.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+
+      const outcome = await manager.newSkin('slim');
+
+      expect(confirm).toHaveBeenCalledWith('skin.png');
+      if (decision === 'cancel') {
+        expect(outcome).toEqual({ status: 'canceled' });
+        expect(manager.getState().session).toBe(previous);
+        expect(previous.document.isDirty).toBe(true);
+      } else {
+        expect(outcome).toEqual({ status: 'success' });
+        expect(manager.getState().session).not.toBe(previous);
+        expect(manager.getState().session?.document.model).toBe('slim');
+        expect(previous.document.isDirty).toBe(
+          decision === 'save' ? false : true,
+        );
+      }
+    },
+  );
+});
+
+describe('document drag-and-drop lifecycle', () => {
+  it('opens a valid dropped PNG through the same atomic decoder path', async () => {
+    const nativeFiles = nativeFileMock();
+    const manager = controller(nativeFiles);
+    await openCurrentSession(manager, nativeFiles);
+    const previous = manager.getState().session!;
+    previous.history.editPixel(2, 2, { r: 99, g: 88, b: 77, a: 66 });
+
+    const droppedDocument = SkinDocument.createBlank({ id: 'dropped' });
+    droppedDocument.writePixel(9, 10, { r: 10, g: 20, b: 30, a: 40 });
+    const outcome = await manager.openDroppedPng({
+      displayName: 'dropped.png',
+      filePath: 'C:\\skins\\dropped.png',
+      readBytes: async () => encodeSkinPng(droppedDocument),
+    });
+
+    expect(outcome).toEqual({ status: 'success' });
+    const current = manager.getState().session!;
+    expect(current).not.toBe(previous);
+    expect(current.filePath).toBe('C:\\skins\\dropped.png');
+    expect(current.displayName).toBe('dropped.png');
+    expect(current.document.readPixel(9, 10)).toEqual({
+      r: 10,
+      g: 20,
+      b: 30,
+      a: 40,
+    });
+    expect(current.history.canUndo).toBe(false);
+  });
+
+  it.each([
+    ['invalid.png', new Uint8Array([1, 2, 3]), 'invalid_png'],
+    ['wide.png', dimensionPng(32, 64), 'unsupported_dimensions'],
+  ] as const)(
+    'preserves the current session when dropped input is %s',
+    async (displayName, bytes, code) => {
+      const nativeFiles = nativeFileMock();
+      const manager = controller(nativeFiles);
+      await openCurrentSession(manager, nativeFiles);
+      const current = manager.getState().session!;
+      const revision = current.document.revision;
+
+      const outcome = await manager.openDroppedPng({
+        displayName,
+        readBytes: async () => bytes,
+      });
+
+      expect(outcome.status).toBe('error');
+      expect(
+        (outcome as { status: 'error'; error: { code: string } }).error.code,
+      ).toBe(code);
+      expect(manager.getState().session).toBe(current);
+      expect(current.document.revision).toBe(revision);
+    },
+  );
+
+  it('rejects non-PNG drops before prompting or reading', async () => {
+    const nativeFiles = nativeFileMock();
+    const confirm = vi.fn(async () => 'cancel' as const);
+    const manager = controller(nativeFiles, confirm);
+    await openCurrentSession(manager, nativeFiles);
+    const current = manager.getState().session!;
+    current.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+    const readBytes = vi.fn(async () => validPng());
+
+    const outcome = await manager.openDroppedPng({
+      displayName: 'not-a-skin.txt',
+      readBytes,
+    });
+
+    expect(outcome).toMatchObject({
+      status: 'error',
+      error: { code: 'unsupported_file' },
+    });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(readBytes).not.toHaveBeenCalled();
+    expect(manager.getState().session).toBe(current);
+  });
+
+  it('applies the same dirty guard to a dropped PNG', async () => {
+    const nativeFiles = nativeFileMock();
+    const confirm = vi.fn(async () => 'cancel' as const);
+    const manager = controller(nativeFiles, confirm);
+    await openCurrentSession(manager, nativeFiles);
+    const current = manager.getState().session!;
+    current.history.editPixel(1, 1, { r: 1, g: 2, b: 3, a: 4 });
+
+    const outcome = await manager.openDroppedPng({
+      displayName: 'dropped.png',
+      readBytes: async () => validPng(),
+    });
+
+    expect(outcome).toEqual({ status: 'canceled' });
+    expect(confirm).toHaveBeenCalledWith('skin.png');
+    expect(manager.getState().session).toBe(current);
+    expect(current.document.isDirty).toBe(true);
   });
 });
 

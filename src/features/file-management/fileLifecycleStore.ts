@@ -14,6 +14,10 @@ import {
 } from './documentSession';
 import { cancelActiveEditorInteraction } from '../editor/activeEditorInteraction';
 
+interface NewSkinDialogState {
+  readonly isOpen: boolean;
+}
+
 const unavailableNativeApi: NativeSkinFileApi = {
   async openSkinPng() {
     return {
@@ -81,6 +85,18 @@ const documentSessionStore = createStore<DocumentSessionState>(() =>
   documentSessionController.getState(),
 );
 
+const newSkinDialogStore = createStore<NewSkinDialogState>(() => ({
+  isOpen: false,
+}));
+
+export function requestNewSkin(): void {
+  newSkinDialogStore.setState({ isOpen: true });
+}
+
+export function closeNewSkinDialog(): void {
+  newSkinDialogStore.setState({ isOpen: false });
+}
+
 documentSessionController.subscribe((state) => {
   documentSessionStore.setState(state, true);
   nativeEdits.setCommandState({
@@ -106,7 +122,9 @@ nativeLifecycle.setDocumentState({
 
 function runFileCommand(command: FileCommand): void {
   cancelActiveEditorInteraction();
-  if (command === 'open') {
+  if (command === 'new') {
+    requestNewSkin();
+  } else if (command === 'open') {
     void documentSessionController.open();
   } else if (command === 'save') {
     void documentSessionController.save();
@@ -137,4 +155,8 @@ nativeLifecycle.onCloseRequest((requestId) => {
 
 export function useDocumentSessionState(): DocumentSessionState {
   return useStore(documentSessionStore);
+}
+
+export function useNewSkinDialogOpen(): boolean {
+  return useStore(newSkinDialogStore, (state) => state.isOpen);
 }

@@ -26,7 +26,7 @@ test('launches the production Electron application shell', async () => {
       };
     });
     const fileMenu = await application.evaluate(({ Menu }) =>
-      ['file-open', 'file-save', 'file-save-as'].map((id) => {
+      ['file-new', 'file-open', 'file-save', 'file-save-as'].map((id) => {
         const item = Menu.getApplicationMenu()?.getMenuItemById(id);
         return {
           id,
@@ -59,6 +59,7 @@ test('launches the production Electron application shell', async () => {
       hasCommonJsRequire: false,
       hasElectronBridge: false,
       fileApiMethods: [
+        'getPathForDroppedFile',
         'onFileCommand',
         'openSkinPng',
         'saveSkinPng',
@@ -73,6 +74,12 @@ test('launches the production Electron application shell', async () => {
       ],
     });
     expect(fileMenu).toEqual([
+      {
+        id: 'file-new',
+        label: 'New',
+        accelerator: 'CmdOrCtrl+N',
+        enabled: true,
+      },
       {
         id: 'file-open',
         label: 'Open…',
@@ -108,6 +115,124 @@ test('launches the production Electron application shell', async () => {
     ]);
   } finally {
     await application.close();
+  }
+});
+
+test('creates a new skin and opens one controlled dropped PNG', async () => {
+  const temporaryDirectory = await mkdtemp(
+    path.join(tmpdir(), 'minecraft-skin-editor-new-drop-e2e-'),
+  );
+  const requestedOutputPath = path.join(temporaryDirectory, 'new-skin');
+  const dropBytes = encode({
+    width: 64,
+    height: 64,
+    data: new Uint8Array(64 * 64 * 4),
+    channels: 4,
+    depth: 8,
+  });
+  const application = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      MINECRAFT_SKIN_EDITOR_E2E: '1',
+      MINECRAFT_SKIN_EDITOR_E2E_SAVE_AS_PATH: requestedOutputPath,
+    },
+  });
+
+  try {
+    const window = await application.firstWindow();
+    await expect(
+      window.getByRole('heading', { name: 'Minecraft Skin Editor' }),
+    ).toBeVisible();
+    await window.bringToFront();
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('file-new')?.click();
+    });
+    const dialog = window.getByRole('dialog', { name: 'New Skin' });
+    await expect(dialog).toBeVisible();
+    await dialog
+      .getByRole('button', { name: 'Slim skin model', exact: true })
+      .click();
+    await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+
+    const canvas = window.getByRole('img', { name: '2D skin canvas' });
+    const preview = window.getByRole('img', { name: '3D skin preview' });
+    const editorStatus = window.getByLabel('Editor status');
+    await expect(canvas).toBeVisible();
+    await expect(preview).toHaveAttribute('data-skin-model', 'slim');
+    await expect(
+      editorStatus.getByText('Untitled.png', { exact: true }),
+    ).toBeVisible();
+
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox).not.toBeNull();
+    await window.mouse.click(
+      canvasBox!.x + canvasBox!.width / 2,
+      canvasBox!.y + canvasBox!.height / 2,
+    );
+    await expect(window).toHaveTitle('Untitled.png • — Minecraft Skin Editor');
+    await window.getByRole('button', { name: 'Save As…' }).click();
+    await expect(editorStatus.getByText('new-skin.png')).toBeVisible();
+    await expect(window).toHaveTitle('new-skin.png — Minecraft Skin Editor');
+
+    const dispatchDrop = async () =>
+      window.evaluate((bytes) => {
+        interface BrowserDataTransfer {
+          readonly items: {
+            add(file: unknown): void;
+          };
+        }
+        interface BrowserElement {
+          dispatchEvent(event: unknown): boolean;
+        }
+        const browser = globalThis as unknown as {
+          readonly DataTransfer: new () => BrowserDataTransfer;
+          readonly File: new (
+            parts: readonly Uint8Array[],
+            name: string,
+            options: { readonly type: string },
+          ) => unknown;
+          readonly DragEvent: new (
+            type: string,
+            init: {
+              readonly bubbles: boolean;
+              readonly cancelable: boolean;
+              readonly dataTransfer: BrowserDataTransfer;
+            },
+          ) => unknown;
+          readonly document: {
+            querySelector(selector: string): BrowserElement | null;
+          };
+        };
+        const dataTransfer = new browser.DataTransfer();
+        dataTransfer.items.add(
+          new browser.File([new Uint8Array(bytes)], 'dropped.png', {
+            type: 'image/png',
+          }),
+        );
+        const target = browser.document.querySelector('.application-shell');
+        if (target === null) throw new Error('Application shell not found.');
+        target.dispatchEvent(
+          new browser.DragEvent('drop', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer,
+          }),
+        );
+      }, Array.from(dropBytes));
+
+    await dispatchDrop();
+    await expect(
+      editorStatus.getByText('dropped.png', { exact: true }),
+    ).toBeVisible();
+    await expect(window).toHaveTitle('dropped.png — Minecraft Skin Editor');
+    await expect(preview).toHaveAttribute('data-skin-model', 'classic');
+    await expect(window.getByRole('dialog', { name: 'New Skin' })).toHaveCount(
+      0,
+    );
+  } finally {
+    await application.close();
+    await rm(temporaryDirectory, { recursive: true, force: true });
   }
 });
 

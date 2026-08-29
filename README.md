@@ -111,12 +111,18 @@ intentionally deferred beyond the core editor.
 
 ## File operations
 
+- New Skin (Classic or Slim, transparent blank 64×64)
 - Open PNG
+- Drag-and-drop PNG open
 - Validate dimensions and format
 - Save
 - Save As
+- Ctrl+N for New Skin
 - Track unsaved changes
 - Warn before destructive close when appropriate
+
+New and drag-and-drop workflows are documented in
+[`docs/NEW_SKIN_AND_DROP.md`](docs/NEW_SKIN_AND_DROP.md).
 
 Example unsaved-state treatment:
 
