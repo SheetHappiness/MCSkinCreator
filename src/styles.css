@@ -402,7 +402,7 @@ body {
 
 .skin-preview-panel {
   display: grid;
-  grid-template-rows: 34px minmax(0, 1fr) 30px;
+  grid-template-rows: 34px auto minmax(0, 1fr) 30px;
   min-width: 0;
   min-height: 0;
   border-left: 1px solid var(--color-separator);
@@ -432,6 +432,82 @@ body {
   text-transform: uppercase;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.skin-preview-visibility-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 5px 8px;
+  border-bottom: 1px solid #34373b;
+  background: #24262a;
+}
+
+.skin-preview-visibility-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.skin-preview-visibility-label {
+  flex: 0 0 32px;
+  color: var(--color-text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.skin-preview-body-parts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  row-gap: 3px;
+}
+
+.skin-preview-body-parts .skin-preview-visibility-label {
+  grid-column: 1 / -1;
+}
+
+.skin-preview-visibility-panel button {
+  min-width: 0;
+  height: 19px;
+  padding: 0 5px;
+  overflow: hidden;
+  border: 1px solid #45484d;
+  border-radius: 3px;
+  color: #b8bbc0;
+  background: #303237;
+  font: 9px/17px inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skin-preview-visibility-panel button:hover {
+  border-color: #62666d;
+  color: #d8dadd;
+  background: #383b40;
+}
+
+.skin-preview-visibility-panel button[aria-pressed='true'] {
+  border-color: #61758d;
+  color: #e1e7ee;
+  background: #3a4654;
+}
+
+.skin-preview-body-part {
+  display: flex;
+  min-width: 0;
+  gap: 2px;
+}
+
+.skin-preview-body-part > button:first-child {
+  flex: 1 1 auto;
+}
+
+.skin-preview-isolate-button {
+  flex: 0 0 37px;
+  padding-inline: 2px !important;
 }
 
 .model-selector {

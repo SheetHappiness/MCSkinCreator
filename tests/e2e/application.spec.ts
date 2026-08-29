@@ -344,7 +344,42 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
     await window.getByRole('button', { name: 'Open PNG' }).click();
     const preview = window.getByRole('img', { name: '3D skin preview' });
     const editorStatus = window.getByLabel('Editor status');
+    const visibility = window.getByLabel('Visibility and focus');
     await expect(preview).toBeVisible();
+    await expect(preview).toHaveAttribute('data-base-visible', 'true');
+    await expect(preview).toHaveAttribute(
+      'data-visible-body-parts',
+      'head,torso,rightArm,leftArm,rightLeg,leftLeg',
+    );
+
+    await visibility
+      .getByRole('button', { name: 'Hide Head', exact: true })
+      .click();
+    await expect(preview).toHaveAttribute(
+      'data-visible-body-parts',
+      'torso,rightArm,leftArm,rightLeg,leftLeg',
+    );
+    await visibility
+      .getByRole('button', { name: 'Isolate Left Arm', exact: true })
+      .click();
+    await expect(preview).toHaveAttribute('data-visible-body-parts', 'leftArm');
+    await expect(
+      visibility.getByRole('button', { name: 'Isolate Left Arm', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await visibility
+      .getByRole('button', { name: 'Restore all visibility', exact: true })
+      .click();
+    await expect(preview).toHaveAttribute(
+      'data-visible-body-parts',
+      'head,torso,rightArm,leftArm,rightLeg,leftLeg',
+    );
+    await visibility
+      .getByRole('button', { name: 'Show base layer', exact: true })
+      .click();
+    await expect(preview).toHaveAttribute('data-base-visible', 'false');
+    await visibility
+      .getByRole('button', { name: 'Restore all visibility', exact: true })
+      .click();
 
     await window.getByLabel('Paint color', { exact: true }).fill('#123456');
     await window.getByLabel('Paint alpha').fill('128');

@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -9,6 +10,7 @@ import {
 import type { RgbaColor, SkinDocument, SkinModel } from '../../engine/document';
 import type { DocumentHistory } from '../../engine/history';
 import type { EditorTool } from '../../engine/tools';
+import { BODY_PARTS, type BodyPart } from '../../engine/minecraft-skin-spec';
 import {
   SkinPreviewRenderer,
   type SkinPickResult,
@@ -23,6 +25,14 @@ import {
   useSelectedEditorColor,
 } from '../editor/editorToolStore';
 import { changeSkinModel } from './modelSelection';
+import {
+  createDefaultSkinViewState,
+  isolateBodyPart,
+  restoreAllVisibility,
+  setBodyPartVisibility,
+  setLayerVisibility,
+  type SkinViewState,
+} from './skinViewState';
 import { ThreeDToolInteraction } from './threeDToolInteraction';
 
 interface SkinPreviewPanelProps {
@@ -61,6 +71,19 @@ const FACE_LABELS: Readonly<Record<SkinPickResult['face'], string>> = {
   right: 'Right',
 };
 
+const BODY_PART_OPTIONS: readonly BodyPart[] = BODY_PARTS;
+
+function applyViewState(
+  renderer: SkinPreviewRenderer,
+  state: SkinViewState,
+): void {
+  renderer.setBaseVisible(state.layers.base);
+  renderer.setOuterVisible(state.layers.outer);
+  for (const bodyPart of BODY_PARTS) {
+    renderer.setBodyPartVisible(bodyPart, state.bodyParts[bodyPart]);
+  }
+}
+
 function formatPick(result: SkinPickResult | undefined): string {
   if (result === undefined) return 'Hover the model to inspect a texel';
   return `${BODY_PART_LABELS[result.bodyPart]} · ${LAYER_LABELS[result.layer]} · ${FACE_LABELS[result.face]} · X: ${result.x} Y: ${result.y}`;
@@ -69,14 +92,27 @@ function formatPick(result: SkinPickResult | undefined): string {
 export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<SkinPreviewRenderer | undefined>(undefined);
-  const outerVisibleRef = useRef(true);
   const activeTool = useActiveEditorTool();
   const selectedColor = useSelectedEditorColor();
   const activeToolRef = useRef<EditorTool>(activeTool);
   const selectedColorRef = useRef<RgbaColor>(selectedColor);
   const temporaryEyedropperRef = useRef(false);
   const interactionRef = useRef<ThreeDToolInteraction | undefined>(undefined);
-  const [outerVisible, setOuterVisible] = useState(true);
+  const defaultView = useMemo(
+    () => ({
+      documentId: document.id,
+      state: createDefaultSkinViewState(),
+    }),
+    [document],
+  );
+  const [viewStateEntry, setViewStateEntry] = useState<{
+    readonly documentId: string;
+    readonly state: SkinViewState;
+  }>(() => defaultView);
+  const viewState =
+    viewStateEntry.documentId === defaultView.documentId
+      ? viewStateEntry.state
+      : defaultView.state;
   const [hoveredPick, setHoveredPick] = useState<SkinPickResult | undefined>();
   const [temporaryEyedropper, setTemporaryEyedropper] = useState(false);
 
@@ -148,7 +184,7 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
       },
     });
     renderer.setEditingTool(activeToolRef.current);
-    renderer.setOuterVisible(outerVisibleRef.current);
+    applyViewState(renderer, defaultView.state);
     rendererRef.current = renderer;
     return () => {
       rendererRef.current = undefined;
@@ -158,7 +194,12 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
       interactionRef.current = undefined;
       setHoveredPick(undefined);
     };
-  }, [document, history]);
+  }, [defaultView, document, history]);
+
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (renderer !== undefined) applyViewState(renderer, viewState);
+  }, [viewState]);
 
   useEffect(() => {
     interactionRef.current?.cancel();
@@ -204,13 +245,14 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
     [],
   );
 
-  const toggleOuterLayer = () => {
+  const updateViewState = (update: (state: SkinViewState) => SkinViewState) => {
     cancelActiveEditorInteraction();
-    setOuterVisible((current) => {
-      const next = !current;
-      outerVisibleRef.current = next;
-      rendererRef.current?.setOuterVisible(next);
-      return next;
+    setViewStateEntry((current) => {
+      const state =
+        current.documentId === defaultView.documentId
+          ? current.state
+          : defaultView.state;
+      return { documentId: defaultView.documentId, state: update(state) };
     });
   };
 
@@ -236,6 +278,87 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
           ))}
         </div>
       </header>
+      <section
+        className="skin-preview-visibility-panel"
+        aria-label="Visibility and focus"
+      >
+        <div
+          className="skin-preview-visibility-row"
+          role="group"
+          aria-label="Layers"
+        >
+          <span className="skin-preview-visibility-label">Layers</span>
+          <button
+            type="button"
+            aria-label="Show base layer"
+            aria-pressed={viewState.layers.base}
+            onClick={() =>
+              updateViewState((state) =>
+                setLayerVisibility(state, 'base', !state.layers.base),
+              )
+            }
+          >
+            Base
+          </button>
+          <button
+            type="button"
+            aria-label="Show outer layer"
+            aria-pressed={viewState.layers.outer}
+            onClick={() =>
+              updateViewState((state) =>
+                setLayerVisibility(state, 'outer', !state.layers.outer),
+              )
+            }
+          >
+            Outer
+          </button>
+          <button
+            type="button"
+            aria-label="Restore all visibility"
+            onClick={() => updateViewState(() => restoreAllVisibility())}
+          >
+            All
+          </button>
+        </div>
+        <div
+          className="skin-preview-visibility-row skin-preview-body-parts"
+          role="group"
+          aria-label="Body parts"
+        >
+          <span className="skin-preview-visibility-label">Parts</span>
+          {BODY_PART_OPTIONS.map((bodyPart) => {
+            const label = BODY_PART_LABELS[bodyPart];
+            const visible = viewState.bodyParts[bodyPart];
+            return (
+              <div className="skin-preview-body-part" key={bodyPart}>
+                <button
+                  type="button"
+                  aria-label={`${visible ? 'Hide' : 'Show'} ${label}`}
+                  aria-pressed={visible}
+                  onClick={() =>
+                    updateViewState((state) =>
+                      setBodyPartVisibility(state, bodyPart, !visible),
+                    )
+                  }
+                >
+                  {label}
+                </button>
+                <button
+                  type="button"
+                  className="skin-preview-isolate-button"
+                  aria-label={`Isolate ${label}`}
+                  aria-pressed={viewState.isolatedBodyPart === bodyPart}
+                  onClick={() =>
+                    updateViewState((state) => isolateBodyPart(state, bodyPart))
+                  }
+                >
+                  Isolate
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </section>
       <div ref={mountRef} className="skin-preview-mount" />
       <footer className="skin-preview-controls">
         <output
@@ -245,14 +368,6 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
         >
           {formatPick(hoveredPick)}
         </output>
-        <button
-          type="button"
-          aria-label="Show outer layer"
-          aria-pressed={outerVisible}
-          onClick={toggleOuterLayer}
-        >
-          Outer
-        </button>
         <button
           type="button"
           title="Reset 3D camera"

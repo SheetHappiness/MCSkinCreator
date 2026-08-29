@@ -71,6 +71,13 @@ export class SkinModelResources {
   private readonly geometries: BufferGeometry[] = [];
   private readonly outerMeshes: Mesh[] = [];
   private readonly pickableMeshes: Mesh[] = [];
+  private readonly meshesByBodyPart = new Map<
+    BodyPart,
+    { readonly base: Mesh; readonly outer: Mesh }
+  >();
+  private readonly bodyPartVisibility = new Map<BodyPart, boolean>();
+  private baseVisible = true;
+  private outerVisible = true;
 
   constructor(model: SkinModel, texture: DataTexture) {
     this.root = new Group();
@@ -126,17 +133,45 @@ export class SkinModelResources {
       this.geometries.push(baseGeometry, outerGeometry);
       this.outerMeshes.push(outerMesh);
       this.pickableMeshes.push(baseMesh, outerMesh);
+      this.meshesByBodyPart.set(descriptor.bodyPart, {
+        base: baseMesh,
+        outer: outerMesh,
+      });
+      this.bodyPartVisibility.set(descriptor.bodyPart, true);
       part.add(baseMesh, outerMesh);
       this.root.add(part);
     }
   }
 
   setOuterVisible(visible: boolean): void {
-    for (const mesh of this.outerMeshes) mesh.visible = visible;
+    this.outerVisible = visible;
+    for (const bodyPart of BODY_PARTS) {
+      this.updateBodyPartVisibility(bodyPart);
+    }
+  }
+
+  setBaseVisible(visible: boolean): void {
+    this.baseVisible = visible;
+    for (const bodyPart of BODY_PARTS) {
+      this.updateBodyPartVisibility(bodyPart);
+    }
+  }
+
+  setBodyPartVisible(bodyPart: BodyPart, visible: boolean): void {
+    this.bodyPartVisibility.set(bodyPart, visible);
+    this.updateBodyPartVisibility(bodyPart);
   }
 
   getPickableMeshes(): readonly Mesh[] {
     return this.pickableMeshes;
+  }
+
+  private updateBodyPartVisibility(bodyPart: BodyPart): void {
+    const meshes = this.meshesByBodyPart.get(bodyPart);
+    if (meshes === undefined) return;
+    const partVisible = this.bodyPartVisibility.get(bodyPart) ?? true;
+    meshes.base.visible = partVisible && this.baseVisible;
+    meshes.outer.visible = partVisible && this.outerVisible;
   }
 
   dispose(): void {

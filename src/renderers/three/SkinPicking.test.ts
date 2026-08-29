@@ -239,6 +239,9 @@ describe('3D skin picking', () => {
       layer: 'base',
       face: 'front',
     });
+    resources.setBodyPartVisible('torso', false);
+    expect(pickSkinAtClientPoint(context, 110, 120, raycaster)).toBeUndefined();
+    resources.setBodyPartVisible('torso', true);
     expect(pickSkinAtClientPoint(context, 9, 120, raycaster)).toBeUndefined();
     expect(pickSkinAtClientPoint(context, 110, 220, raycaster)).toBeUndefined();
 

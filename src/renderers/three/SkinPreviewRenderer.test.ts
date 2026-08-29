@@ -107,6 +107,16 @@ describe('Three.js preview lifecycle', () => {
     expect(updateTexture).toHaveBeenCalledOnce();
     expect(renderer.render).toHaveBeenCalledOnce();
 
+    preview.setBaseVisible(false);
+    preview.setOuterVisible(false);
+    preview.setBodyPartVisible('leftArm', false);
+    expect(canvas.dataset.baseVisible).toBe('false');
+    expect(canvas.dataset.outerVisible).toBe('false');
+    expect(canvas.dataset.visibleBodyParts).toBe(
+      'head,torso,rightArm,rightLeg,leftLeg',
+    );
+    expect(skinDocument.revision).toBe(2);
+
     skinDocument.writePixel(3, 3, { r: 9, g: 10, b: 11, a: 12 });
     expect(canvas.dataset.documentRevision).toBe('3');
     expect(requestFrame).toHaveBeenCalledTimes(2);

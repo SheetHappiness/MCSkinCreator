@@ -12,6 +12,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import type { SkinDocument } from '../../engine/document';
 import type { EditorTool } from '../../engine/tools';
+import { BODY_PARTS, type BodyPart } from '../../engine/minecraft-skin-spec';
 import { SkinModelResources } from './SkinModelBuilder';
 import { pickSkinAtClientPoint, type SkinPickResult } from './SkinPicking';
 import { SkinTexture } from './SkinTexture';
@@ -111,6 +112,10 @@ export class SkinPreviewRenderer {
   private renderFrame: number | undefined;
   private textureDirty = false;
   private currentModel: SkinDocument['model'];
+  private readonly bodyPartVisibility = new Map<BodyPart, boolean>(
+    BODY_PARTS.map((bodyPart) => [bodyPart, true]),
+  );
+  private baseVisible = true;
   private outerVisible = true;
   private disposed = false;
   private readonly activePointerIds = new Set<number>();
@@ -234,6 +239,24 @@ export class SkinPreviewRenderer {
     if (this.disposed || visible === this.outerVisible) return;
     this.outerVisible = visible;
     this.modelResources.setOuterVisible(visible);
+    this.syncDebugState();
+    this.requestRender();
+  }
+
+  setBaseVisible(visible: boolean): void {
+    if (this.disposed || visible === this.baseVisible) return;
+    this.baseVisible = visible;
+    this.modelResources.setBaseVisible(visible);
+    this.syncDebugState();
+    this.requestRender();
+  }
+
+  setBodyPartVisible(bodyPart: BodyPart, visible: boolean): void {
+    if (this.disposed || this.bodyPartVisibility.get(bodyPart) === visible) {
+      return;
+    }
+    this.bodyPartVisibility.set(bodyPart, visible);
+    this.modelResources.setBodyPartVisible(bodyPart, visible);
     this.syncDebugState();
     this.requestRender();
   }
@@ -373,7 +396,11 @@ export class SkinPreviewRenderer {
         this.currentModel,
         this.skinTexture.texture,
       );
+      this.modelResources.setBaseVisible(this.baseVisible);
       this.modelResources.setOuterVisible(this.outerVisible);
+      for (const [bodyPart, visible] of this.bodyPartVisibility) {
+        this.modelResources.setBodyPartVisible(bodyPart, visible);
+      }
       this.scene.add(this.modelResources.root);
     } else {
       this.textureDirty = true;
@@ -416,6 +443,10 @@ export class SkinPreviewRenderer {
     const canvas = this.renderer.domElement;
     canvas.dataset.skinModel = this.currentModel;
     canvas.dataset.documentRevision = String(this.document.revision);
+    canvas.dataset.baseVisible = String(this.baseVisible);
     canvas.dataset.outerVisible = String(this.outerVisible);
+    canvas.dataset.visibleBodyParts = BODY_PARTS.filter((bodyPart) =>
+      this.bodyPartVisibility.get(bodyPart),
+    ).join(',');
   }
 }
