@@ -15,6 +15,7 @@ describe('preview model selection', () => {
     expect(document.copyPixelData()).toEqual(pixelsBefore);
     expect(document.isDirty).toBe(true);
     expect(history.canUndo).toBe(true);
+    expect(history.getTimelineState().entries[1]?.label).toBe('Model → Slim');
 
     expect(history.undo()).toBe(true);
     expect(document.model).toBe('classic');

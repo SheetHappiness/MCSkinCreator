@@ -8,7 +8,9 @@ export function changeSkinModel(
   model: SkinModel,
 ): boolean {
   if (document.model === model) return false;
-  const transaction = history.beginTransaction();
+  const transaction = history.beginTransaction(
+    `Model → ${model === 'slim' ? 'Slim' : 'Classic'}`,
+  );
   const changed = transaction.setModel(model);
   transaction.commit();
   return changed;

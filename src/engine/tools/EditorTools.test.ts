@@ -111,6 +111,28 @@ describe('rasterizeLine', () => {
 });
 
 describe('Pencil strokes', () => {
+  it('records concise labels supplied by the editor command path', () => {
+    const { document, history } = createEditor();
+
+    const pencilOperation = beginPixelStroke(
+      history,
+      RED,
+      { x: 1, y: 1 },
+      'Pencil Stroke',
+    ).commit();
+    document.writePixel(2, 2, RED);
+    document.markSaved();
+    const eraserOperation = beginPixelStroke(
+      history,
+      ERASER_COLOR,
+      { x: 2, y: 2 },
+      'Eraser Stroke',
+    ).commit();
+
+    expect(pencilOperation?.label).toBe('Pencil Stroke');
+    expect(eraserOperation?.label).toBe('Eraser Stroke');
+  });
+
   it('writes one exact selected RGBA pixel for a click', () => {
     const { document, history } = createEditor();
     const stroke = beginPixelStroke(history, SEMI_BLUE, { x: 6, y: 9 });
@@ -246,9 +268,9 @@ describe('exact contiguous Fill', () => {
     const { document, history } = createEditor();
     document.writePixel(10, 10, SEMI_BLUE);
     document.markSaved();
-    expect(
-      fillAt(document, history, { x: 10, y: 10 }, RED)?.pixels,
-    ).toHaveLength(1);
+    const operation = fillAt(document, history, { x: 10, y: 10 }, RED);
+    expect(operation?.label).toBe('Fill');
+    expect(operation?.pixels).toHaveLength(1);
     expect(document.readPixel(10, 10)).toEqual(RED);
     history.undo();
     expect(document.readPixel(10, 10)).toEqual(SEMI_BLUE);

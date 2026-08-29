@@ -9,6 +9,19 @@ import { rasterizeLine, type EditorTool } from './EditorTools';
 
 export type AdvancedPaintTool = 'lighten' | 'darken' | 'noise' | 'stamp';
 
+export function getAdvancedPaintHistoryLabel(tool: AdvancedPaintTool): string {
+  switch (tool) {
+    case 'lighten':
+      return 'Lighten Stroke';
+    case 'darken':
+      return 'Darken Stroke';
+    case 'noise':
+      return 'Noise Stroke';
+    case 'stamp':
+      return 'Stamp';
+  }
+}
+
 export function isAdvancedPaintTool(
   tool: EditorTool,
 ): tool is AdvancedPaintTool {
@@ -395,7 +408,7 @@ export function beginAdvancedPaintStroke(
 ): AdvancedPaintStroke {
   const stroke = new AdvancedPaintStroke(
     document,
-    history.beginTransaction(),
+    history.beginTransaction(getAdvancedPaintHistoryLabel(tool)),
     tool,
     options,
     colors,

@@ -16,6 +16,7 @@ export interface ModelChange {
 
 export interface DocumentEditOperation {
   readonly kind: 'document-edit';
+  readonly label: string;
   readonly pixels: readonly PixelChange[];
   readonly model?: ModelChange;
 }
@@ -26,6 +27,35 @@ export interface DocumentHistoryState {
 }
 
 export type DocumentHistoryListener = (state: DocumentHistoryState) => void;
+
+export type DocumentHistoryTimelineEntryState =
+  'undoable' | 'current' | 'redoable';
+
+export interface DocumentHistoryTimelineEntry {
+  /** -1 is the session's initial state; operations use their retained index. */
+  readonly index: number;
+  readonly kind: 'initial' | 'operation';
+  readonly label: string;
+  readonly state: DocumentHistoryTimelineEntryState;
+  readonly isCurrent: boolean;
+  readonly isSaved: boolean;
+  readonly pixelCount: number;
+  readonly hasModelChange: boolean;
+}
+
+export interface DocumentHistoryTimelineState {
+  readonly entries: readonly DocumentHistoryTimelineEntry[];
+  /** The state currently applied to the document, where -1 is initial. */
+  readonly currentIndex: number;
+  /** Undefined means the saved state is no longer represented by this timeline. */
+  readonly savedIndex: number | undefined;
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+}
+
+export type DocumentHistoryTimelineListener = (
+  state: DocumentHistoryTimelineState,
+) => void;
 
 export interface DocumentEditTransaction {
   readonly isActive: boolean;
@@ -61,6 +91,7 @@ function colorsEqual(left: RgbaColor, right: RgbaColor): boolean {
 }
 
 function freezeOperation(
+  label: string,
   pixels: readonly MutablePixelChange[],
   model: ModelChange | undefined,
 ): DocumentEditOperation {
@@ -75,6 +106,7 @@ function freezeOperation(
 
   return Object.freeze({
     kind: 'document-edit' as const,
+    label,
     pixels: Object.freeze(immutablePixels),
     ...(model === undefined
       ? {}
@@ -113,6 +145,7 @@ class LiveDocumentEditTransaction implements DocumentEditTransaction {
 
   constructor(
     private readonly document: SkinDocument,
+    private readonly label: string,
     private readonly onFinish: (
       transaction: LiveDocumentEditTransaction,
       operation: DocumentEditOperation | undefined,
@@ -189,7 +222,7 @@ class LiveDocumentEditTransaction implements DocumentEditTransaction {
     const operation =
       effectivePixels.length === 0 && effectiveModel === undefined
         ? undefined
-        : freezeOperation(effectivePixels, effectiveModel);
+        : freezeOperation(this.label, effectivePixels, effectiveModel);
 
     this.onFinish(this, operation);
     return operation;
@@ -227,10 +260,14 @@ class LiveDocumentEditTransaction implements DocumentEditTransaction {
 
 /** Framework-independent, document-owned bounded Undo/Redo controller. */
 export class DocumentHistory {
-  private readonly undoStack: DocumentEditOperation[] = [];
-  private readonly redoStack: DocumentEditOperation[] = [];
+  private readonly operations: DocumentEditOperation[] = [];
   private readonly listeners = new Set<DocumentHistoryListener>();
+  private readonly timelineListeners =
+    new Set<DocumentHistoryTimelineListener>();
   private activeTransaction: LiveDocumentEditTransaction | undefined;
+  private currentIndex = -1;
+  private savedIndex: number | undefined = -1;
+  private timelineStateValue: DocumentHistoryTimelineState;
 
   constructor(
     private readonly document: SkinDocument,
@@ -239,14 +276,16 @@ export class DocumentHistory {
     if (!Number.isInteger(capacity) || capacity < 1) {
       throw new RangeError('History capacity must be a positive integer.');
     }
+
+    this.timelineStateValue = this.createTimelineState();
   }
 
   get canUndo(): boolean {
-    return this.undoStack.length > 0;
+    return this.currentIndex >= 0;
   }
 
   get canRedo(): boolean {
-    return this.redoStack.length > 0;
+    return this.currentIndex < this.operations.length - 1;
   }
 
   getState(): DocumentHistoryState {
@@ -258,13 +297,23 @@ export class DocumentHistory {
     return () => this.listeners.delete(listener);
   }
 
-  beginTransaction(): DocumentEditTransaction {
+  getTimelineState(): DocumentHistoryTimelineState {
+    return this.timelineStateValue;
+  }
+
+  subscribeTimeline(listener: DocumentHistoryTimelineListener): () => void {
+    this.timelineListeners.add(listener);
+    return () => this.timelineListeners.delete(listener);
+  }
+
+  beginTransaction(label = 'Edit'): DocumentEditTransaction {
     if (this.activeTransaction !== undefined) {
       throw new Error('An edit transaction is already active.');
     }
 
     const transaction = new LiveDocumentEditTransaction(
       this.document,
+      normalizeHistoryLabel(label),
       (finished, operation) => this.finishTransaction(finished, operation),
     );
     this.activeTransaction = transaction;
@@ -281,8 +330,13 @@ export class DocumentHistory {
     return true;
   }
 
-  editPixel(x: number, y: number, color: RgbaColor): boolean {
-    const transaction = this.beginTransaction();
+  editPixel(
+    x: number,
+    y: number,
+    color: RgbaColor,
+    label = 'Pixel Edit',
+  ): boolean {
+    const transaction = this.beginTransaction(label);
     const changed = transaction.writePixel(x, y, color);
     transaction.commit();
     return changed;
@@ -290,35 +344,82 @@ export class DocumentHistory {
 
   undo(): boolean {
     this.assertNoActiveTransaction();
-    const operation = this.undoStack.pop();
-    if (operation === undefined) {
+    if (!this.canUndo) {
       return false;
     }
 
+    const operation = this.operations[this.currentIndex]!;
     applyOperation(this.document, operation, 'before');
-    this.redoStack.push(operation);
+    this.currentIndex -= 1;
     this.publish();
     return true;
   }
 
   redo(): boolean {
     this.assertNoActiveTransaction();
-    const operation = this.redoStack.pop();
-    if (operation === undefined) {
+    if (!this.canRedo) {
       return false;
     }
 
+    const operation = this.operations[this.currentIndex + 1]!;
     applyOperation(this.document, operation, 'after');
-    this.undoStack.push(operation);
+    this.currentIndex += 1;
     this.publish();
     return true;
   }
 
+  /**
+   * Moves the canonical document to a retained history state without adding
+   * an operation. The target is -1 for the initial state or an operation
+   * index returned by getTimelineState().
+   */
+  jumpTo(targetIndex: number): boolean {
+    this.assertNoActiveTransaction();
+    if (
+      !Number.isInteger(targetIndex) ||
+      targetIndex < -1 ||
+      targetIndex >= this.operations.length
+    ) {
+      throw new RangeError('History target is outside the retained timeline.');
+    }
+    if (targetIndex === this.currentIndex) return false;
+
+    while (this.currentIndex > targetIndex) {
+      applyOperation(
+        this.document,
+        this.operations[this.currentIndex]!,
+        'before',
+      );
+      this.currentIndex -= 1;
+    }
+    while (this.currentIndex < targetIndex) {
+      const nextIndex = this.currentIndex + 1;
+      applyOperation(this.document, this.operations[nextIndex]!, 'after');
+      this.currentIndex = nextIndex;
+    }
+    this.publish();
+    return true;
+  }
+
+  /** Records the current document content as the saved timeline checkpoint. */
+  markSavedCheckpoint(): void {
+    this.assertNoActiveTransaction();
+    this.savedIndex = this.currentIndex;
+    this.publishTimeline();
+  }
+
   clear(): void {
     this.cancelActiveTransaction();
-    const changed = this.undoStack.length > 0 || this.redoStack.length > 0;
-    this.undoStack.length = 0;
-    this.redoStack.length = 0;
+    const changed =
+      this.operations.length > 0 ||
+      this.currentIndex !== -1 ||
+      this.savedIndex !== undefined;
+    this.operations.length = 0;
+    this.currentIndex = -1;
+    // clear() may be used to re-baseline an existing document. Its actual
+    // dirty state remains owned by SkinDocument, so no saved marker is
+    // invented here; callers can explicitly mark a successful save.
+    this.savedIndex = undefined;
     if (changed) {
       this.publish();
     }
@@ -337,11 +438,26 @@ export class DocumentHistory {
       return;
     }
 
-    this.undoStack.push(operation);
-    if (this.undoStack.length > this.capacity) {
-      this.undoStack.shift();
+    if (this.currentIndex < this.operations.length - 1) {
+      this.operations.splice(this.currentIndex + 1);
+      if (
+        this.savedIndex !== undefined &&
+        this.savedIndex > this.currentIndex
+      ) {
+        this.savedIndex = undefined;
+      }
     }
-    this.redoStack.length = 0;
+
+    this.operations.push(operation);
+    this.currentIndex += 1;
+    if (this.operations.length > this.capacity) {
+      this.operations.shift();
+      this.currentIndex -= 1;
+      if (this.savedIndex !== undefined) {
+        this.savedIndex =
+          this.savedIndex === 0 ? undefined : this.savedIndex - 1;
+      }
+    }
     this.publish();
   }
 
@@ -352,9 +468,70 @@ export class DocumentHistory {
   }
 
   private publish(): void {
+    this.publishTimeline();
     const state = this.getState();
     for (const listener of this.listeners) {
       listener(state);
     }
   }
+
+  private publishTimeline(): void {
+    this.timelineStateValue = this.createTimelineState();
+    for (const listener of this.timelineListeners) {
+      listener(this.timelineStateValue);
+    }
+  }
+
+  private createTimelineState(): DocumentHistoryTimelineState {
+    const entries: DocumentHistoryTimelineEntry[] = [
+      {
+        index: -1,
+        kind: 'initial',
+        label: 'Initial state',
+        state: this.currentIndex === -1 ? 'current' : 'undoable',
+        isCurrent: this.currentIndex === -1,
+        isSaved: this.savedIndex === -1,
+        pixelCount: 0,
+        hasModelChange: false,
+      },
+      ...this.operations.map((operation, index) => ({
+        index,
+        kind: 'operation' as const,
+        label: operation.label,
+        state:
+          index < this.currentIndex
+            ? ('undoable' as const)
+            : index === this.currentIndex
+              ? ('current' as const)
+              : ('redoable' as const),
+        isCurrent: index === this.currentIndex,
+        isSaved: this.savedIndex === index,
+        pixelCount: operation.pixels.length,
+        hasModelChange: operation.model !== undefined,
+      })),
+    ];
+
+    return Object.freeze({
+      entries: Object.freeze(entries.map((entry) => Object.freeze(entry))),
+      currentIndex: this.currentIndex,
+      savedIndex: this.savedIndex,
+      canUndo: this.canUndo,
+      canRedo: this.canRedo,
+    });
+  }
+}
+
+const MAX_HISTORY_LABEL_LENGTH = 64;
+
+function normalizeHistoryLabel(label: string): string {
+  const normalized = label.trim().replace(/\s+/g, ' ');
+  if (normalized.length === 0) {
+    throw new TypeError('History labels must not be empty.');
+  }
+  if (normalized.length > MAX_HISTORY_LABEL_LENGTH) {
+    throw new RangeError(
+      `History labels must be ${MAX_HISTORY_LABEL_LENGTH} characters or fewer.`,
+    );
+  }
+  return normalized;
 }

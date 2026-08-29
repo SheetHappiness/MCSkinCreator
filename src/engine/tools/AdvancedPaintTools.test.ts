@@ -5,6 +5,7 @@ import { DocumentHistory } from '../history';
 import {
   beginAdvancedPaintStroke,
   darkenColor,
+  getAdvancedPaintHistoryLabel,
   lightenColor,
   noiseColor,
   type AdvancedPaintColors,
@@ -21,6 +22,17 @@ const COLORS: AdvancedPaintColors = {
   primary: { r: 220, g: 40, b: 20, a: 255 },
   secondary: { r: 20, g: 40, b: 220, a: 255 },
 };
+
+describe('advanced paint history labels', () => {
+  it.each([
+    ['lighten', 'Lighten Stroke'],
+    ['darken', 'Darken Stroke'],
+    ['noise', 'Noise Stroke'],
+    ['stamp', 'Stamp'],
+  ] as const)('maps %s to a concise history label', (tool, label) => {
+    expect(getAdvancedPaintHistoryLabel(tool)).toBe(label);
+  });
+});
 
 function createDocument(
   pixels: readonly {

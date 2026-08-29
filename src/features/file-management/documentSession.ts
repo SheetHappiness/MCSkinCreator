@@ -177,6 +177,7 @@ export class DocumentSessionController {
         displayName: result.displayName,
       };
       session.document.markSaved();
+      session.history.markSavedCheckpoint();
       this.publish({
         ...this.state,
         session: nextSession,
@@ -195,6 +196,7 @@ export class DocumentSessionController {
     }
 
     session.document.markSaved();
+    session.history.markSavedCheckpoint();
     this.publish({
       ...this.state,
       session,

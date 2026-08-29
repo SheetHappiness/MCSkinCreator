@@ -111,7 +111,12 @@ export class ThreeDToolInteraction {
       tool === 'eraser' && getToolOptions('eraser').output === 'transparent'
         ? ERASER_COLOR
         : color;
-    this.stroke = beginPixelStroke(this.history, strokeColor, pick);
+    this.stroke = beginPixelStroke(
+      this.history,
+      strokeColor,
+      pick,
+      tool === 'eraser' ? 'Eraser Stroke' : 'Pencil Stroke',
+    );
     this.pointerId = pointerId;
     this.previousSurface = surfaceIdentity(pick);
     return true;

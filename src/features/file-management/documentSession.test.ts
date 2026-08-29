@@ -300,11 +300,13 @@ describe('document Save lifecycle', () => {
     await manager.save();
     expect(session.document.isDirty).toBe(false);
     expect(manager.getState().canUndo).toBe(true);
+    expect(session.history.getTimelineState().savedIndex).toBe(0);
 
     session.history.editPixel(4, 4, { r: 5, g: 6, b: 7, a: 8 });
     expect(session.document.isDirty).toBe(true);
     expect(manager.undo()).toBe(true);
     expect(session.document.isDirty).toBe(false);
+    expect(session.history.getTimelineState().currentIndex).toBe(0);
 
     expect(manager.undo()).toBe(true);
     expect(session.document.isDirty).toBe(true);

@@ -266,6 +266,166 @@ describe('DocumentHistory saved-state interaction', () => {
   });
 });
 
+describe('DocumentHistory timeline', () => {
+  it('exposes concise labels, metadata, and the current history position', () => {
+    const { document, history } = createEditor();
+
+    const pencil = history.editPixel(1, 1, RED, 'Pencil Stroke');
+    const eraser = history.editPixel(2, 2, RED, 'Eraser Stroke');
+    const fill = history.beginTransaction('Fill');
+    fill.writePixel(3, 3, BLUE_ALPHA);
+    const fillOperation = fill.commit();
+    const model = history.beginTransaction('Model → Slim');
+    model.setModel('slim');
+    const modelOperation = model.commit();
+
+    expect(pencil).toBe(true);
+    expect(eraser).toBe(true);
+    expect(fillOperation?.label).toBe('Fill');
+    expect(modelOperation?.label).toBe('Model → Slim');
+    expect(history.getTimelineState()).toMatchObject({
+      currentIndex: 3,
+      savedIndex: -1,
+      canUndo: true,
+      canRedo: false,
+    });
+    expect(history.getTimelineState().entries).toEqual([
+      expect.objectContaining({
+        index: -1,
+        kind: 'initial',
+        label: 'Initial state',
+        state: 'undoable',
+        isCurrent: false,
+        isSaved: true,
+      }),
+      expect.objectContaining({
+        index: 0,
+        label: 'Pencil Stroke',
+        pixelCount: 1,
+        state: 'undoable',
+      }),
+      expect.objectContaining({
+        index: 1,
+        label: 'Eraser Stroke',
+        pixelCount: 1,
+        state: 'undoable',
+      }),
+      expect.objectContaining({
+        index: 2,
+        label: 'Fill',
+        pixelCount: 1,
+        state: 'undoable',
+      }),
+      expect.objectContaining({
+        index: 3,
+        label: 'Model → Slim',
+        pixelCount: 0,
+        hasModelChange: true,
+        state: 'current',
+        isCurrent: true,
+      }),
+    ]);
+    expect(document.model).toBe('slim');
+  });
+
+  it('jumps across retained states without adding history or changing labels', () => {
+    const { document, history } = createEditor();
+
+    history.editPixel(1, 1, RED, 'First');
+    history.editPixel(2, 2, BLUE_ALPHA, 'Second');
+    history.editPixel(3, 3, { r: 8, g: 7, b: 6, a: 5 }, 'Third');
+    const beforeEntries = history.getTimelineState().entries;
+    const listener = vi.fn();
+    history.subscribeTimeline(listener);
+
+    expect(history.jumpTo(0)).toBe(true);
+    expect(document.readPixel(1, 1)).toEqual(RED);
+    expect(document.readPixel(2, 2)).toEqual(TRANSPARENT_RGBA);
+    expect(document.readPixel(3, 3)).toEqual(TRANSPARENT_RGBA);
+    expect(history.getTimelineState().currentIndex).toBe(0);
+    expect(history.getTimelineState().entries).toEqual([
+      ...beforeEntries.slice(0, 4).map((entry, index) =>
+        expect.objectContaining({
+          index: entry.index,
+          label: entry.label,
+          kind: entry.kind,
+          state:
+            index === 1 ? 'current' : index === 0 ? 'undoable' : 'redoable',
+        }),
+      ),
+    ]);
+    expect(history.getTimelineState().entries).toHaveLength(4);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    expect(history.jumpTo(2)).toBe(true);
+    expect(document.readPixel(2, 2)).toEqual(BLUE_ALPHA);
+    expect(document.readPixel(3, 3)).toEqual({ r: 8, g: 7, b: 6, a: 5 });
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(history.jumpTo(2)).toBe(false);
+    expect(history.getTimelineState().entries).toHaveLength(4);
+  });
+
+  it('tracks a reachable saved checkpoint and clears it when branching past it', () => {
+    const { document, history } = createEditor();
+
+    history.editPixel(1, 1, RED, 'Before Save');
+    history.editPixel(2, 2, BLUE_ALPHA, 'Saved Edit');
+    document.markSaved();
+    history.markSavedCheckpoint();
+
+    expect(history.getTimelineState().savedIndex).toBe(1);
+    expect(
+      history.getTimelineState().entries.find((entry) => entry.isSaved)?.label,
+    ).toBe('Saved Edit');
+
+    history.undo();
+    expect(history.getTimelineState().currentIndex).toBe(0);
+    expect(history.getTimelineState().entries[2]!.isSaved).toBe(true);
+    expect(document.isDirty).toBe(true);
+
+    history.editPixel(3, 3, { r: 1, g: 2, b: 3, a: 4 }, 'New Branch');
+    expect(history.canRedo).toBe(false);
+    expect(history.getTimelineState().savedIndex).toBeUndefined();
+    expect(
+      history.getTimelineState().entries.some((entry) => entry.isSaved),
+    ).toBe(false);
+  });
+
+  it('retains only bounded operations and starts a replacement session at a clean baseline', () => {
+    const first = createEditor(2);
+    first.history.editPixel(0, 0, RED, 'One');
+    first.history.editPixel(1, 0, RED, 'Two');
+    first.history.editPixel(2, 0, RED, 'Three');
+
+    expect(
+      first.history.getTimelineState().entries.map((entry) => entry.label),
+    ).toEqual(['Initial state', 'Two', 'Three']);
+    expect(first.history.getTimelineState().currentIndex).toBe(1);
+
+    const replacement = createEditor();
+    expect(replacement.history.getTimelineState()).toMatchObject({
+      currentIndex: -1,
+      savedIndex: -1,
+      canUndo: false,
+      canRedo: false,
+    });
+    expect(replacement.history.getTimelineState().entries).toHaveLength(1);
+    expect(replacement.document.revision).toBe(0);
+  });
+
+  it('does not mutate the document when inspecting or rejecting a timeline target', () => {
+    const { document, history } = createEditor();
+    history.editPixel(4, 4, RED, 'Paint');
+    const revision = document.revision;
+    const color = document.readPixel(4, 4);
+
+    expect(history.getTimelineState().entries).toHaveLength(2);
+    expect(() => history.jumpTo(4)).toThrow(RangeError);
+    expect(document.revision).toBe(revision);
+    expect(document.readPixel(4, 4)).toEqual(color);
+  });
+});
+
 describe('DocumentHistory capacity', () => {
   it('evicts oldest operations and retains the newest operations predictably', () => {
     const { document, history } = createEditor(2);

@@ -640,6 +640,26 @@ test('applies advanced paint tools through the contextual 2D inspector', async (
     await window.mouse.click(stampTarget.x, stampTarget.y);
     await expect(editorStatus.getByText('advanced.png •')).toBeVisible();
 
+    const historySummary = window.getByRole('button', { name: /^History/ });
+    await historySummary.click();
+    await expect(
+      window.getByRole('button', { name: 'Lighten Stroke · Undo' }),
+    ).toBeVisible();
+    await expect(
+      window.getByRole('button', { name: 'Darken Stroke · Undo' }),
+    ).toBeVisible();
+    await expect(
+      window.getByRole('button', { name: 'Stamp · Current' }),
+    ).toBeVisible();
+    await window.getByRole('button', { name: 'Darken Stroke · Undo' }).click();
+    await expect(
+      window.getByRole('button', { name: 'Stamp · Redo' }),
+    ).toBeVisible();
+    await window.getByRole('button', { name: 'Stamp · Redo' }).click();
+    await expect(
+      window.getByRole('button', { name: 'Stamp · Current' }),
+    ).toBeVisible();
+
     await window.getByRole('button', { name: 'Save As…' }).click();
     await expect(editorStatus.getByText('advanced-copy.png')).toBeVisible();
 
@@ -867,10 +887,9 @@ test('guards dirty Open and window close without duplicate native dialogs', asyn
       Menu.getApplicationMenu()?.getMenuItemById('file-open')?.click();
     });
     await expect(window).toHaveTitle('guarded.png • — Minecraft Skin Editor');
-    await expect(window.getByRole('button', { name: 'Slim' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    await expect(
+      window.getByRole('button', { name: 'Slim', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
 
     await application.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()[0]?.close();

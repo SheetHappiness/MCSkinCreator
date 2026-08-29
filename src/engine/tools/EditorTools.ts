@@ -142,8 +142,9 @@ export function beginPixelStroke(
   history: DocumentHistory,
   color: RgbaColor,
   start: TextureCoordinate,
+  label = 'Pencil Stroke',
 ): PixelStroke {
-  return new PixelStroke(history.beginTransaction(), color, start);
+  return new PixelStroke(history.beginTransaction(label), color, start);
 }
 
 /** Finds the exact 4-connected region containing seed without mutating it. */
@@ -186,13 +187,14 @@ export function fillAt(
   history: DocumentHistory,
   seed: TextureCoordinate,
   replacement: RgbaColor,
+  label = 'Fill',
 ): DocumentEditOperation | undefined {
   if (colorsEqual(document.readPixel(seed.x, seed.y), replacement)) {
     return undefined;
   }
 
   const region = findFloodFillRegion(document, seed);
-  const transaction = history.beginTransaction();
+  const transaction = history.beginTransaction(label);
   try {
     for (const point of region) {
       transaction.writePixel(point.x, point.y, replacement);

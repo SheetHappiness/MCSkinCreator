@@ -551,7 +551,12 @@ export function EditorWorkspace({
       getToolOptions('eraser').output === 'transparent'
         ? ERASER_COLOR
         : color;
-    const stroke = beginPixelStroke(history, strokeColor, point);
+    const stroke = beginPixelStroke(
+      history,
+      strokeColor,
+      point,
+      effectiveTool === 'eraser' ? 'Eraser Stroke' : 'Pencil Stroke',
+    );
     event.currentTarget.setPointerCapture(event.pointerId);
     strokeGestureRef.current = { pointerId: event.pointerId, stroke };
   };

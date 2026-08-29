@@ -28,6 +28,7 @@ import {
   useSecondaryEditorColor,
 } from '../editor/editorToolStore';
 import { ToolOptionsInspector } from '../editor/ToolOptionsInspector';
+import { HistoryTimeline } from '../history/HistoryTimeline';
 import { changeSkinModel } from './modelSelection';
 import {
   createDefaultSkinViewState,
@@ -389,6 +390,7 @@ export function SkinPreviewPanel({ document, history }: SkinPreviewPanelProps) {
         </div>
       </section>
       <ToolOptionsInspector activeTool={activeTool} />
+      <HistoryTimeline history={history} />
       <div ref={mountRef} className="skin-preview-mount" />
       <footer className="skin-preview-controls">
         <output
