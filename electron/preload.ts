@@ -253,7 +253,14 @@ const skinEditApi: NativeSkinEditApi = {
       _event: Electron.IpcRendererEvent,
       command: EditCommand,
     ) => {
-      if (command === 'undo' || command === 'redo') {
+      if (
+        command === 'undo' ||
+        command === 'redo' ||
+        command === 'copy' ||
+        command === 'cut' ||
+        command === 'paste' ||
+        command === 'delete'
+      ) {
         listener(command);
       }
     };

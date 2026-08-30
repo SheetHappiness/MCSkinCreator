@@ -36,7 +36,7 @@ export const SKIN_EDIT_CHANNELS = {
 } as const;
 
 export type FileCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAll';
-export type EditCommand = 'undo' | 'redo';
+export type EditCommand = 'undo' | 'redo' | 'copy' | 'cut' | 'paste' | 'delete';
 
 export interface EditCommandState {
   readonly canUndo: boolean;

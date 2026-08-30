@@ -158,6 +158,7 @@ Avoid unnecessary save confirmation dialogs.
 
 Required tools:
 
+- Rectangular Selection
 - Pencil
 - Eraser
 - Eyedropper
@@ -178,6 +179,12 @@ Required editing behavior:
 - no accidental subpixel painting;
 - deterministic tool behavior;
 - immediate visual response.
+
+Rectangular selection uses integer texture coordinates and half-open bounds.
+Copy and cut preserve exact RGBA bytes, including transparent texels. Cut and
+Delete clear to transparent black in one history transaction. Paste and move
+use a floating selection that previews clipped placement before an explicit
+commit; Escape cancels it without changing the document.
 
 A Minecraft texture pixel must remain a discrete source pixel regardless of display zoom.
 
@@ -209,9 +216,8 @@ The UI must allow users to:
 - edit them intentionally;
 - understand which layer is active.
 
-The current editor provides body-part visibility and isolation. Selection-
-based structural editing and other broader transformations remain outside the
-current parity slice.
+The current editor provides body-part visibility and isolation. UV-aware and
+body-part structural selection remain outside the current parity slice.
 
 ---
 
@@ -739,7 +745,7 @@ Save
 The defined Roadmap 2 parity slice is complete. The ideas below are possible
 future work beyond that slice and require separate scope:
 
-- selections;
+- selection transformations;
 - symmetry;
 - mirroring;
 - advanced fill;

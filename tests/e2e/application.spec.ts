@@ -275,6 +275,179 @@ test('creates a new skin and opens one controlled dropped PNG', async () => {
   }
 });
 
+test('selects exact pixels, previews paste and move, supports rollback, and cleans selection per document', async () => {
+  const temporaryDirectory = await mkdtemp(
+    path.join(tmpdir(), 'minecraft-skin-editor-selection-e2e-'),
+  );
+  const inputPath = path.join(temporaryDirectory, 'selection.png');
+  const pixels = new Uint8Array(64 * 64 * 4);
+  const setPixel = (x: number, y: number, rgba: number[]) => {
+    pixels.set(rgba, (y * 64 + x) * 4);
+  };
+  setPixel(10, 10, [0xa1, 0xb2, 0xc3, 0x40]);
+  setPixel(11, 10, [0x11, 0x22, 0x33, 0xff]);
+  setPixel(10, 11, [0x44, 0x55, 0x66, 0x80]);
+  setPixel(11, 11, [0, 0, 0, 0]);
+  await writeFile(
+    inputPath,
+    encode({ width: 64, height: 64, data: pixels, channels: 4, depth: 8 }),
+  );
+
+  const application = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      MINECRAFT_SKIN_EDITOR_E2E: '1',
+      MINECRAFT_SKIN_EDITOR_E2E_OPEN_PATH: inputPath,
+      MINECRAFT_SKIN_EDITOR_E2E_UNSAVED_DECISION: 'discard',
+    },
+  });
+
+  try {
+    const window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Open PNG' }).click();
+    const canvas = window.getByRole('img', { name: '2D skin canvas' });
+    const editorStatus = window.getByLabel('Editor status');
+    await expect(canvas).toBeVisible();
+    await window.getByRole('button', { name: 'Fit' }).click();
+
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox).not.toBeNull();
+    const zoom =
+      Number.parseInt(
+        (await window.getByTestId('zoom-value').textContent()) ?? '',
+        10,
+      ) / 100;
+    const textureLeft = (canvasBox!.width - 64 * zoom) / 2;
+    const textureTop = (canvasBox!.height - 64 * zoom) / 2;
+    const texturePoint = (x: number, y: number) => ({
+      x: canvasBox!.x + textureLeft + (x + 0.5) * zoom,
+      y: canvasBox!.y + textureTop + (y + 0.5) * zoom,
+    });
+    const dragSelection = async () => {
+      const first = texturePoint(10, 10);
+      const last = texturePoint(11, 11);
+      await window.mouse.move(first.x, first.y);
+      await window.mouse.down();
+      await window.mouse.move(last.x, last.y);
+      await window.mouse.up();
+    };
+
+    await window
+      .getByRole('button', { name: 'Selection', exact: true })
+      .click();
+    await dragSelection();
+    await expect(canvas).toHaveAttribute('data-selection-state', 'selected');
+    await expect(canvas).toHaveAttribute('data-selection-rect', '10,10,2,2');
+    await expect(
+      editorStatus.getByText('selection.png', { exact: true }),
+    ).toBeVisible();
+
+    await window.getByRole('button', { name: 'Zoom in' }).click();
+    await expect(canvas).toHaveAttribute('data-selection-rect', '10,10,2,2');
+    await window.getByRole('button', { name: 'Fit' }).click();
+    const panAnchor = {
+      x: canvasBox!.x + canvasBox!.width / 2,
+      y: canvasBox!.y + canvasBox!.height / 2,
+    };
+    await window.mouse.move(panAnchor.x, panAnchor.y);
+    await window.mouse.down({ button: 'middle' });
+    await window.mouse.move(panAnchor.x + 24, panAnchor.y + 12);
+    await window.mouse.up({ button: 'middle' });
+    await expect(canvas).toHaveAttribute('data-selection-rect', '10,10,2,2');
+    await window.getByRole('button', { name: 'Fit' }).click();
+
+    await canvas.focus();
+    await window.keyboard.press('Control+C');
+    await window.keyboard.press('Control+V');
+    await expect(canvas).toHaveAttribute('data-selection-state', 'floating');
+    await expect(
+      editorStatus.getByText('selection.png', { exact: true }),
+    ).toBeVisible();
+    await window.keyboard.press('ArrowRight');
+    await expect(canvas).toHaveAttribute('data-selection-rect', '11,10,2,2');
+    await window.keyboard.press('Escape');
+    await expect(canvas).toHaveAttribute('data-selection-state', 'selected');
+    await expect(
+      editorStatus.getByText('selection.png', { exact: true }),
+    ).toBeVisible();
+
+    await window.keyboard.press('Control+V');
+    await expect(canvas).toHaveAttribute('data-selection-state', 'floating');
+    const floatingActions = window.getByTestId('selection-floating-actions');
+    await floatingActions.getByRole('button', { name: 'Cancel' }).focus();
+    await expect(canvas).toHaveAttribute('data-selection-state', 'floating');
+    await floatingActions
+      .getByRole('button', { name: 'Cancel' })
+      .press('Enter');
+    await expect(canvas).toHaveAttribute('data-selection-state', 'selected');
+    await canvas.focus();
+    await window.keyboard.press('Control+V');
+    await expect(canvas).toHaveAttribute('data-selection-state', 'floating');
+    await window.getByRole('button', { name: 'Pencil', exact: true }).click();
+    await expect(canvas).toHaveAttribute('data-selection-state', 'selected');
+    await window
+      .getByRole('button', { name: 'Selection', exact: true })
+      .click();
+
+    await canvas.focus();
+    await window.keyboard.press('Control+V');
+    await window.keyboard.press('ArrowRight');
+    await window.keyboard.press('Enter');
+    await expect(canvas).toHaveAttribute('data-selection-state', 'selected');
+    await expect(editorStatus.getByText('selection.png •')).toBeVisible();
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('edit-undo')?.click();
+    });
+    await expect(
+      editorStatus.getByText('selection.png', { exact: true }),
+    ).toBeVisible();
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('edit-redo')?.click();
+    });
+    await expect(editorStatus.getByText('selection.png •')).toBeVisible();
+
+    await dragSelection();
+    await window.keyboard.press('Control+X');
+    await expect(editorStatus.getByText('selection.png •')).toBeVisible();
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('edit-undo')?.click();
+    });
+
+    const moveStart = texturePoint(10, 10);
+    const moveEnd = texturePoint(12, 12);
+    await window.mouse.move(moveStart.x, moveStart.y);
+    await window.mouse.down();
+    await window.mouse.move(moveEnd.x, moveEnd.y);
+    await window.mouse.up();
+    await expect(canvas).toHaveAttribute('data-selection-state', 'floating');
+    await expect(canvas).toHaveAttribute('data-selection-rect', '12,12,2,2');
+    await window.keyboard.press('Escape');
+    await expect(canvas).toHaveAttribute('data-selection-state', 'selected');
+    await expect(editorStatus.getByText('selection.png •')).toBeVisible();
+
+    await canvas.focus();
+    await window.keyboard.press('Delete');
+    await expect(editorStatus.getByText('selection.png •')).toBeVisible();
+
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('file-new')?.click();
+    });
+    const newSkinDialog = window.getByRole('dialog', { name: 'New Skin' });
+    await expect(newSkinDialog).toBeVisible();
+    await newSkinDialog.getByRole('button', { name: 'Create' }).click();
+    const newCanvas = window.getByRole('img', { name: '2D skin canvas' });
+    await expect(newCanvas).toHaveAttribute('data-selection-state', 'empty');
+    await window.getByRole('tab', { name: /selection\.png/ }).click();
+    await expect(
+      window.getByRole('img', { name: '2D skin canvas' }),
+    ).toHaveAttribute('data-selection-state', 'empty');
+  } finally {
+    await application.close();
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
 test('paints, erases, undoes, redoes, and saves exact RGBA pixels', async () => {
   const temporaryDirectory = await mkdtemp(
     path.join(tmpdir(), 'minecraft-skin-editor-e2e-'),

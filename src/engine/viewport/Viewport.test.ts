@@ -8,6 +8,7 @@ import {
   getGridLinePositions,
   panViewport,
   screenToTexture,
+  screenToTextureClamped,
   textureToScreen,
   zoomViewportAroundPoint,
   type ViewportState,
@@ -65,6 +66,16 @@ describe('screen and texture coordinate mapping', () => {
     expect(
       screenToTexture({ x: 5, y: 2.5 }, fractionalViewport, TEXTURE_SIZE),
     ).toEqual({ x: 2, y: 1 });
+  });
+
+  it('clamps selection drags to the first and last source texels', () => {
+    const current = { zoom: 4, offsetX: 8, offsetY: 12 };
+    expect(
+      screenToTextureClamped({ x: -100, y: -100 }, current, TEXTURE_SIZE),
+    ).toEqual({ x: 0, y: 0 });
+    expect(
+      screenToTextureClamped({ x: 1000, y: 1000 }, current, TEXTURE_SIZE),
+    ).toEqual({ x: 63, y: 63 });
   });
 
   it('applies pan offsets without changing texture semantics', () => {

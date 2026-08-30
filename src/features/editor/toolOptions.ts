@@ -21,6 +21,11 @@ export interface PencilToolOptions {
   readonly source: 'active-color';
 }
 
+export interface SelectionToolOptions {
+  readonly shape: 'rectangle';
+  readonly coordinates: 'integer-half-open';
+}
+
 export interface EraserToolOptions {
   readonly size: 1;
   readonly output: 'transparent';
@@ -39,6 +44,7 @@ export interface EyedropperToolOptions {
 export type { StampPattern } from '../../engine/tools/AdvancedPaintTools';
 
 export interface ToolOptionsByTool {
+  readonly selection: SelectionToolOptions;
   readonly pencil: PencilToolOptions;
   readonly eraser: EraserToolOptions;
   readonly fill: FillToolOptions;
@@ -64,6 +70,10 @@ export interface ToolOptionSummary {
 
 function freezeDefaultOptions(): ToolOptionsByTool {
   return Object.freeze({
+    selection: Object.freeze({
+      shape: 'rectangle' as const,
+      coordinates: 'integer-half-open' as const,
+    }),
     pencil: Object.freeze({
       size: 1 as const,
       source: 'active-color' as const,
@@ -141,6 +151,11 @@ export function validateToolOptions<T extends EditorTool>(
 ): ToolOptionsFor<T> {
   const record = optionRecord(options, tool);
   switch (tool) {
+    case 'selection':
+      assertExactKeys(tool, record, ['shape', 'coordinates']);
+      assertFixedValue(tool, record, 'shape', 'rectangle');
+      assertFixedValue(tool, record, 'coordinates', 'integer-half-open');
+      break;
     case 'pencil':
       assertExactKeys(tool, record, ['size', 'source']);
       assertFixedValue(tool, record, 'size', 1);
@@ -179,6 +194,7 @@ export function validateToolOptions<T extends EditorTool>(
 
 function cloneOptions(options: ToolOptionsByTool): ToolOptionsByTool {
   return Object.freeze({
+    selection: Object.freeze({ ...options.selection }),
     pencil: Object.freeze({ ...options.pencil }),
     eraser: Object.freeze({ ...options.eraser }),
     fill: Object.freeze({ ...options.fill }),
@@ -233,6 +249,26 @@ export function getToolOptionSummary(
   tool: EditorTool,
 ): readonly ToolOptionSummary[] {
   switch (tool) {
+    case 'selection': {
+      const options = getToolOptions(tool);
+      return [
+        {
+          key: 'shape',
+          label: 'Shape',
+          value: 'Rectangle',
+          fixed: true,
+        },
+        {
+          key: 'coordinates',
+          label: 'Coordinates',
+          value:
+            options.coordinates === 'integer-half-open'
+              ? 'Integer · half-open'
+              : options.coordinates,
+          fixed: true,
+        },
+      ];
+    }
     case 'pencil': {
       const options = getToolOptions(tool);
       return [
@@ -366,6 +402,8 @@ export function getToolOptionSummary(
 
 export function toolLabel(tool: EditorTool): string {
   switch (tool) {
+    case 'selection':
+      return 'Selection';
     case 'pencil':
       return 'Pencil';
     case 'eraser':

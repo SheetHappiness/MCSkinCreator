@@ -5,6 +5,7 @@ export type PointerAction = 'pan' | 'edit-primary' | 'edit-secondary';
 export type ColorShortcutAction = 'swap' | 'reset';
 
 const SHORTCUT_TO_TOOL: Readonly<Record<string, EditorTool>> = {
+  s: 'selection',
   p: 'pencil',
   e: 'eraser',
   g: 'fill',

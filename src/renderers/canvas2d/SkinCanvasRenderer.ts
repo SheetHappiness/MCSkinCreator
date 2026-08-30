@@ -1,5 +1,10 @@
 import type { SkinDocument } from '../../engine/document';
 import {
+  clipPixelRegion,
+  type PixelRegion,
+  type SelectionState,
+} from '../../engine/selection';
+import {
   PIXEL_GRID_ZOOM_THRESHOLD,
   getGridLinePositions,
   type Size,
@@ -21,6 +26,7 @@ const TEXTURE_BOUNDARY_COLOR = 'rgba(225, 229, 235, 0.32)';
 export interface SkinCanvasRenderOptions {
   readonly showGrid: boolean;
   readonly pixelRatio: number;
+  readonly selection?: SelectionState;
 }
 
 function drawTransparencySurface(
@@ -51,6 +57,150 @@ function drawTransparencySurface(
     }
   }
 
+  context.restore();
+}
+
+function drawTransparencyRegion(
+  context: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  textureSize: Size,
+  region: PixelRegion,
+): void {
+  const clipped = clipPixelRegion(region, textureSize);
+  if (clipped === undefined) return;
+
+  const left = viewport.offsetX + clipped.x * viewport.zoom;
+  const top = viewport.offsetY + clipped.y * viewport.zoom;
+  const right = viewport.offsetX + (clipped.x + clipped.width) * viewport.zoom;
+  const bottom =
+    viewport.offsetY + (clipped.y + clipped.height) * viewport.zoom;
+  const firstColumn = Math.floor((left - viewport.offsetX) / CHECKER_SIZE);
+  const firstRow = Math.floor((top - viewport.offsetY) / CHECKER_SIZE);
+  const startX = viewport.offsetX + firstColumn * CHECKER_SIZE;
+  const startY = viewport.offsetY + firstRow * CHECKER_SIZE;
+
+  context.save();
+  context.beginPath();
+  context.rect(left, top, right - left, bottom - top);
+  context.clip();
+  for (
+    let y = startY, row = firstRow;
+    y < bottom;
+    y += CHECKER_SIZE, row += 1
+  ) {
+    for (
+      let x = startX, column = firstColumn;
+      x < right;
+      x += CHECKER_SIZE, column += 1
+    ) {
+      context.fillStyle =
+        (column + row) % 2 === 0 ? CHECKER_LIGHT : CHECKER_DARK;
+      context.fillRect(x, y, CHECKER_SIZE, CHECKER_SIZE);
+    }
+  }
+  context.restore();
+}
+
+function drawFloatingSelection(
+  context: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  skinDocument: SkinDocument,
+  viewport: ViewportState,
+  floating: NonNullable<SelectionState['floating']>,
+): void {
+  if (floating.kind === 'move' && floating.sourceRect !== undefined) {
+    drawTransparencyRegion(
+      context,
+      viewport,
+      skinDocument,
+      floating.sourceRect,
+    );
+  }
+  drawTransparencyRegion(context, viewport, skinDocument, floating.rect);
+
+  const visible = clipPixelRegion(floating.rect, skinDocument);
+  if (visible === undefined) return;
+
+  const sourceCanvas = canvas.ownerDocument.createElement('canvas');
+  sourceCanvas.width = floating.rect.width;
+  sourceCanvas.height = floating.rect.height;
+  const sourceContext = sourceCanvas.getContext('2d', { alpha: true });
+  if (sourceContext === null) {
+    throw new Error('Canvas 2D floating-selection rendering is unavailable.');
+  }
+  sourceContext.imageSmoothingEnabled = false;
+  const imageData = sourceContext.createImageData(
+    floating.rect.width,
+    floating.rect.height,
+  );
+  imageData.data.set(floating.data);
+  sourceContext.putImageData(imageData, 0, 0);
+
+  const sourceX = visible.x - floating.rect.x;
+  const sourceY = visible.y - floating.rect.y;
+  const destinationX = viewport.offsetX + visible.x * viewport.zoom;
+  const destinationY = viewport.offsetY + visible.y * viewport.zoom;
+  context.save();
+  context.beginPath();
+  context.rect(
+    viewport.offsetX,
+    viewport.offsetY,
+    skinDocument.width * viewport.zoom,
+    skinDocument.height * viewport.zoom,
+  );
+  context.clip();
+  context.drawImage(
+    sourceCanvas,
+    sourceX,
+    sourceY,
+    visible.width,
+    visible.height,
+    destinationX,
+    destinationY,
+    visible.width * viewport.zoom,
+    visible.height * viewport.zoom,
+  );
+  context.restore();
+}
+
+function drawSelectionOverlay(
+  context: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  skinDocument: SkinDocument,
+  surface: CanvasSurface,
+  selection: SelectionState | undefined,
+): void {
+  if (selection === undefined) return;
+  const region =
+    selection.floating?.rect ?? selection.draft ?? selection.selection;
+  if (region === undefined) return;
+  const visible = clipPixelRegion(region, skinDocument);
+  if (visible === undefined) return;
+
+  const left = viewport.offsetX + visible.x * viewport.zoom;
+  const top = viewport.offsetY + visible.y * viewport.zoom;
+  const width = visible.width * viewport.zoom;
+  const height = visible.height * viewport.zoom;
+  const lineWidth = 1 / surface.pixelRatio;
+  const inset = lineWidth / 2;
+
+  context.save();
+  context.beginPath();
+  context.rect(
+    left + inset,
+    top + inset,
+    Math.max(0, width - lineWidth),
+    Math.max(0, height - lineWidth),
+  );
+  context.lineWidth = lineWidth;
+  context.setLineDash([4, 4]);
+  context.lineDashOffset = 0;
+  context.strokeStyle = '#111419';
+  context.stroke();
+  context.lineDashOffset = 4;
+  context.strokeStyle = '#f2f5f8';
+  context.stroke();
+  context.setLineDash([]);
   context.restore();
 }
 
@@ -170,9 +320,26 @@ export function renderSkinCanvas(
     skinDocument.height * viewport.zoom,
   );
 
+  if (options.selection?.floating !== undefined) {
+    drawFloatingSelection(
+      context,
+      canvas,
+      skinDocument,
+      viewport,
+      options.selection.floating,
+    );
+  }
+
   drawTextureBoundary(context, viewport, skinDocument, surface);
 
   if (shouldRenderPixelGrid(options.showGrid, viewport.zoom)) {
     drawPixelGrid(context, viewport, skinDocument, surface);
   }
+  drawSelectionOverlay(
+    context,
+    viewport,
+    skinDocument,
+    surface,
+    options.selection,
+  );
 }

@@ -13,7 +13,10 @@ import {
   type FileCommandOutcome,
   type DocumentSessionState,
 } from './documentSession';
-import { cancelActiveEditorInteraction } from '../editor/activeEditorInteraction';
+import {
+  cancelActiveEditorInteraction,
+  dispatchActiveEditorCommand,
+} from '../editor/activeEditorInteraction';
 
 interface NewSkinDialogState {
   readonly isOpen: boolean;
@@ -143,11 +146,14 @@ function runFileCommand(command: FileCommand): void {
 nativeFiles.onFileCommand(runFileCommand);
 
 function runEditCommand(command: EditCommand): void {
-  cancelActiveEditorInteraction();
   if (command === 'undo') {
+    cancelActiveEditorInteraction();
     documentSessionController.undo();
-  } else {
+  } else if (command === 'redo') {
+    cancelActiveEditorInteraction();
     documentSessionController.redo();
+  } else {
+    dispatchActiveEditorCommand(command);
   }
 }
 

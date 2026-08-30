@@ -22,6 +22,8 @@ function createContext() {
     moveTo: vi.fn(),
     lineTo: vi.fn(),
     stroke: vi.fn(),
+    setLineDash: vi.fn(),
+    lineDashOffset: 0,
     createImageData: vi.fn((width: number, height: number) => ({
       width,
       height,
@@ -88,5 +90,47 @@ describe('Canvas 2D skin rendering', () => {
     expect(shouldRenderPixelGrid(false, PIXEL_GRID_ZOOM_THRESHOLD + 10)).toBe(
       false,
     );
+  });
+
+  it('draws a DPR-aware selection outline in texture coordinates above the bitmap', () => {
+    const destinationContext = createContext();
+    const sourceContext = createContext();
+    const sourceCanvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => sourceContext),
+    };
+    const canvas = {
+      width: 0,
+      height: 0,
+      ownerDocument: { createElement: vi.fn(() => sourceCanvas) },
+      getContext: vi.fn(() => destinationContext),
+    } as unknown as HTMLCanvasElement;
+    const document = SkinDocument.createBlank({ id: 'selection-render' });
+
+    renderSkinCanvas(
+      canvas,
+      document,
+      { zoom: 8, offsetX: 20, offsetY: 30 },
+      { width: 640, height: 480 },
+      {
+        showGrid: false,
+        pixelRatio: 2,
+        selection: {
+          selection: { x: 2, y: 3, width: 4, height: 5 },
+          draft: undefined,
+          floating: undefined,
+        },
+      },
+    );
+
+    expect(destinationContext.setLineDash).toHaveBeenCalledWith([4, 4]);
+    expect(destinationContext.rect).toHaveBeenCalledWith(
+      36.25,
+      54.25,
+      31.5,
+      39.5,
+    );
+    expect(destinationContext.stroke).toHaveBeenCalledTimes(3);
   });
 });

@@ -10,6 +10,7 @@ export {
   getGridLinePositions,
   panViewport,
   screenToTexture,
+  screenToTextureClamped,
   textureToScreen,
   zoomViewportAroundPoint,
 } from './Viewport';

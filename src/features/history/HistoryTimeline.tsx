@@ -4,6 +4,7 @@ import type {
   DocumentHistory,
   DocumentHistoryTimelineEntry,
 } from '../../engine/history';
+import { cancelActiveEditorInteraction } from '../editor/activeEditorInteraction';
 
 interface HistoryTimelineProps {
   readonly history: DocumentHistory;
@@ -64,7 +65,10 @@ export function HistoryTimeline({ history }: HistoryTimelineProps) {
                   data-history-state={entry.state}
                   aria-current={entry.isCurrent ? 'step' : undefined}
                   aria-label={`${entry.label} · ${describeState(entry)}${entry.isSaved ? ' · Saved' : ''}`}
-                  onClick={() => history.jumpTo(entry.index)}
+                  onClick={() => {
+                    cancelActiveEditorInteraction();
+                    history.jumpTo(entry.index);
+                  }}
                 >
                   <span className="history-timeline__entry-label">
                     {entry.label}

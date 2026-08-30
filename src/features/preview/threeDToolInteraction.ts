@@ -74,6 +74,8 @@ export class ThreeDToolInteraction {
 
     this.cancel();
 
+    if (tool === 'selection') return false;
+
     if (tool === 'eyedropper') {
       const options = getToolOptions('eyedropper');
       if (

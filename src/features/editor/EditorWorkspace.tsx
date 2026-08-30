@@ -2,14 +2,21 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type PointerEvent as ReactPointerEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type WheelEvent as ReactWheelEvent,
 } from 'react';
 
 import type { SkinDocument } from '../../engine/document';
 import type { DocumentHistory } from '../../engine/history';
+import {
+  SelectionController,
+  selectionRectContainsPoint,
+} from '../../engine/selection';
 import {
   beginAdvancedPaintStroke,
   ERASER_COLOR,
@@ -27,6 +34,7 @@ import {
   fitViewportToView,
   panViewport,
   screenToTexture,
+  screenToTextureClamped,
   zoomViewportAroundPoint,
   type Point,
   type TextureCoordinate,
@@ -47,7 +55,9 @@ import {
 } from '../workspace';
 import {
   cancelActiveEditorInteraction,
+  registerActiveEditorCommandHandler,
   registerActiveEditorInteraction,
+  type ActiveEditorCommand,
 } from './activeEditorInteraction';
 import { ColorFields } from './ColorFields';
 import { ColorControls } from './ColorControls';
@@ -94,6 +104,11 @@ interface StrokeGesture {
   readonly stroke: PixelStroke | AdvancedPaintStroke;
 }
 
+interface SelectionGesture {
+  readonly pointerId: number;
+  readonly mode: 'select' | 'move';
+}
+
 interface ToolDefinition {
   readonly tool: EditorTool;
   readonly label: string;
@@ -101,6 +116,7 @@ interface ToolDefinition {
 }
 
 const TOOLS: readonly ToolDefinition[] = [
+  { tool: 'selection', label: 'Selection', shortcut: 'S' },
   { tool: 'pencil', label: 'Pencil', shortcut: 'P' },
   { tool: 'eraser', label: 'Eraser', shortcut: 'E' },
   { tool: 'fill', label: 'Fill', shortcut: 'G' },
@@ -131,6 +147,17 @@ function ToolIcon({ tool }: { readonly tool: EditorTool }) {
     strokeLinejoin: 'round' as const,
   };
 
+  if (tool === 'selection') {
+    return (
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <path {...common} d="M3.5 3.5h13v13h-13z" />
+        <path
+          {...common}
+          d="M6.5 3.5v-1M10 3.5v-1M13.5 3.5v-1M6.5 16.5v1M10 16.5v1M13.5 16.5v1M3.5 6.5h-1M3.5 10h-1M3.5 13.5h-1M16.5 6.5h1M16.5 10h1M16.5 13.5h1"
+        />
+      </svg>
+    );
+  }
   if (tool === 'pencil') {
     return (
       <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -240,11 +267,21 @@ export function EditorWorkspace({
   const renderFrameRef = useRef<number | undefined>(undefined);
   const panGestureRef = useRef<PanGesture | undefined>(undefined);
   const strokeGestureRef = useRef<StrokeGesture | undefined>(undefined);
+  const selectionGestureRef = useRef<SelectionGesture | undefined>(undefined);
   const spacePressedRef = useRef(false);
   const temporaryEyedropperSlotRef = useRef<
     'primary' | 'secondary' | undefined
   >(undefined);
   const fittedDocumentIdRef = useRef<string | undefined>(undefined);
+  const selectionController = useMemo(
+    () => new SelectionController(skinDocument, history),
+    [history, skinDocument],
+  );
+  const selectionState = useSyncExternalStore(
+    (listener) => selectionController.subscribe(listener),
+    () => selectionController.getState(),
+    () => selectionController.getState(),
+  );
   const size = useElementSize(stageRef);
   const editorMainSize = useElementSize(editorMainRef);
   const activeTool = useActiveEditorTool();
@@ -290,8 +327,9 @@ export function EditorWorkspace({
     renderSkinCanvas(canvas, skinDocument, viewport, size, {
       showGrid,
       pixelRatio: window.devicePixelRatio || 1,
+      selection: selectionState,
     });
-  }, [showGrid, size, skinDocument, viewport]);
+  }, [selectionState, showGrid, size, skinDocument, viewport]);
 
   const invalidateCanvas = useCallback(() => {
     if (renderFrameRef.current !== undefined) return;
@@ -331,6 +369,16 @@ export function EditorWorkspace({
       return point === undefined
         ? undefined
         : screenToTexture(point, viewport, skinDocument);
+    },
+    [logicalPoint, skinDocument, viewport],
+  );
+
+  const clampedTexturePoint = useCallback(
+    (clientX: number, clientY: number): TextureCoordinate | undefined => {
+      const point = logicalPoint(clientX, clientY);
+      return point === undefined
+        ? undefined
+        : screenToTextureClamped(point, viewport, skinDocument);
     },
     [logicalPoint, skinDocument, viewport],
   );
@@ -389,19 +437,80 @@ export function EditorWorkspace({
     strokeGestureRef.current = undefined;
   }, []);
 
+  const finishSelection = useCallback(
+    (pointerId: number) => {
+      const canvas = canvasRef.current;
+      const gesture = selectionGestureRef.current;
+      if (gesture?.pointerId !== pointerId) return;
+      if (gesture.mode === 'select') selectionController.commitSelection();
+      if (canvas?.hasPointerCapture(pointerId)) {
+        canvas.releasePointerCapture(pointerId);
+      }
+      selectionGestureRef.current = undefined;
+    },
+    [selectionController],
+  );
+
+  const cancelSelectionGesture = useCallback(
+    (pointerId?: number) => {
+      const canvas = canvasRef.current;
+      const gesture = selectionGestureRef.current;
+      if (
+        gesture === undefined ||
+        (pointerId !== undefined && gesture.pointerId !== pointerId)
+      ) {
+        return;
+      }
+      if (gesture.mode === 'select') {
+        selectionController.cancelSelection();
+      } else {
+        selectionController.cancelFloating();
+      }
+      if (canvas?.hasPointerCapture(gesture.pointerId)) {
+        canvas.releasePointerCapture(gesture.pointerId);
+      }
+      selectionGestureRef.current = undefined;
+    },
+    [selectionController],
+  );
+
   const cancelInteraction = useCallback(() => {
     finishPan();
     cancelStroke();
+    cancelSelectionGesture();
+    selectionController.cancelTransient();
     spacePressedRef.current = false;
     setIsSpacePressed(false);
     temporaryEyedropperSlotRef.current = undefined;
     setTemporaryEyedropper(false);
-  }, [cancelStroke, finishPan]);
+  }, [cancelSelectionGesture, cancelStroke, finishPan, selectionController]);
 
   useEffect(
     () => registerActiveEditorInteraction(cancelInteraction),
     [cancelInteraction],
   );
+
+  const executeSelectionCommand = useCallback(
+    (command: ActiveEditorCommand) => {
+      if (command === 'copy') {
+        selectionController.copy();
+      } else if (command === 'cut') {
+        selectionController.cut();
+      } else if (command === 'paste') {
+        selectionController.beginPaste();
+      } else {
+        selectionController.delete();
+      }
+    },
+    [selectionController],
+  );
+
+  useEffect(
+    () => registerActiveEditorCommandHandler(executeSelectionCommand),
+    [executeSelectionCommand],
+  );
+
+  useEffect(() => () => selectionController.clear(), [selectionController]);
 
   useEffect(() => {
     const handleWindowBlur = () => {
@@ -476,6 +585,95 @@ export function EditorWorkspace({
     ? 'eyedropper'
     : activeTool;
 
+  const handleCanvasKeyDown = (
+    event: ReactKeyboardEvent<HTMLCanvasElement>,
+  ) => {
+    if (event.code === 'Space' && !event.repeat) {
+      event.preventDefault();
+      spacePressedRef.current = true;
+      setIsSpacePressed(true);
+      return;
+    }
+
+    const hasSelection =
+      selectionState.selection !== undefined ||
+      selectionState.draft !== undefined ||
+      selectionState.floating !== undefined;
+    const commandKey = event.key.toLowerCase();
+    if (
+      (event.ctrlKey || event.metaKey) &&
+      !event.altKey &&
+      (commandKey === 'c' || commandKey === 'x' || commandKey === 'v')
+    ) {
+      const command: ActiveEditorCommand =
+        commandKey === 'c' ? 'copy' : commandKey === 'x' ? 'cut' : 'paste';
+      if (command !== 'paste' ? hasSelection : selectionController.canPaste()) {
+        event.preventDefault();
+        executeSelectionCommand(command);
+      }
+      return;
+    }
+
+    if (
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      event.key === 'Delete' &&
+      hasSelection
+    ) {
+      event.preventDefault();
+      executeSelectionCommand('delete');
+      return;
+    }
+
+    if (
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      event.key === 'Escape' &&
+      (selectionState.draft !== undefined ||
+        selectionState.floating !== undefined)
+    ) {
+      event.preventDefault();
+      selectionController.cancelTransient();
+      return;
+    }
+
+    if (
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      event.key === 'Enter' &&
+      selectionState.floating !== undefined
+    ) {
+      event.preventDefault();
+      selectionController.commitFloating();
+      return;
+    }
+
+    if (
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      selectionState.floating !== undefined
+    ) {
+      const delta =
+        event.key === 'ArrowLeft'
+          ? { x: -1, y: 0 }
+          : event.key === 'ArrowRight'
+            ? { x: 1, y: 0 }
+            : event.key === 'ArrowUp'
+              ? { x: 0, y: -1 }
+              : event.key === 'ArrowDown'
+                ? { x: 0, y: 1 }
+                : undefined;
+      if (delta !== undefined) {
+        event.preventDefault();
+        selectionController.moveFloatingBy(delta);
+      }
+    }
+  };
+
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     event.currentTarget.focus({ preventScroll: true });
     const pointerAction = getPointerAction(
@@ -498,6 +696,38 @@ export function EditorWorkspace({
       pointerAction !== 'edit-primary' &&
       pointerAction !== 'edit-secondary'
     ) {
+      return;
+    }
+
+    if (effectiveTool === 'selection') {
+      if (pointerAction !== 'edit-primary') return;
+      const point = clampedTexturePoint(event.clientX, event.clientY);
+      if (point === undefined) return;
+      updateHoveredPixel(event.clientX, event.clientY);
+
+      event.preventDefault();
+      let mode: SelectionGesture['mode'] = 'select';
+      if (selectionState.floating !== undefined) {
+        if (
+          selectionRectContainsPoint(selectionState.floating.rect, point) &&
+          selectionController.beginFloatingDrag(point)
+        ) {
+          mode = 'move';
+        } else {
+          selectionController.commitFloating();
+          selectionController.beginSelection(point);
+        }
+      } else if (
+        selectionState.selection !== undefined &&
+        selectionRectContainsPoint(selectionState.selection, point) &&
+        selectionController.beginMove(point)
+      ) {
+        mode = 'move';
+      } else {
+        selectionController.beginSelection(point);
+      }
+      event.currentTarget.setPointerCapture(event.pointerId);
+      selectionGestureRef.current = { pointerId: event.pointerId, mode };
       return;
     }
 
@@ -579,6 +809,18 @@ export function EditorWorkspace({
     }
 
     const point = updateHoveredPixel(event.clientX, event.clientY);
+    const selectionGesture = selectionGestureRef.current;
+    if (selectionGesture?.pointerId === event.pointerId) {
+      const dragPoint = clampedTexturePoint(event.clientX, event.clientY);
+      if (dragPoint !== undefined) {
+        if (selectionGesture.mode === 'select') {
+          selectionController.updateSelection(dragPoint);
+        } else {
+          selectionController.moveFloatingFromPointer(dragPoint);
+        }
+      }
+      return;
+    }
     const strokeGesture = strokeGestureRef.current;
     if (strokeGesture?.pointerId === event.pointerId) {
       strokeGesture.stroke.extend(point);
@@ -610,6 +852,14 @@ export function EditorWorkspace({
 
   const zoomPercent = Math.round(viewport.zoom * 100);
   const selectedHex = colorToHex(selectedColor);
+  const visibleSelection =
+    selectionState.floating?.rect ??
+    selectionState.draft ??
+    selectionState.selection;
+  const selectionRectAttribute =
+    visibleSelection === undefined
+      ? undefined
+      : `${visibleSelection.x},${visibleSelection.y},${visibleSelection.width},${visibleSelection.height}`;
 
   return (
     <section className="editor-workspace" aria-label="2D editor viewport">
@@ -655,20 +905,31 @@ export function EditorWorkspace({
             ref={canvasRef}
             className={`skin-canvas${isSpacePressed ? ' is-pan-ready' : ''}${isPanning ? ' is-panning' : ''}`}
             data-tool={effectiveTool}
+            data-selection-rect={selectionRectAttribute}
+            data-selection-state={
+              selectionState.floating !== undefined
+                ? 'floating'
+                : selectionState.draft !== undefined
+                  ? 'selecting'
+                  : selectionState.selection === undefined
+                    ? 'empty'
+                    : 'selected'
+            }
             aria-label="2D skin canvas"
             role="img"
             tabIndex={0}
             onContextMenu={(event) => event.preventDefault()}
-            onBlur={() => {
+            onBlur={(event) => {
+              const nextFocused = event.relatedTarget;
+              if (
+                nextFocused instanceof Node &&
+                event.currentTarget.parentElement?.contains(nextFocused)
+              ) {
+                return;
+              }
               cancelInteraction();
             }}
-            onKeyDown={(event) => {
-              if (event.code === 'Space' && !event.repeat) {
-                event.preventDefault();
-                spacePressedRef.current = true;
-                setIsSpacePressed(true);
-              }
-            }}
+            onKeyDown={handleCanvasKeyDown}
             onKeyUp={(event) => {
               if (event.code === 'Space') {
                 event.preventDefault();
@@ -679,6 +940,7 @@ export function EditorWorkspace({
             onPointerCancel={(event) => {
               finishPan(event.pointerId);
               cancelStroke(event.pointerId);
+              cancelSelectionGesture(event.pointerId);
             }}
             onPointerDown={handlePointerDown}
             onPointerLeave={() => setHoveredPixel(undefined)}
@@ -686,9 +948,46 @@ export function EditorWorkspace({
             onPointerUp={(event) => {
               finishPan(event.pointerId);
               finishStroke(event.pointerId);
+              finishSelection(event.pointerId);
             }}
             onWheel={handleWheel}
           />
+          {selectionState.floating === undefined ? null : (
+            <div
+              className="selection-floating-actions"
+              data-testid="selection-floating-actions"
+              role="group"
+              aria-label="Floating selection actions"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  selectionController.cancelFloating();
+                }
+              }}
+            >
+              <span>
+                {selectionState.floating.kind === 'move'
+                  ? 'Moving selection'
+                  : 'Pasted selection'}{' '}
+                · {selectionState.floating.rect.width}×
+                {selectionState.floating.rect.height}
+              </span>
+              <button
+                type="button"
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => selectionController.commitFloating()}
+              >
+                Commit
+              </button>
+              <button
+                type="button"
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => selectionController.cancelFloating()}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
 
         <WorkspaceSplitter

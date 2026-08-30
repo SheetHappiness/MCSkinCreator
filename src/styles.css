@@ -511,6 +511,7 @@ body.is-workspace-resizing-horizontal * {
 .tool-options-inspector input:focus-visible,
 .tool-options-inspector select:focus-visible,
 .history-timeline button:focus-visible,
+.selection-floating-actions button:focus-visible,
 .new-skin-dialog button:focus-visible,
 .skin-canvas:focus-visible,
 .workspace-splitter:focus-visible,
@@ -1470,6 +1471,48 @@ body.is-workspace-resizing-horizontal * {
 
 .skin-canvas.is-panning {
   cursor: grabbing;
+}
+
+.selection-floating-actions {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  padding: 5px 6px 5px 8px;
+  border: 1px solid #4b5057;
+  border-radius: var(--radius-control);
+  color: #c9cdd2;
+  background: rgb(32 34 37 / 94%);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 30%);
+  font-size: 10px;
+  transform: translateX(-50%);
+}
+
+.selection-floating-actions span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selection-floating-actions button {
+  flex: 0 0 auto;
+  height: 21px;
+  padding: 0 7px;
+  border: 1px solid #454a51;
+  border-radius: var(--radius-control);
+  color: #cbd0d6;
+  background: #303338;
+  font: inherit;
+}
+
+.selection-floating-actions button:hover {
+  border-color: #6a7078;
+  color: #f0f2f5;
+  background: #3a3e44;
 }
 
 .skin-preview-panel {

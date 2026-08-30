@@ -10,6 +10,7 @@ import {
 
 describe('editor tool keyboard shortcuts', () => {
   it.each([
+    ['s', 'selection'],
     ['p', 'pencil'],
     ['P', 'pencil'],
     ['e', 'eraser'],

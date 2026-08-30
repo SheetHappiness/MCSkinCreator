@@ -18,6 +18,7 @@ afterEach(() => {
 
 describe('ToolOptionsInspector', () => {
   it.each([
+    ['selection', 'Selection', 'Shape option', 'Rectangle'],
     ['pencil', 'Pencil', 'Size option', '1 px'],
     ['eraser', 'Eraser', 'Output option', 'Transparent'],
     ['fill', 'Fill', 'Match option', 'Exact RGBA'],

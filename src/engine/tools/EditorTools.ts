@@ -11,6 +11,7 @@ import type {
 import type { TextureCoordinate } from '../viewport';
 
 export type EditorTool =
+  | 'selection'
   | 'pencil'
   | 'eraser'
   | 'fill'

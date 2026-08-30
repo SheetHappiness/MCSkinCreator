@@ -19,6 +19,7 @@ afterEach(() => {
 
 describe('core tool options', () => {
   it.each([
+    ['selection', { shape: 'rectangle', coordinates: 'integer-half-open' }],
     ['pencil', { size: 1, source: 'active-color' }],
     ['eraser', { size: 1, output: 'transparent' }],
     ['fill', { mode: 'contiguous', match: 'exact-rgba' }],
@@ -29,6 +30,15 @@ describe('core tool options', () => {
   });
 
   it('describes only fixed options for the active core tool', () => {
+    expect(getToolOptionSummary('selection')).toEqual([
+      { key: 'shape', label: 'Shape', value: 'Rectangle', fixed: true },
+      {
+        key: 'coordinates',
+        label: 'Coordinates',
+        value: 'Integer · half-open',
+        fixed: true,
+      },
+    ]);
     expect(getToolOptionSummary('pencil')).toEqual([
       { key: 'size', label: 'Size', value: '1 px', fixed: true },
       {

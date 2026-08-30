@@ -77,6 +77,34 @@ export function screenToTexture(
   };
 }
 
+/**
+ * Maps any logical screen position to the nearest valid texel. This is used
+ * by drag gestures that remain active after the pointer leaves the texture so
+ * selection edges stop cleanly at the first or last texel.
+ */
+export function screenToTextureClamped(
+  point: Point,
+  viewport: ViewportState,
+  textureSize: Size,
+): TextureCoordinate {
+  assertPositive(viewport.zoom, 'Viewport zoom');
+  assertPositive(textureSize.width, 'Texture width');
+  assertPositive(textureSize.height, 'Texture height');
+
+  const localX = point.x - viewport.offsetX;
+  const localY = point.y - viewport.offsetY;
+  return {
+    x: Math.min(
+      textureSize.width - 1,
+      Math.max(0, Math.floor(localX / viewport.zoom)),
+    ),
+    y: Math.min(
+      textureSize.height - 1,
+      Math.max(0, Math.floor(localY / viewport.zoom)),
+    ),
+  };
+}
+
 /** Returns the logical screen position of a texture coordinate's top-left edge. */
 export function textureToScreen(point: Point, viewport: ViewportState): Point {
   assertPositive(viewport.zoom, 'Viewport zoom');
