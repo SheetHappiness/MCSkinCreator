@@ -113,6 +113,91 @@ const FACE_LABELS: Readonly<Record<SkinPickResult['face'], string>> = {
 
 const BODY_PART_OPTIONS: readonly BodyPart[] = BODY_PARTS;
 
+const ICON_STROKE = {
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.5,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+};
+
+function VisibilityIcon({ visible }: { readonly visible: boolean }) {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path
+        {...ICON_STROKE}
+        d="M2.5 10s2.8-4.2 7.5-4.2 7.5 4.2 7.5 4.2-2.8 4.2-7.5 4.2S2.5 10 2.5 10Z"
+      />
+      {visible ? (
+        <circle {...ICON_STROKE} cx="10" cy="10" r="2" />
+      ) : (
+        <path {...ICON_STROKE} d="m4 4 12 12" />
+      )}
+    </svg>
+  );
+}
+
+function TargetIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <circle {...ICON_STROKE} cx="10" cy="10" r="5.5" />
+      <circle {...ICON_STROKE} cx="10" cy="10" r="1.5" />
+      <path {...ICON_STROKE} d="M10 1.8v2M10 16.2v2M1.8 10h2M16.2 10h2" />
+    </svg>
+  );
+}
+
+function IsolateIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path
+        {...ICON_STROKE}
+        d="M3.5 7V3.5H7M13 3.5h3.5V7M16.5 13v3.5H13M7 16.5H3.5V13"
+      />
+      <path {...ICON_STROKE} d="M7 7h6v6H7z" />
+    </svg>
+  );
+}
+
+function PopOutIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path {...ICON_STROKE} d="M7 5H4.5v10h10V12" />
+      <path {...ICON_STROKE} d="M10 3h6v6M16 3l-7 7" />
+    </svg>
+  );
+}
+
+function SnapshotIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path {...ICON_STROKE} d="M3.5 6.5h3l1.2-2h4.6l1.2 2h3v9h-13v-9Z" />
+      <circle {...ICON_STROKE} cx="10" cy="10.8" r="2.7" />
+    </svg>
+  );
+}
+
+function ResetViewIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path {...ICON_STROKE} d="M4 8a6.2 6.2 0 1 1 .7 5.8" />
+      <path {...ICON_STROKE} d="M4 4.5V8h3.5" />
+    </svg>
+  );
+}
+
+function semanticTargetForPick(
+  result: SkinPickResult | undefined,
+): SkinSemanticTarget | undefined {
+  if (result === undefined) return undefined;
+  return {
+    model: result.model,
+    bodyPart: result.bodyPart,
+    layer: result.layer,
+    face: result.face,
+  };
+}
+
 function applyViewState(
   renderer: SkinPreviewRenderer,
   state: SkinViewState,
@@ -432,6 +517,15 @@ export function SkinPreviewPanel({
     selectedTarget?.model === document.model
       ? selectedTarget.layer
       : targetLayer;
+  const hoveredInspectorTarget =
+    canvasHoverTarget ?? semanticTargetForPick(hoveredPick);
+  const visibleBodyPartCount = BODY_PARTS.filter(
+    (bodyPart) => viewState.bodyParts[bodyPart],
+  ).length;
+  const structureStatus =
+    viewState.isolatedBodyPart === undefined
+      ? `${visibleBodyPartCount}/${BODY_PARTS.length} parts visible`
+      : `Isolated · ${BODY_PART_LABELS[viewState.isolatedBodyPart]}`;
 
   const selectBodyPart = (bodyPart: BodyPart) => {
     selectSemanticTargetRef.current?.({
@@ -507,9 +601,36 @@ export function SkinPreviewPanel({
       aria-label="3D preview panel"
     >
       <div className="skin-preview-inspector">
-        <header className="skin-preview-toolbar">
+        <header className="skin-preview-toolbar skin-preview-inspector__toolbar">
           <div className="skin-preview-toolbar__leading">
-            <span className="skin-preview-title">3D Preview</span>
+            <div className="skin-preview-inspector__identity">
+              <span className="skin-preview-inspector__eyebrow">Inspector</span>
+              <span className="skin-preview-title">3D Structure</span>
+            </div>
+          </div>
+          <div className="skin-preview-inspector__toolbar-actions">
+            <div
+              className="model-selector ts-segmented"
+              role="group"
+              aria-label="Skin model"
+            >
+              <span className="model-selector__label">Model</span>
+              {MODEL_OPTIONS.map(({ model, label }) => (
+                <button
+                  key={model}
+                  type="button"
+                  className="ts-button"
+                  aria-pressed={document.model === model}
+                  title={`${label} arm geometry`}
+                  onClick={() => {
+                    cancelActiveEditorInteraction();
+                    changeSkinModel(document, history, model);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             {onCollapse === undefined ? null : (
               <button
                 type="button"
@@ -522,150 +643,164 @@ export function SkinPreviewPanel({
               </button>
             )}
           </div>
-          <div
-            className="model-selector ts-segmented"
-            role="group"
-            aria-label="Skin model"
-          >
-            <span className="model-selector__label">Model</span>
-            {MODEL_OPTIONS.map(({ model, label }) => (
-              <button
-                key={model}
-                type="button"
-                className="ts-button"
-                aria-pressed={document.model === model}
-                title={`${label} arm geometry`}
-                onClick={() => {
-                  cancelActiveEditorInteraction();
-                  changeSkinModel(document, history, model);
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
         </header>
         <section
-          className="skin-preview-visibility-panel"
+          className="skin-preview-visibility-panel skin-preview-inspector__structure"
           aria-label="Visibility and focus"
         >
-          <div
-            className="skin-preview-visibility-row skin-preview-target-row"
-            role="group"
-            aria-label="Semantic target layer"
-          >
-            <span className="skin-preview-visibility-label">Target</span>
-            <button
-              type="button"
-              className="ts-button"
-              aria-label="Target base layer"
-              aria-pressed={targetLayerForSelection === 'base'}
-              onClick={() => selectTargetLayer('base')}
-            >
-              Base
-            </button>
-            <button
-              type="button"
-              className="ts-button"
-              aria-label="Target outer layer"
-              aria-pressed={targetLayerForSelection === 'outer'}
-              onClick={() => selectTargetLayer('outer')}
-            >
-              Outer
-            </button>
+          <div className="skin-preview-section-heading">
+            <div className="skin-preview-section-heading__title">
+              <span className="skin-preview-section-heading__eyebrow">
+                View state
+              </span>
+              <span>Layers + parts</span>
+            </div>
+            <span className="skin-preview-section-heading__status">
+              {structureStatus}
+            </span>
           </div>
-          <div
-            className="skin-preview-visibility-row"
-            role="group"
-            aria-label="Layers"
-          >
-            <span className="skin-preview-visibility-label">Layers</span>
-            <button
-              type="button"
-              className="ts-button"
-              aria-label="Show base layer"
-              aria-pressed={viewState.layers.base}
-              onClick={() =>
-                updateViewState((state) =>
-                  setLayerVisibility(state, 'base', !state.layers.base),
-                )
-              }
+          <div className="skin-preview-visibility-inline-controls">
+            <div
+              className="skin-preview-inline-control"
+              role="group"
+              aria-label="Semantic target layer"
             >
-              Base
-            </button>
-            <button
-              type="button"
-              className="ts-button"
-              aria-label="Show outer layer"
-              aria-pressed={viewState.layers.outer}
-              onClick={() =>
-                updateViewState((state) =>
-                  setLayerVisibility(state, 'outer', !state.layers.outer),
-                )
-              }
+              <span className="skin-preview-visibility-label">Target</span>
+              <div className="ts-segmented skin-preview-segmented-control">
+                <button
+                  type="button"
+                  className="ts-button"
+                  aria-label="Target base layer"
+                  aria-pressed={targetLayerForSelection === 'base'}
+                  onClick={() => selectTargetLayer('base')}
+                >
+                  Base
+                </button>
+                <button
+                  type="button"
+                  className="ts-button"
+                  aria-label="Target outer layer"
+                  aria-pressed={targetLayerForSelection === 'outer'}
+                  onClick={() => selectTargetLayer('outer')}
+                >
+                  Outer
+                </button>
+              </div>
+            </div>
+            <div
+              className="skin-preview-inline-control"
+              role="group"
+              aria-label="Layers"
             >
-              Outer
-            </button>
-            <button
-              type="button"
-              className="ts-button"
-              aria-label="Restore all visibility"
-              onClick={() => updateViewState(() => restoreAllVisibility())}
-            >
-              All
-            </button>
+              <span className="skin-preview-visibility-label">Layers</span>
+              <div className="ts-segmented skin-preview-segmented-control">
+                <button
+                  type="button"
+                  className="ts-button"
+                  aria-label="Show base layer"
+                  aria-pressed={viewState.layers.base}
+                  onClick={() =>
+                    updateViewState((state) =>
+                      setLayerVisibility(state, 'base', !state.layers.base),
+                    )
+                  }
+                >
+                  Base
+                </button>
+                <button
+                  type="button"
+                  className="ts-button"
+                  aria-label="Show outer layer"
+                  aria-pressed={viewState.layers.outer}
+                  onClick={() =>
+                    updateViewState((state) =>
+                      setLayerVisibility(state, 'outer', !state.layers.outer),
+                    )
+                  }
+                >
+                  Outer
+                </button>
+                <button
+                  type="button"
+                  className="ts-button"
+                  aria-label="Restore all visibility"
+                  onClick={() => updateViewState(() => restoreAllVisibility())}
+                >
+                  All
+                </button>
+              </div>
+            </div>
           </div>
           <div
             className="skin-preview-visibility-row skin-preview-body-parts"
             role="group"
             aria-label="Body parts"
           >
-            <span className="skin-preview-visibility-label">Parts</span>
+            <div className="skin-preview-body-parts__heading">
+              <span className="skin-preview-visibility-label">Parts</span>
+              <span className="skin-preview-body-parts__hint">
+                Select to link · isolate to inspect
+              </span>
+            </div>
             {BODY_PART_OPTIONS.map((bodyPart) => {
               const label = BODY_PART_LABELS[bodyPart];
               const visible = viewState.bodyParts[bodyPart];
+              const isHovered =
+                hoveredInspectorTarget?.model === document.model &&
+                hoveredInspectorTarget.bodyPart === bodyPart;
+              const isSelected =
+                selectedTarget?.model === document.model &&
+                selectedTarget.bodyPart === bodyPart;
               return (
-                <div className="skin-preview-body-part" key={bodyPart}>
+                <div
+                  className="skin-preview-body-part"
+                  key={bodyPart}
+                  data-visible={visible}
+                  data-semantic-hovered={isHovered ? 'true' : undefined}
+                  data-semantic-selected={isSelected ? 'true' : undefined}
+                >
                   <button
                     type="button"
-                    className="ts-button"
+                    className="skin-preview-body-part__visibility ts-button"
                     aria-label={`${visible ? 'Hide' : 'Show'} ${label}`}
                     aria-pressed={visible}
+                    title={`${visible ? 'Hide' : 'Show'} ${label}`}
                     onClick={() =>
                       updateViewState((state) =>
                         setBodyPartVisibility(state, bodyPart, !visible),
                       )
                     }
                   >
-                    {label}
+                    <VisibilityIcon visible={visible} />
+                    <span>{label}</span>
                   </button>
-                  <button
-                    type="button"
-                    className="skin-preview-select-button ts-button"
-                    aria-label={`Select ${label}`}
-                    aria-pressed={
-                      selectedTarget?.model === document.model &&
-                      selectedTarget.bodyPart === bodyPart
-                    }
-                    title={`Link ${label} to the 2D canvas`}
-                    onClick={() => selectBodyPart(bodyPart)}
-                  >
-                    Sel
-                  </button>
-                  <button
-                    type="button"
-                    className="skin-preview-isolate-button ts-button"
-                    aria-label={`Isolate ${label}`}
-                    aria-pressed={viewState.isolatedBodyPart === bodyPart}
-                    onClick={() => {
-                      updateViewState((state) =>
-                        isolateBodyPart(state, bodyPart),
-                      );
-                      selectBodyPart(bodyPart);
-                    }}
-                  >
-                    Isolate
-                  </button>
+                  <div className="skin-preview-body-part__actions">
+                    <button
+                      type="button"
+                      className="skin-preview-select-button skin-preview-action-button ts-icon-button ts-icon-button--compact"
+                      aria-label={`Select ${label}`}
+                      aria-pressed={isSelected}
+                      title={`Link ${label} to the 2D canvas`}
+                      onClick={() => selectBodyPart(bodyPart)}
+                    >
+                      <TargetIcon />
+                    </button>
+                    <button
+                      type="button"
+                      className="skin-preview-isolate-button skin-preview-action-button ts-icon-button ts-icon-button--compact"
+                      aria-label={`Isolate ${label}`}
+                      aria-pressed={viewState.isolatedBodyPart === bodyPart}
+                      title={`Isolate ${label}`}
+                      onClick={() => {
+                        updateViewState((state) =>
+                          isolateBodyPart(state, bodyPart),
+                        );
+                        selectBodyPart(bodyPart);
+                      }}
+                    >
+                      <IsolateIcon />
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -686,6 +821,47 @@ export function SkinPreviewPanel({
         id="skin-preview-viewport"
         className={`skin-preview-viewport${previewNotice === undefined ? '' : ' has-notice'}`}
       >
+        <div
+          className="skin-preview-viewport__chrome"
+          role="group"
+          aria-label="3D viewport controls"
+        >
+          <div className="skin-preview-viewport__identity">
+            <span className="skin-preview-viewport__eyebrow">3D Viewport</span>
+            <span className="skin-preview-viewport__hint">
+              Edit · orbit · zoom
+            </span>
+          </div>
+          <div className="skin-preview-viewport__actions">
+            <button
+              type="button"
+              className="skin-preview-viewport-action ts-icon-button ts-icon-button--compact"
+              aria-label="Pop Out"
+              title="Open 3D preview in a separate window"
+              onClick={() => void handleOpenPopout()}
+            >
+              <PopOutIcon />
+            </button>
+            <button
+              type="button"
+              className="skin-preview-viewport-action ts-icon-button ts-icon-button--compact"
+              aria-label="Snapshot"
+              title="Save a PNG snapshot of the viewport"
+              onClick={() => void handleSnapshot()}
+            >
+              <SnapshotIcon />
+            </button>
+            <button
+              type="button"
+              className="skin-preview-viewport-action ts-icon-button ts-icon-button--compact"
+              aria-label="Reset view"
+              title="Reset 3D camera"
+              onClick={() => rendererRef.current?.resetView()}
+            >
+              <ResetViewIcon />
+            </button>
+          </div>
+        </div>
         <div ref={mountRef} className="skin-preview-mount" />
         {previewNotice === undefined ? null : (
           <p className="skin-preview-notice" role="status">
@@ -693,37 +869,15 @@ export function SkinPreviewPanel({
           </p>
         )}
         <footer className="skin-preview-controls">
-          <output
-            className="skin-preview-pick-readout"
-            aria-label="3D pick"
-            data-testid="preview-pick"
-          >
-            {formatPick(hoveredPick)}
-          </output>
-          <div className="skin-preview-actions">
-            <button
-              type="button"
-              className="ts-button"
-              onClick={() => void handleOpenPopout()}
-            >
-              Pop Out
-            </button>
-            <button
-              type="button"
-              className="ts-button"
-              onClick={() => void handleSnapshot()}
-            >
-              Snapshot
-            </button>
-            <button
-              type="button"
-              className="ts-button"
-              title="Reset 3D camera"
-              onClick={() => rendererRef.current?.resetView()}
-            >
-              Reset view
-            </button>
+          <div className="skin-preview-pick-readout">
+            <span className="skin-preview-pick-readout__label">Pick</span>
+            <output aria-label="3D pick" data-testid="preview-pick">
+              {formatPick(hoveredPick)}
+            </output>
           </div>
+          <span className="skin-preview-controls__hint">
+            Right drag orbit · wheel zoom
+          </span>
         </footer>
       </div>
     </aside>

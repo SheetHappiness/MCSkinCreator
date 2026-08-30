@@ -63,6 +63,7 @@ export function HistoryTimeline({ history }: HistoryTimelineProps) {
                   className="history-timeline__entry ts-button ts-button--quiet"
                   data-history-index={entry.index}
                   data-history-state={entry.state}
+                  data-history-saved={entry.isSaved ? 'true' : undefined}
                   aria-current={entry.isCurrent ? 'step' : undefined}
                   aria-label={`${entry.label} · ${describeState(entry)}${entry.isSaved ? ' · Saved' : ''}`}
                   onClick={() => {
@@ -70,19 +71,25 @@ export function HistoryTimeline({ history }: HistoryTimelineProps) {
                     history.jumpTo(entry.index);
                   }}
                 >
-                  <span className="history-timeline__entry-label">
-                    {entry.label}
-                  </span>
-                  <span className="history-timeline__entry-meta">
-                    {describeEntry(entry)}
-                    <span aria-hidden="true"> · </span>
-                    {describeState(entry)}
-                    {entry.isSaved ? (
-                      <>
-                        <span aria-hidden="true"> · </span>
-                        Saved
-                      </>
-                    ) : null}
+                  <span
+                    className="history-timeline__entry-marker"
+                    aria-hidden="true"
+                  />
+                  <span className="history-timeline__entry-main">
+                    <span className="history-timeline__entry-label">
+                      {entry.label}
+                    </span>
+                    <span className="history-timeline__entry-meta">
+                      {describeEntry(entry)}
+                      <span aria-hidden="true"> · </span>
+                      {describeState(entry)}
+                      {entry.isSaved ? (
+                        <>
+                          <span aria-hidden="true"> · </span>
+                          Saved
+                        </>
+                      ) : null}
+                    </span>
                   </span>
                 </button>
               </li>
