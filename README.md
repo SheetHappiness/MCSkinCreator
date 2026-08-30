@@ -437,6 +437,10 @@ derives clamped effective sizes for temporarily smaller windows. Its defaults,
 collapse behavior, and view-state boundary are documented in
 [`docs/WORKSPACE_LAYOUT.md`](docs/WORKSPACE_LAYOUT.md).
 
+The Roadmap 4 Technical Studio visual foundation and its durable semantic
+token contract are documented in
+[`docs/TECHNICAL_STUDIO_TOKENS.md`](docs/TECHNICAL_STUDIO_TOKENS.md).
+
 ---
 
 ## Testing
