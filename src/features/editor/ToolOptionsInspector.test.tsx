@@ -10,10 +10,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { EditorTool } from '../../engine/tools';
 import { ToolOptionsInspector } from './ToolOptionsInspector';
 import { getToolOptions, resetToolOptions } from './toolOptions';
+import { getSymmetryMode, resetSymmetryMode } from './symmetryStore';
 
 afterEach(() => {
   cleanup();
   resetToolOptions();
+  resetSymmetryMode();
 });
 
 describe('ToolOptionsInspector', () => {
@@ -71,5 +73,31 @@ describe('ToolOptionsInspector', () => {
       target: { value: 'stripe-3x3' },
     });
     expect(getToolOptions('stamp')).toEqual({ pattern: 'stripe-3x3' });
+  });
+
+  it('exposes Off, Mirror, and Body Pair as a session-scoped preference', () => {
+    render(<ToolOptionsInspector activeTool="pencil" />);
+    const inspector = screen.getByRole('region', { name: 'Tool options' });
+    const symmetry = within(inspector).getByLabelText('Symmetry');
+
+    expect(symmetry).toHaveValue('off');
+    expect(
+      within(symmetry).getByRole('option', { name: 'Off' }),
+    ).toBeInTheDocument();
+    expect(
+      within(symmetry).getByRole('option', { name: 'Mirror' }),
+    ).toBeInTheDocument();
+    expect(
+      within(symmetry).getByRole('option', { name: 'Body Pair' }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(symmetry, { target: { value: 'body-pair' } });
+    expect(getSymmetryMode()).toBe('body-pair');
+    expect(symmetry).toHaveValue('body-pair');
+    expect(
+      within(inspector).getByText(
+        'Paired arms and legs · canonical face orientation',
+      ),
+    ).toBeInTheDocument();
   });
 });

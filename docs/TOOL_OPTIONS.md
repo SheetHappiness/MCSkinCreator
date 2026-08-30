@@ -17,6 +17,33 @@ history operation. Options remain session-scoped rather than being written to
 local storage; this keeps the configurable tool options small and avoids
 another settings format.
 
+## Symmetry
+
+Symmetry is a session-scoped editor preference, separate from `SkinDocument`
+and `DocumentHistory`. The compact control exposes three exact modes:
+
+- `Off` writes only the source texel.
+- `Mirror` writes the source texel and its generic 64×64 canvas reflection,
+  `(63 - x, y)`.
+- `Body Pair` writes the source texel and the corresponding character-relative
+  texel on the paired arm or leg. It uses the canonical model, face, layer, and
+  U/V orientation from `src/engine/minecraft-skin-spec` for both Classic and
+  Slim models. Head and torso texels are unchanged by this mode.
+
+The target expansion happens before a mutation is applied, and duplicate
+targets are removed before writing. A complete 2D or direct-3D gesture remains
+one history transaction. Preview visibility and isolation do not change the
+mapping.
+
+Symmetry support follows the existing tool semantics:
+
+- Pencil, Eraser, Fill, Lighten, Darken, and Stamp support all three modes.
+- Noise supports all three modes with one shared deterministic noise sample
+  per symmetry group, preserving exact paired results while retaining the
+  tool's seeded behavior.
+- Eyedropper and Selection do not mutate paint targets, so symmetry does not
+  alter them. Their current sample and selection contracts remain unchanged.
+
 Future tools may add genuinely configurable, validated fields to the typed
 map and use `setToolOptions()`; they must not turn fixed core semantics into
 fake controls or store option state in `SkinDocument`.

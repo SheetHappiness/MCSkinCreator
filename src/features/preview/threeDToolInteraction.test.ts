@@ -13,6 +13,7 @@ import {
   resetToolOptions,
   setToolOptions,
 } from '../editor/toolOptions';
+import { resetSymmetryMode, setSymmetryMode } from '../editor/symmetryStore';
 import { ThreeDToolInteraction } from './threeDToolInteraction';
 
 const PAINT_COLOR: RgbaColor = { r: 220, g: 80, b: 40, a: 255 };
@@ -41,6 +42,7 @@ describe('direct 3D tool interaction', () => {
   afterEach(() => {
     resetEditorColors();
     resetToolOptions();
+    resetSymmetryMode();
   });
 
   it('paints a continuous same-face stroke as one undoable operation', () => {
@@ -65,6 +67,37 @@ describe('direct 3D tool interaction', () => {
     }
     expect(history.redo()).toBe(true);
     expect(document.readPixel(6, 3)).toEqual(PAINT_COLOR);
+  });
+
+  it('expands direct 3D painting through canonical Classic/Slim body pairs', () => {
+    setSymmetryMode('body-pair');
+
+    for (const [model, layer, source, target] of [
+      ['classic', 'base', { x: 44, y: 20 }, { x: 39, y: 52 }],
+      ['slim', 'outer', { x: 44, y: 36 }, { x: 54, y: 52 }],
+    ] as const) {
+      const document = SkinDocument.createBlank({
+        id: `3d-symmetry-${model}`,
+        model,
+      });
+      const history = new DocumentHistory(document);
+      const interaction = new ThreeDToolInteraction(document, history, vi.fn());
+      const rightArmPick = pick(source.x, source.y, {
+        model,
+        bodyPart: 'rightArm',
+        layer,
+        face: 'front',
+      });
+
+      expect(
+        interaction.pointerDown(1, 0, rightArmPick, 'pencil', PAINT_COLOR),
+      ).toBe(true);
+      interaction.pointerUp(1);
+
+      expect(document.readPixel(source.x, source.y)).toEqual(PAINT_COLOR);
+      expect(document.readPixel(target.x, target.y)).toEqual(PAINT_COLOR);
+      expect(history.getTimelineState().entries).toHaveLength(2);
+    }
   });
 
   it('breaks interpolation across faces, layers, parts, and raycast misses', () => {

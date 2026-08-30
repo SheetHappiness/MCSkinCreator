@@ -11,9 +11,11 @@ import {
   setToolOptions,
   validateToolOptions,
 } from './toolOptions';
+import { resetSymmetryMode, setSymmetryMode } from './symmetryStore';
 
 afterEach(() => {
   resetToolOptions();
+  resetSymmetryMode();
   setActiveEditorTool('pencil');
 });
 
@@ -99,6 +101,18 @@ describe('core tool options', () => {
 
     setToolOptions('eraser', getToolOptions('eraser'));
     resetToolOptions();
+
+    expect(document.revision).toBe(0);
+    expect(document.isDirty).toBe(false);
+    expect(history.canUndo).toBe(false);
+    expect(history.canRedo).toBe(false);
+  });
+
+  it('keeps symmetry preference outside document and history state', () => {
+    const document = SkinDocument.createBlank({ id: 'symmetry-options' });
+    const history = new DocumentHistory(document);
+
+    setSymmetryMode('body-pair');
 
     expect(document.revision).toBe(0);
     expect(document.isDirty).toBe(false);

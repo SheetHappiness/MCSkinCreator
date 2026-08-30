@@ -7,12 +7,19 @@ import {
   type StampPattern,
 } from '../../engine/tools/AdvancedPaintTools';
 import {
+  SYMMETRY_MODE_LABELS,
+  SYMMETRY_MODES,
+  type SymmetryMode,
+} from '../../engine/symmetry';
+import { cancelActiveEditorInteraction } from './activeEditorInteraction';
+import {
   getToolOptionSummary,
   getToolOptions,
   setToolOptions,
   toolLabel,
   useToolOptions,
 } from './toolOptions';
+import { setSymmetryMode, useSymmetryMode } from './symmetryStore';
 
 interface ToolOptionsInspectorProps {
   readonly activeTool: EditorTool;
@@ -165,6 +172,48 @@ function AdvancedToolControls({ tool }: { readonly tool: AdvancedPaintTool }) {
   );
 }
 
+function symmetrySupportsTool(tool: EditorTool): boolean {
+  return tool !== 'selection' && tool !== 'eyedropper';
+}
+
+function SymmetryOption({ activeTool }: { readonly activeTool: EditorTool }) {
+  const mode = useSymmetryMode();
+  const supportsTool = symmetrySupportsTool(activeTool);
+
+  return (
+    <div className="tool-options-inspector__symmetry">
+      <label className="tool-options-inspector__control tool-options-inspector__select">
+        <span>Symmetry</span>
+        <select
+          aria-label="Symmetry"
+          value={mode}
+          onChange={(event) => {
+            const nextMode = event.currentTarget.value as SymmetryMode;
+            if (!SYMMETRY_MODES.includes(nextMode)) return;
+            cancelActiveEditorInteraction();
+            setSymmetryMode(nextMode);
+          }}
+        >
+          {SYMMETRY_MODES.map((symmetryMode) => (
+            <option key={symmetryMode} value={symmetryMode}>
+              {SYMMETRY_MODE_LABELS[symmetryMode]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="tool-options-inspector__note">
+        {supportsTool
+          ? mode === 'body-pair'
+            ? 'Paired arms and legs · canonical face orientation'
+            : mode === 'mirror'
+              ? 'Canvas axis · exact RGBA targets'
+              : 'Single target · exact RGBA'
+          : 'Painting only · sampling and selection are unchanged'}
+      </p>
+    </div>
+  );
+}
+
 /**
  * Presents fixed core semantics and real advanced-tool controls through the
  * same typed options source.
@@ -187,6 +236,7 @@ export function ToolOptionsInspector({
         <span>Tool options</span>
         <span>{toolLabel(activeTool)}</span>
       </header>
+      <SymmetryOption activeTool={activeTool} />
       {advanced ? (
         <AdvancedToolControls tool={activeTool} />
       ) : (

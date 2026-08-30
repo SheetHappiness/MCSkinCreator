@@ -9,7 +9,7 @@ import {
 
 import type { RgbaColor, SkinDocument, SkinModel } from '../../engine/document';
 import type { DocumentHistory } from '../../engine/history';
-import type { EditorTool } from '../../engine/tools';
+import { isAdvancedPaintTool, type EditorTool } from '../../engine/tools';
 import { BODY_PARTS, type BodyPart } from '../../engine/minecraft-skin-spec';
 import {
   SkinPreviewRenderer,
@@ -236,7 +236,11 @@ export function SkinPreviewPanel({
         );
         if (!handled) return;
         event.preventDefault();
-        if (tool === 'pencil' || tool === 'eraser') {
+        if (
+          tool === 'pencil' ||
+          tool === 'eraser' ||
+          isAdvancedPaintTool(tool)
+        ) {
           const canvas = event.currentTarget;
           if (canvas instanceof HTMLCanvasElement) {
             canvas.setPointerCapture(event.pointerId);

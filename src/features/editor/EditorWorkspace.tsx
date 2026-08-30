@@ -13,6 +13,7 @@ import {
 
 import type { SkinDocument } from '../../engine/document';
 import type { DocumentHistory } from '../../engine/history';
+import type { SymmetryEditOptions } from '../../engine/symmetry';
 import {
   SelectionController,
   selectionRectContainsPoint,
@@ -82,6 +83,7 @@ import {
   getPointerAction,
 } from './editorShortcuts';
 import { getToolOptions } from './toolOptions';
+import { getSymmetryMode } from './symmetryStore';
 
 interface EditorWorkspaceProps {
   readonly document: SkinDocument;
@@ -132,6 +134,10 @@ const TOOLS: readonly ToolDefinition[] = [
 
 const INITIAL_VIEWPORT: ViewportState = { zoom: 1, offsetX: 0, offsetY: 0 };
 const WHEEL_ZOOM_SENSITIVITY = 0.0015;
+
+function symmetryOptions(document: SkinDocument): SymmetryEditOptions {
+  return { mode: getSymmetryMode(), model: document.model };
+}
 
 function normalizeWheelDelta(event: ReactWheelEvent): number {
   if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * 16;
@@ -936,7 +942,14 @@ export function EditorWorkspace({
     if (effectiveTool === 'fill') {
       const options = getToolOptions('fill');
       if (options.mode === 'contiguous' && options.match === 'exact-rgba') {
-        fillAt(skinDocument, history, point, color);
+        fillAt(
+          skinDocument,
+          history,
+          point,
+          color,
+          'Fill',
+          symmetryOptions(skinDocument),
+        );
       }
       return;
     }
@@ -949,6 +962,8 @@ export function EditorWorkspace({
         getToolOptions(effectiveTool),
         { primary: primaryColor, secondary: secondaryColor },
         point,
+        undefined,
+        symmetryOptions(skinDocument),
       );
       event.currentTarget.setPointerCapture(event.pointerId);
       strokeGestureRef.current = { pointerId: event.pointerId, stroke };
@@ -965,6 +980,7 @@ export function EditorWorkspace({
       strokeColor,
       point,
       effectiveTool === 'eraser' ? 'Eraser Stroke' : 'Pencil Stroke',
+      symmetryOptions(skinDocument),
     );
     event.currentTarget.setPointerCapture(event.pointerId);
     strokeGestureRef.current = { pointerId: event.pointerId, stroke };

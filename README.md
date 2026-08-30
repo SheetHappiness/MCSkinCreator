@@ -750,11 +750,10 @@ Save
 
 ## Stage 2 — Further Artist Tools
 
-The defined Roadmap 2 parity slice is complete, and Roadmap 3 A03 adds
-selection transforms and paired-limb transfer. The ideas below are possible
-future work beyond those slices and require separate scope:
+The defined Roadmap 2 parity slice is complete, and Roadmap 3 A04 adds live
+symmetry on top of the selection and paired-limb work. The ideas below are
+possible future work beyond those slices and require separate scope:
 
-- symmetry;
 - advanced fill;
 - replace color;
 - palette ramps;

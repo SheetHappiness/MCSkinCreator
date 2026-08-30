@@ -4,6 +4,11 @@ import type {
   DocumentEditTransaction,
   DocumentHistory,
 } from '../history';
+import {
+  expandSymmetryTargets,
+  type SymmetryEditOptions,
+  type SymmetrySource,
+} from '../symmetry';
 import { hsvToRgba, rgbaToHsv } from '../color/ColorConversions';
 import { rasterizeLine, type EditorTool } from './EditorTools';
 
@@ -245,22 +250,33 @@ function safeRandom(random: NoiseRandomSource): number {
   return clamp(value, 0, 0.999999999);
 }
 
-export function noiseColor(
-  color: RgbaColor,
+function sampleNoiseDelta(
   options: NoiseToolOptions,
   random: NoiseRandomSource,
-): RgbaColor {
+): number | undefined {
   validateAdvancedPaintOptions('noise', options);
-  if (safeRandom(random) >= options.density) return color;
+  if (safeRandom(random) >= options.density) return undefined;
 
   const range = Math.round(options.strength * MAX_NOISE_CHANNEL_RANGE);
-  const delta = Math.floor(safeRandom(random) * (range * 2 + 1)) - range;
+  return Math.floor(safeRandom(random) * (range * 2 + 1)) - range;
+}
+
+function applyNoiseDelta(color: RgbaColor, delta: number): RgbaColor {
   return {
     r: byte(color.r + delta),
     g: byte(color.g + delta),
     b: byte(color.b + delta),
     a: color.a,
   };
+}
+
+export function noiseColor(
+  color: RgbaColor,
+  options: NoiseToolOptions,
+  random: NoiseRandomSource,
+): RgbaColor {
+  const delta = sampleNoiseDelta(options, random);
+  return delta === undefined ? color : applyNoiseDelta(color, delta);
 }
 
 /** Small deterministic generator used by Noise when a test seam is not supplied. */
@@ -285,8 +301,8 @@ function coordinateKey(x: number, y: number): number {
  * A 3D adapter can call extend(undefined) to break interpolation at a face.
  */
 export class AdvancedPaintStroke {
-  private previous: { readonly x: number; readonly y: number } | undefined;
-  private readonly transformed = new Set<number>();
+  private previous: SymmetrySource | undefined;
+  private readonly transformedTargets = new Set<number>();
   private readonly stampedAnchors = new Set<number>();
   private readonly noiseRandom: NoiseRandomSource | undefined;
 
@@ -296,6 +312,7 @@ export class AdvancedPaintStroke {
     private readonly tool: AdvancedPaintTool,
     private readonly options: AdvancedPaintToolOptions,
     private readonly colors: AdvancedPaintColors,
+    private readonly symmetry: SymmetryEditOptions,
     randomSource?: NoiseRandomSource,
   ) {
     validateAdvancedPaintOptions(tool, options);
@@ -310,7 +327,7 @@ export class AdvancedPaintStroke {
     return this.transaction.isActive;
   }
 
-  extend(point: { readonly x: number; readonly y: number } | undefined): void {
+  extend(point: SymmetrySource | undefined): void {
     if (!this.transaction.isActive) {
       this.previous = undefined;
       return;
@@ -330,7 +347,9 @@ export class AdvancedPaintStroke {
       this.previous === undefined
         ? [point]
         : rasterizeLine(this.previous, point);
-    for (const coordinate of points) this.applyTransform(coordinate);
+    for (const coordinate of points) {
+      this.applyTransform({ ...coordinate, surface: point.surface });
+    }
     this.previous = point;
   }
 
@@ -345,31 +364,49 @@ export class AdvancedPaintStroke {
     this.previous = undefined;
   }
 
-  private applyTransform(point: {
-    readonly x: number;
-    readonly y: number;
-  }): void {
-    const key = coordinateKey(point.x, point.y);
-    if (this.transformed.has(key)) return;
-    this.transformed.add(key);
+  private applyTransform(point: SymmetrySource): void {
+    const targets = expandSymmetryTargets(point, this.symmetry).filter(
+      (target) => {
+        const key = coordinateKey(target.x, target.y);
+        if (this.transformedTargets.has(key)) return false;
+        this.transformedTargets.add(key);
+        return true;
+      },
+    );
+    if (targets.length === 0) return;
 
-    const color = this.document.readPixel(point.x, point.y);
-    let next = color;
-    if (this.tool === 'lighten') {
-      next = lightenColor(color, (this.options as LightenToolOptions).strength);
-    } else if (this.tool === 'darken') {
-      next = darkenColor(color, (this.options as DarkenToolOptions).strength);
-    } else if (this.tool === 'noise') {
-      next = noiseColor(
-        color,
+    if (this.tool === 'noise') {
+      const delta = sampleNoiseDelta(
         this.options as NoiseToolOptions,
         this.noiseRandom!,
       );
+      if (delta === undefined) return;
+      for (const target of targets) {
+        this.transaction.writePixel(
+          target.x,
+          target.y,
+          applyNoiseDelta(this.document.readPixel(target.x, target.y), delta),
+        );
+      }
+      return;
     }
-    this.transaction.writePixel(point.x, point.y, next);
+
+    for (const target of targets) {
+      const color = this.document.readPixel(target.x, target.y);
+      let next = color;
+      if (this.tool === 'lighten') {
+        next = lightenColor(
+          color,
+          (this.options as LightenToolOptions).strength,
+        );
+      } else if (this.tool === 'darken') {
+        next = darkenColor(color, (this.options as DarkenToolOptions).strength);
+      }
+      this.transaction.writePixel(target.x, target.y, next);
+    }
   }
 
-  private applyStamp(anchor: { readonly x: number; readonly y: number }): void {
+  private applyStamp(anchor: SymmetrySource): void {
     const anchorKey = coordinateKey(anchor.x, anchor.y);
     if (this.stampedAnchors.has(anchorKey)) return;
     this.stampedAnchors.add(anchorKey);
@@ -391,7 +428,12 @@ export class AdvancedPaintStroke {
         const reference = definition.cells[row * definition.width + column];
         const color =
           reference === 'primary' ? this.colors.primary : this.colors.secondary;
-        this.transaction.writePixel(x, y, color);
+        for (const target of expandSymmetryTargets(
+          { x, y, surface: anchor.surface },
+          this.symmetry,
+        )) {
+          this.transaction.writePixel(target.x, target.y, color);
+        }
       }
     }
   }
@@ -403,8 +445,9 @@ export function beginAdvancedPaintStroke(
   tool: AdvancedPaintTool,
   options: AdvancedPaintToolOptions,
   colors: AdvancedPaintColors,
-  start: { readonly x: number; readonly y: number },
+  start: SymmetrySource,
   randomSource?: NoiseRandomSource,
+  symmetry: SymmetryEditOptions = { mode: 'off', model: 'classic' },
 ): AdvancedPaintStroke {
   const stroke = new AdvancedPaintStroke(
     document,
@@ -412,6 +455,7 @@ export function beginAdvancedPaintStroke(
     tool,
     options,
     colors,
+    symmetry,
     randomSource,
   );
   stroke.extend(start);

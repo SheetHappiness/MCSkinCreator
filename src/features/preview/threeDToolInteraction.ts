@@ -12,16 +12,16 @@ import {
   type PixelStroke,
 } from '../../engine/tools';
 import type { DocumentHistory } from '../../engine/history';
+import type {
+  SymmetryEditOptions,
+  SymmetrySurface,
+} from '../../engine/symmetry';
 import type { SkinPickResult } from '../../renderers/three';
 import type { ColorSlot } from '../editor/editorToolStore';
+import { getSymmetryMode } from '../editor/symmetryStore';
 import { getToolOptions } from '../editor/toolOptions';
 
-interface SurfaceIdentity {
-  readonly model: SkinPickResult['model'];
-  readonly bodyPart: SkinPickResult['bodyPart'];
-  readonly layer: SkinPickResult['layer'];
-  readonly face: SkinPickResult['face'];
-}
+type SurfaceIdentity = SymmetrySurface;
 
 function surfaceIdentity(pick: SkinPickResult): SurfaceIdentity {
   return {
@@ -30,6 +30,18 @@ function surfaceIdentity(pick: SkinPickResult): SurfaceIdentity {
     layer: pick.layer,
     face: pick.face,
   };
+}
+
+function symmetryOptions(pick: SkinPickResult): SymmetryEditOptions {
+  return { mode: getSymmetryMode(), model: pick.model };
+}
+
+function symmetrySource(pick: SkinPickResult) {
+  return {
+    x: pick.x,
+    y: pick.y,
+    surface: surfaceIdentity(pick),
+  } as const;
 }
 
 function sameSurface(
@@ -90,7 +102,15 @@ export class ThreeDToolInteraction {
     if (tool === 'fill') {
       const options = getToolOptions('fill');
       if (options.mode === 'contiguous' && options.match === 'exact-rgba') {
-        fillAt(this.document, this.history, pick, color);
+        fillAt(
+          this.document,
+          this.history,
+          pick,
+          color,
+          'Fill',
+          symmetryOptions(pick),
+          surfaceIdentity(pick),
+        );
       }
       return true;
     }
@@ -102,7 +122,9 @@ export class ThreeDToolInteraction {
         tool,
         getToolOptions(tool),
         colors,
-        pick,
+        symmetrySource(pick),
+        undefined,
+        symmetryOptions(pick),
       );
       this.pointerId = pointerId;
       this.previousSurface = surfaceIdentity(pick);
@@ -116,8 +138,9 @@ export class ThreeDToolInteraction {
     this.stroke = beginPixelStroke(
       this.history,
       strokeColor,
-      pick,
+      symmetrySource(pick),
       tool === 'eraser' ? 'Eraser Stroke' : 'Pencil Stroke',
+      symmetryOptions(pick),
     );
     this.pointerId = pointerId;
     this.previousSurface = surfaceIdentity(pick);
@@ -136,7 +159,7 @@ export class ThreeDToolInteraction {
     if (!sameSurface(this.previousSurface, pick)) {
       this.stroke.extend(undefined);
     }
-    this.stroke.extend({ x: pick.x, y: pick.y });
+    this.stroke.extend(symmetrySource(pick));
     this.previousSurface = surfaceIdentity(pick);
   }
 

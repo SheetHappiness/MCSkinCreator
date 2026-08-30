@@ -8,6 +8,11 @@ import type {
   DocumentEditTransaction,
   DocumentHistory,
 } from '../history';
+import {
+  expandSymmetryTargets,
+  type SymmetryEditOptions,
+  type SymmetrySource,
+} from '../symmetry';
 import type { TextureCoordinate } from '../viewport';
 
 export type EditorTool =
@@ -85,12 +90,13 @@ export function rasterizeLine(
 
 /** One live, 1-texel stroke backed by exactly one M4 history transaction. */
 export class PixelStroke {
-  private previous: TextureCoordinate | undefined;
+  private previous: SymmetrySource | undefined;
 
   constructor(
     private readonly transaction: DocumentEditTransaction,
     private readonly color: RgbaColor,
-    start: TextureCoordinate,
+    private readonly symmetry: SymmetryEditOptions,
+    start: SymmetrySource,
   ) {
     this.extend(start);
   }
@@ -103,7 +109,7 @@ export class PixelStroke {
    * Undefined represents the pointer being outside the texture. Re-entry
    * starts a fresh in-bounds segment instead of painting across outside space.
    */
-  extend(point: TextureCoordinate | undefined): void {
+  extend(point: SymmetrySource | undefined): void {
     if (!this.transaction.isActive) {
       this.previous = undefined;
       return;
@@ -119,7 +125,15 @@ export class PixelStroke {
         ? [point]
         : rasterizeLine(this.previous, point);
     for (const coordinate of points) {
-      this.transaction.writePixel(coordinate.x, coordinate.y, this.color);
+      for (const target of expandSymmetryTargets(
+        {
+          ...coordinate,
+          surface: point.surface,
+        },
+        this.symmetry,
+      )) {
+        this.transaction.writePixel(target.x, target.y, this.color);
+      }
     }
     this.previous = point;
   }
@@ -142,10 +156,16 @@ export class PixelStroke {
 export function beginPixelStroke(
   history: DocumentHistory,
   color: RgbaColor,
-  start: TextureCoordinate,
+  start: SymmetrySource,
   label = 'Pencil Stroke',
+  symmetry: SymmetryEditOptions = { mode: 'off', model: 'classic' },
 ): PixelStroke {
-  return new PixelStroke(history.beginTransaction(label), color, start);
+  return new PixelStroke(
+    history.beginTransaction(label),
+    color,
+    symmetry,
+    start,
+  );
 }
 
 /** Finds the exact 4-connected region containing seed without mutating it. */
@@ -189,16 +209,23 @@ export function fillAt(
   seed: TextureCoordinate,
   replacement: RgbaColor,
   label = 'Fill',
+  symmetry: SymmetryEditOptions = { mode: 'off', model: 'classic' },
+  seedSurface?: SymmetrySource['surface'],
 ): DocumentEditOperation | undefined {
-  if (colorsEqual(document.readPixel(seed.x, seed.y), replacement)) {
-    return undefined;
-  }
-
   const region = findFloodFillRegion(document, seed);
   const transaction = history.beginTransaction(label);
   try {
     for (const point of region) {
-      transaction.writePixel(point.x, point.y, replacement);
+      for (const target of expandSymmetryTargets(
+        {
+          ...point,
+          surface:
+            point.x === seed.x && point.y === seed.y ? seedSurface : undefined,
+        },
+        symmetry,
+      )) {
+        transaction.writePixel(target.x, target.y, replacement);
+      }
     }
     return transaction.commit();
   } catch (error) {
