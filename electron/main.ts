@@ -22,6 +22,7 @@ import {
 } from './fileContract';
 import { registerSkinFileIpc } from './skinFileIpc';
 import { registerSkinLibraryIpc } from './skinLibraryIpc';
+import { registerRecentSkinIpc } from './recentSkinIpc';
 import { closePopoutForOwner, registerPreviewIpc } from './previewIpc';
 import { WindowCloseCoordinator } from './windowCloseCoordinator';
 
@@ -382,6 +383,7 @@ function installApplicationMenu(): void {
 
 app.whenReady().then(async () => {
   registerSkinFileIpc();
+  registerRecentSkinIpc();
   registerSkinLibraryIpc();
   registerPreviewIpc();
   registerAppLifecycleIpc();

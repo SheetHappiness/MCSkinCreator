@@ -2,6 +2,10 @@ export const SKIN_FILE_CHANNELS = {
   open: 'skin-file:open',
   save: 'skin-file:save',
   saveAs: 'skin-file:save-as',
+  listRecent: 'skin-file:list-recent',
+  openRecent: 'skin-file:open-recent',
+  removeRecent: 'skin-file:remove-recent',
+  recordRecent: 'skin-file:record-recent',
   command: 'skin-file:command',
 } as const;
 
@@ -12,6 +16,11 @@ export const SKIN_LIBRARY_CHANNELS = {
   duplicate: 'skin-library:duplicate',
   delete: 'skin-library:delete',
   copyIn: 'skin-library:copy-in',
+  reveal: 'skin-library:reveal',
+  createCollection: 'skin-library:create-collection',
+  renameCollection: 'skin-library:rename-collection',
+  deleteCollection: 'skin-library:delete-collection',
+  setEntryCollections: 'skin-library:set-entry-collections',
 } as const;
 
 export const PREVIEW_CHANNELS = {
@@ -29,6 +38,8 @@ export const APP_LIFECYCLE_CHANNELS = {
   closeRequest: 'app-lifecycle:close-request',
   closeResponse: 'app-lifecycle:close-response',
 } as const;
+
+export const MAX_RECENT_SKINS = 12 as const;
 
 export const SKIN_EDIT_CHANNELS = {
   command: 'skin-edit:command',
@@ -85,6 +96,12 @@ export interface NativeSkinFileApi {
   openSkinPng(): Promise<OpenSkinPngResult>;
   saveSkinPng(request: SaveSkinPngRequest): Promise<SaveSkinPngResult>;
   saveSkinPngAs(request: SaveSkinPngAsRequest): Promise<SaveSkinPngAsResult>;
+  listRecentSkins?(): Promise<RecentSkinListResult>;
+  openRecentSkin?(filePath: string): Promise<OpenSkinPngResult>;
+  removeRecentSkin?(filePath: string): Promise<SkinLibraryActionResult>;
+  recordRecentSkin?(
+    request: RecordRecentSkinRequest,
+  ): Promise<SkinLibraryActionResult>;
   /** Resolves an OS-backed dropped File path without exposing file access. */
   getPathForDroppedFile?(file: unknown): string;
   onFileCommand(listener: (command: FileCommand) => void): () => void;
@@ -94,6 +111,15 @@ export interface SkinLibraryEntry {
   readonly filePath: string;
   readonly displayName: string;
   readonly byteLength: number;
+  /** Derived display data; never used as document authority. */
+  readonly thumbnailDataUrl?: string;
+  readonly collectionIds: readonly string[];
+}
+
+export interface SkinLibraryCollection {
+  readonly id: string;
+  readonly displayName: string;
+  readonly entryCount: number;
 }
 
 export type SkinLibraryListResult =
@@ -101,6 +127,7 @@ export type SkinLibraryListResult =
       readonly status: 'success';
       readonly rootDisplayName: string;
       readonly entries: readonly SkinLibraryEntry[];
+      readonly collections: readonly SkinLibraryCollection[];
     }
   | { readonly status: 'error'; readonly error: NativeFileError };
 
@@ -118,9 +145,45 @@ export interface CopySkinToLibraryRequest {
   readonly bytes: Uint8Array;
 }
 
+export interface CreateSkinLibraryCollectionRequest {
+  readonly displayName: string;
+}
+
+export interface RenameSkinLibraryCollectionRequest {
+  readonly collectionId: string;
+  readonly displayName: string;
+}
+
+export interface SetSkinLibraryEntryCollectionsRequest {
+  readonly filePath: string;
+  readonly collectionIds: readonly string[];
+}
+
+export type SkinLibraryCollectionMutationResult =
+  | { readonly status: 'success'; readonly collection: SkinLibraryCollection }
+  | { readonly status: 'error'; readonly error: NativeFileError };
+
 export type SkinLibraryActionResult =
   | { readonly status: 'success' }
   | { readonly status: 'error'; readonly error: NativeFileError };
+
+export interface RecentSkinEntry {
+  readonly filePath: string;
+  readonly displayName: string;
+  readonly lastOpenedAt: number;
+  readonly isAvailable: boolean;
+  /** Derived display data; never used as document authority. */
+  readonly thumbnailDataUrl?: string;
+}
+
+export type RecentSkinListResult =
+  | { readonly status: 'success'; readonly entries: readonly RecentSkinEntry[] }
+  | { readonly status: 'error'; readonly error: NativeFileError };
+
+export interface RecordRecentSkinRequest {
+  readonly filePath: string;
+  readonly displayName: string;
+}
 
 export interface NativeSkinLibraryApi {
   listLibrarySkins(): Promise<SkinLibraryListResult>;
@@ -133,6 +196,19 @@ export interface NativeSkinLibraryApi {
   copySkinToLibrary(
     request: CopySkinToLibraryRequest,
   ): Promise<SkinLibraryMutationResult>;
+  revealLibrarySkin(filePath: string): Promise<SkinLibraryActionResult>;
+  createLibraryCollection(
+    request: CreateSkinLibraryCollectionRequest,
+  ): Promise<SkinLibraryCollectionMutationResult>;
+  renameLibraryCollection(
+    request: RenameSkinLibraryCollectionRequest,
+  ): Promise<SkinLibraryCollectionMutationResult>;
+  deleteLibraryCollection(
+    collectionId: string,
+  ): Promise<SkinLibraryActionResult>;
+  setLibraryEntryCollections(
+    request: SetSkinLibraryEntryCollectionsRequest,
+  ): Promise<SkinLibraryActionResult>;
 }
 
 export type PreviewBodyPart =

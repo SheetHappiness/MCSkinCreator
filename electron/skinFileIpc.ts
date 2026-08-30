@@ -15,6 +15,7 @@ import {
   type SaveSkinPngRequest,
   type SaveSkinPngResult,
 } from './fileContract';
+import { recordRecentSkin } from './recentSkinIpc';
 
 const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 const MAX_ENCODED_SKIN_BYTES = 1024 * 1024;
@@ -165,7 +166,14 @@ async function saveSkinPng(value: unknown): Promise<SaveSkinPngResult> {
     return invalidWriteRequest();
   }
 
-  return persistPng(value.filePath, value.bytes);
+  const result = await persistPng(value.filePath, value.bytes);
+  if (result.status === 'success') {
+    await recordRecentSkin({
+      filePath: value.filePath,
+      displayName: path.basename(value.filePath),
+    }).catch(() => undefined);
+  }
+  return result;
 }
 
 async function saveSkinPngAs(
@@ -207,6 +215,11 @@ async function saveSkinPngAs(
     if (result.status === 'error') {
       return result;
     }
+
+    await recordRecentSkin({
+      filePath,
+      displayName: path.basename(filePath),
+    }).catch(() => undefined);
 
     return {
       status: 'success',

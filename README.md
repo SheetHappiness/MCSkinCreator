@@ -134,8 +134,9 @@ exclusions are recorded in
 - Save As
 - Multiple open document tabs with independent history
 - Save All across dirty tabs
-- Offline local skin library: list, open, rename, duplicate, delete, and copy
-  the active document
+- Offline local skin library: cached thumbnails, local search, virtual
+  collections, bounded recents, list, open, rename, duplicate, delete, reveal,
+  and copy the active document
 - Pop Out a read-only 3D preview bound to the current document
 - Snapshot the current 3D preview to PNG
 - Ctrl+N for New Skin

@@ -39,4 +39,8 @@ When several files are dropped, only one deterministic candidate is
 considered. Use the local library to manage more than one existing skin at a
 time; see [`docs/LOCAL_LIBRARY_MULTI_DOCUMENT.md`](LOCAL_LIBRARY_MULTI_DOCUMENT.md).
 
-Recent files, online templates, and cloud storage remain out of scope.
+When the dropped file exposes an OS-backed path, a successful open promotes it
+in the bounded Recently Opened list described in
+[`docs/LOCAL_LIBRARY_MULTI_DOCUMENT.md`](LOCAL_LIBRARY_MULTI_DOCUMENT.md).
+Browser-constructed files without a stable path remain session-only. Online
+templates and cloud storage remain out of scope.

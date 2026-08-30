@@ -244,11 +244,11 @@ export class DocumentSessionController {
     );
   }
 
-  private replaceOrActivatePng(source: {
+  private async replaceOrActivatePng(source: {
     readonly bytes: Uint8Array;
     readonly filePath?: string;
     readonly displayName: string;
-  }): FileCommandOutcome {
+  }): Promise<FileCommandOutcome> {
     let document: SkinDocument;
     try {
       document = decodeSkinPng(source.bytes, {
@@ -257,6 +257,18 @@ export class DocumentSessionController {
       });
     } catch (error) {
       return this.fail(toLifecycleError(error));
+    }
+
+    if (
+      source.filePath !== undefined &&
+      this.nativeFiles.recordRecentSkin !== undefined
+    ) {
+      await this.nativeFiles
+        .recordRecentSkin({
+          filePath: source.filePath,
+          displayName: source.displayName,
+        })
+        .catch(() => undefined);
     }
 
     const existing =

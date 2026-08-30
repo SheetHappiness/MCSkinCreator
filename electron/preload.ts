@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type {
   CloseRequestResponse,
   CopySkinToLibraryRequest,
+  CreateSkinLibraryCollectionRequest,
   DocumentPresentationState,
   EditCommand,
   EditCommandState,
@@ -17,6 +18,8 @@ import type {
   OpenPopoutPreviewResult,
   PopoutPreviewState,
   RenameSkinLibraryRequest,
+  RenameSkinLibraryCollectionRequest,
+  RecordRecentSkinRequest,
   SaveSkinPngAsRequest,
   SaveSkinPngAsResult,
   SaveSkinPngRequest,
@@ -24,8 +27,11 @@ import type {
   SavePreviewSnapshotRequest,
   SavePreviewSnapshotResult,
   SkinLibraryActionResult,
+  SkinLibraryCollectionMutationResult,
   SkinLibraryListResult,
   SkinLibraryMutationResult,
+  RecentSkinListResult,
+  SetSkinLibraryEntryCollectionsRequest,
   UnsavedChangesDecision,
   UnsavedChangesRequest,
 } from './fileContract';
@@ -36,6 +42,10 @@ const SKIN_FILE_CHANNELS = {
   open: 'skin-file:open',
   save: 'skin-file:save',
   saveAs: 'skin-file:save-as',
+  listRecent: 'skin-file:list-recent',
+  openRecent: 'skin-file:open-recent',
+  removeRecent: 'skin-file:remove-recent',
+  recordRecent: 'skin-file:record-recent',
   command: 'skin-file:command',
 } as const;
 
@@ -51,6 +61,11 @@ const SKIN_LIBRARY_CHANNELS = {
   duplicate: 'skin-library:duplicate',
   delete: 'skin-library:delete',
   copyIn: 'skin-library:copy-in',
+  reveal: 'skin-library:reveal',
+  createCollection: 'skin-library:create-collection',
+  renameCollection: 'skin-library:rename-collection',
+  deleteCollection: 'skin-library:delete-collection',
+  setEntryCollections: 'skin-library:set-entry-collections',
 } as const;
 
 const PREVIEW_CHANNELS = {
@@ -88,6 +103,31 @@ const skinFileApi: NativeSkinFileApi = {
       SKIN_FILE_CHANNELS.saveAs,
       request,
     ) as Promise<SaveSkinPngAsResult>;
+  },
+  async listRecentSkins(): Promise<RecentSkinListResult> {
+    return ipcRenderer.invoke(
+      SKIN_FILE_CHANNELS.listRecent,
+    ) as Promise<RecentSkinListResult>;
+  },
+  async openRecentSkin(filePath: string): Promise<OpenSkinPngResult> {
+    return ipcRenderer.invoke(
+      SKIN_FILE_CHANNELS.openRecent,
+      filePath,
+    ) as Promise<OpenSkinPngResult>;
+  },
+  async removeRecentSkin(filePath: string): Promise<SkinLibraryActionResult> {
+    return ipcRenderer.invoke(
+      SKIN_FILE_CHANNELS.removeRecent,
+      filePath,
+    ) as Promise<SkinLibraryActionResult>;
+  },
+  async recordRecentSkin(
+    request: RecordRecentSkinRequest,
+  ): Promise<SkinLibraryActionResult> {
+    return ipcRenderer.invoke(
+      SKIN_FILE_CHANNELS.recordRecent,
+      request,
+    ) as Promise<SkinLibraryActionResult>;
   },
   getPathForDroppedFile(file: unknown): string {
     try {
@@ -162,6 +202,44 @@ const skinLibraryApi: NativeSkinLibraryApi = {
       SKIN_LIBRARY_CHANNELS.copyIn,
       request,
     ) as Promise<SkinLibraryMutationResult>;
+  },
+  async revealLibrarySkin(filePath: string): Promise<SkinLibraryActionResult> {
+    return ipcRenderer.invoke(
+      SKIN_LIBRARY_CHANNELS.reveal,
+      filePath,
+    ) as Promise<SkinLibraryActionResult>;
+  },
+  async createLibraryCollection(
+    request: CreateSkinLibraryCollectionRequest,
+  ): Promise<SkinLibraryCollectionMutationResult> {
+    return ipcRenderer.invoke(
+      SKIN_LIBRARY_CHANNELS.createCollection,
+      request,
+    ) as Promise<SkinLibraryCollectionMutationResult>;
+  },
+  async renameLibraryCollection(
+    request: RenameSkinLibraryCollectionRequest,
+  ): Promise<SkinLibraryCollectionMutationResult> {
+    return ipcRenderer.invoke(
+      SKIN_LIBRARY_CHANNELS.renameCollection,
+      request,
+    ) as Promise<SkinLibraryCollectionMutationResult>;
+  },
+  async deleteLibraryCollection(
+    collectionId: string,
+  ): Promise<SkinLibraryActionResult> {
+    return ipcRenderer.invoke(
+      SKIN_LIBRARY_CHANNELS.deleteCollection,
+      collectionId,
+    ) as Promise<SkinLibraryActionResult>;
+  },
+  async setLibraryEntryCollections(
+    request: SetSkinLibraryEntryCollectionsRequest,
+  ): Promise<SkinLibraryActionResult> {
+    return ipcRenderer.invoke(
+      SKIN_LIBRARY_CHANNELS.setEntryCollections,
+      request,
+    ) as Promise<SkinLibraryActionResult>;
   },
 };
 

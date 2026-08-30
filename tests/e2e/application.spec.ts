@@ -77,18 +77,27 @@ test('launches the production Electron application shell', async () => {
       hasElectronBridge: false,
       fileApiMethods: [
         'getPathForDroppedFile',
+        'listRecentSkins',
         'onFileCommand',
+        'openRecentSkin',
         'openSkinPng',
+        'recordRecentSkin',
+        'removeRecentSkin',
         'saveSkinPng',
         'saveSkinPngAs',
       ],
       libraryApiMethods: [
         'copySkinToLibrary',
+        'createLibraryCollection',
+        'deleteLibraryCollection',
         'deleteLibrarySkin',
         'duplicateLibrarySkin',
         'listLibrarySkins',
         'openLibrarySkin',
+        'renameLibraryCollection',
         'renameLibrarySkin',
+        'revealLibrarySkin',
+        'setLibraryEntryCollections',
       ],
       previewApiMethods: [
         'notifyPopoutPreviewReady',
@@ -1585,6 +1594,375 @@ test('keeps multiple documents independent and manages the local library', async
     expect(await readdir(libraryDirectory)).toEqual([
       'library-renamed Copy.png',
     ]);
+  } finally {
+    await application.close();
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test('organizes library skins with thumbnails, search, collections, recents, and reveal', async () => {
+  const temporaryDirectory = await mkdtemp(
+    path.join(tmpdir(), 'minecraft-skin-editor-library-ux-e2e-'),
+  );
+  const libraryDirectory = path.join(temporaryDirectory, 'library');
+  const recentStorePath = path.join(temporaryDirectory, 'recent-skins.json');
+  const libraryPath = path.join(libraryDirectory, 'artist.png');
+  const recentSourceDirectory = path.join(temporaryDirectory, 'recent-sources');
+  const savedRecentPath = path.join(temporaryDirectory, 'saved-recent.png');
+  const initialPixels = new Uint8Array(64 * 64 * 4);
+  initialPixels.set([15, 25, 35, 255], 0);
+  await mkdir(libraryDirectory, { recursive: true });
+  await mkdir(recentSourceDirectory, { recursive: true });
+  await writeFile(
+    libraryPath,
+    encode({
+      width: 64,
+      height: 64,
+      data: initialPixels,
+      channels: 4,
+      depth: 8,
+    }),
+  );
+
+  let application = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      MINECRAFT_SKIN_EDITOR_E2E: '1',
+      MINECRAFT_SKIN_EDITOR_E2E_LIBRARY_DIR: libraryDirectory,
+      MINECRAFT_SKIN_EDITOR_RECENTS_PATH: recentStorePath,
+    },
+  });
+
+  try {
+    let window = await application.firstWindow();
+    await expect(window.getByAltText('artist.png thumbnail')).toBeVisible();
+    const initialListing = await window.evaluate(async () => {
+      const browser = globalThis as typeof globalThis & {
+        skinLibrary?: {
+          listLibrarySkins(): Promise<{
+            status: string;
+            entries: Array<{ displayName: string; thumbnailDataUrl?: string }>;
+          }>;
+        };
+      };
+      return browser.skinLibrary?.listLibrarySkins();
+    });
+    expect(initialListing?.status).toBe('success');
+    expect(initialListing?.entries[0]?.thumbnailDataUrl).toMatch(
+      /^data:image\/png;base64,/,
+    );
+
+    const recentSourcePaths = Array.from({ length: 13 }, (_, index) =>
+      path.join(recentSourceDirectory, `recent-${index + 1}.png`),
+    );
+    const recentSourceBytes = encode({
+      width: 64,
+      height: 64,
+      data: new Uint8Array(64 * 64 * 4),
+      channels: 4,
+      depth: 8,
+    });
+    for (const recentSourcePath of recentSourcePaths) {
+      await writeFile(recentSourcePath, recentSourceBytes);
+    }
+    const recordedRecent = await window.evaluate(async (filePaths) => {
+      const browser = globalThis as typeof globalThis & {
+        skinFiles?: {
+          recordRecentSkin(request: {
+            filePath: string;
+            displayName: string;
+          }): Promise<{ status: string }>;
+          listRecentSkins(): Promise<{
+            status: string;
+            entries: Array<{ filePath: string }>;
+          }>;
+        };
+      };
+      const api = browser.skinFiles!;
+      const results = await Promise.all(
+        filePaths.map((filePath) =>
+          api.recordRecentSkin({
+            filePath,
+            displayName: filePath.split(/[\\/]/).pop() ?? filePath,
+          }),
+        ),
+      );
+      return {
+        results,
+        listing: await api.listRecentSkins(),
+      };
+    }, recentSourcePaths);
+    expect(
+      recordedRecent.results.every((result) => result.status === 'success'),
+    ).toBe(true);
+    expect(recordedRecent.listing.entries).toHaveLength(12);
+    expect(
+      new Set(recordedRecent.listing.entries.map((entry) => entry.filePath))
+        .size,
+    ).toBe(12);
+
+    const savedRecent = await window.evaluate(
+      async ({ filePath, bytes }) => {
+        const browser = globalThis as typeof globalThis & {
+          skinFiles?: {
+            saveSkinPng(request: {
+              filePath: string;
+              bytes: Uint8Array;
+            }): Promise<{ status: string }>;
+            listRecentSkins(): Promise<{
+              status: string;
+              entries: Array<{ filePath: string }>;
+            }>;
+          };
+        };
+        const api = browser.skinFiles!;
+        const result = await api.saveSkinPng({
+          filePath,
+          bytes: Uint8Array.from(bytes),
+        });
+        return { result, listing: await api.listRecentSkins() };
+      },
+      { filePath: savedRecentPath, bytes: Array.from(recentSourceBytes) },
+    );
+    expect(savedRecent.result).toEqual({ status: 'success' });
+    expect(savedRecent.listing.entries[0]?.filePath).toBe(savedRecentPath);
+
+    await window
+      .getByRole('button', { name: 'Create library collection' })
+      .click();
+    await window.getByLabel('New collection name').fill('Characters');
+    await window
+      .getByRole('button', { name: 'Create collection', exact: true })
+      .click();
+    await expect(
+      window.getByRole('option', { name: /Characters \(0\)/ }),
+    ).toBeAttached();
+
+    await window
+      .locator('[data-testid="library-entry"]')
+      .filter({ hasText: 'artist.png' })
+      .getByText(/Collections/)
+      .click();
+    await window.getByLabel('Add artist.png to Characters').click();
+    await expect(
+      window.getByRole('option', { name: /Characters \(1\)/ }),
+    ).toBeAttached();
+    const invalidRename = await window.evaluate(async (filePath) => {
+      const browser = globalThis as typeof globalThis & {
+        skinLibrary?: {
+          renameLibrarySkin(request: {
+            filePath: string;
+            displayName: string;
+          }): Promise<unknown>;
+        };
+      };
+      return browser.skinLibrary?.renameLibrarySkin({
+        filePath,
+        displayName: 'CON.png',
+      });
+    }, libraryPath);
+    expect(invalidRename).toEqual({
+      status: 'error',
+      error: {
+        code: 'write_failed',
+        message: 'Choose a safe PNG filename within the application library.',
+      },
+    });
+    await window.getByRole('button', { name: 'Open artist.png' }).click();
+    await expect(
+      window.getByRole('tab', { name: /artist\.png/ }),
+    ).toBeVisible();
+    await expect(
+      window.getByRole('button', { name: 'Open recent artist.png' }),
+    ).toBeVisible();
+
+    await window.getByLabel('Search local library').fill('characters');
+    await expect(
+      window.getByRole('button', { name: 'Open artist.png' }),
+    ).toBeVisible();
+    await window.getByLabel('Search local library').fill('');
+    await window
+      .getByLabel('Filter local library by collection')
+      .selectOption({ label: 'Characters (1)' });
+    await expect(
+      window.getByRole('button', { name: 'Open artist.png' }),
+    ).toBeVisible();
+
+    await window.getByRole('button', { name: 'Rename artist.png' }).click();
+    await window
+      .getByLabel('New name for artist.png')
+      .fill('artist-renamed.png');
+    await window
+      .getByRole('button', { name: 'Save rename for artist.png' })
+      .click();
+    const renamedPath = path.join(libraryDirectory, 'artist-renamed.png');
+    await expect(
+      window.getByRole('button', { name: 'Open artist-renamed.png' }),
+    ).toBeVisible();
+    await expect(
+      window.getByRole('tab', { name: /artist-renamed\.png/ }),
+    ).toBeVisible();
+
+    const renamedListing = await window.evaluate(async () => {
+      const browser = globalThis as typeof globalThis & {
+        skinLibrary?: {
+          listLibrarySkins(): Promise<{
+            status: string;
+            entries: Array<{
+              displayName: string;
+              collectionIds: string[];
+            }>;
+            collections: Array<{ displayName: string; entryCount: number }>;
+          }>;
+        };
+      };
+      return browser.skinLibrary?.listLibrarySkins();
+    });
+    expect(renamedListing?.entries[0]?.displayName).toBe('artist-renamed.png');
+    expect(renamedListing?.entries[0]?.collectionIds).toHaveLength(1);
+    expect(renamedListing?.collections[0]).toMatchObject({
+      displayName: 'Characters',
+      entryCount: 1,
+    });
+
+    await window
+      .getByRole('button', { name: 'Duplicate artist-renamed.png' })
+      .click();
+    await expect(
+      window.getByRole('button', { name: 'Open artist-renamed Copy.png' }),
+    ).toBeVisible();
+    await expect(
+      window.getByRole('option', { name: /Characters \(2\)/ }),
+    ).toBeAttached();
+    const duplicatedListing = await window.evaluate(async () => {
+      const browser = globalThis as typeof globalThis & {
+        skinLibrary?: {
+          listLibrarySkins(): Promise<{
+            status: string;
+            entries: Array<{
+              displayName: string;
+              collectionIds: string[];
+            }>;
+          }>;
+        };
+      };
+      return browser.skinLibrary?.listLibrarySkins();
+    });
+    expect(
+      duplicatedListing?.entries.find(
+        (entry) => entry.displayName === 'artist-renamed Copy.png',
+      )?.collectionIds,
+    ).toHaveLength(1);
+    await window
+      .getByRole('button', { name: 'Open artist-renamed Copy.png' })
+      .click();
+    await expect(
+      window.getByRole('tab', { name: /artist-renamed Copy\.png/ }),
+    ).toBeVisible();
+
+    await application.close();
+    application = await electron.launch({
+      args: ['.'],
+      env: {
+        ...process.env,
+        MINECRAFT_SKIN_EDITOR_E2E: '1',
+        MINECRAFT_SKIN_EDITOR_E2E_LIBRARY_DIR: libraryDirectory,
+        MINECRAFT_SKIN_EDITOR_RECENTS_PATH: recentStorePath,
+      },
+    });
+    window = await application.firstWindow();
+    await expect(
+      window.getByRole('option', { name: /Characters \(2\)/ }),
+    ).toBeAttached();
+    await expect(
+      window.getByRole('button', { name: 'Open recent artist-renamed.png' }),
+    ).toBeVisible();
+    await expect(
+      window.getByRole('button', {
+        name: 'Open recent artist-renamed Copy.png',
+      }),
+    ).toBeVisible();
+
+    const revealResult = await window.evaluate(async (filePath) => {
+      const browser = globalThis as typeof globalThis & {
+        skinLibrary?: {
+          revealLibrarySkin(filePath: string): Promise<unknown>;
+        };
+      };
+      return browser.skinLibrary?.revealLibrarySkin(filePath);
+    }, renamedPath);
+    expect(revealResult).toEqual({ status: 'success' });
+
+    const updatedPixels = new Uint8Array(64 * 64 * 4);
+    updatedPixels.set([210, 120, 30, 255], 0);
+    await writeFile(
+      renamedPath,
+      encode({
+        width: 64,
+        height: 64,
+        data: updatedPixels,
+        channels: 4,
+        depth: 8,
+      }),
+    );
+    await window.getByRole('button', { name: 'Refresh local library' }).click();
+    const updatedListing = await window.evaluate(async () => {
+      const browser = globalThis as typeof globalThis & {
+        skinLibrary?: {
+          listLibrarySkins(): Promise<{
+            status: string;
+            entries: Array<{
+              displayName: string;
+              thumbnailDataUrl?: string;
+            }>;
+          }>;
+        };
+      };
+      return browser.skinLibrary?.listLibrarySkins();
+    });
+    const updatedThumbnail = updatedListing?.entries.find(
+      (entry) => entry.displayName === 'artist-renamed.png',
+    )?.thumbnailDataUrl;
+    expect(updatedThumbnail).toBeDefined();
+    expect(updatedThumbnail).not.toBe(
+      initialListing?.entries[0]?.thumbnailDataUrl,
+    );
+
+    const recentListing = await window.evaluate(async () => {
+      const browser = globalThis as typeof globalThis & {
+        skinFiles?: {
+          listRecentSkins(): Promise<{
+            status: string;
+            entries: Array<{ filePath: string }>;
+          }>;
+        };
+      };
+      return browser.skinFiles?.listRecentSkins();
+    });
+    expect(
+      recentListing?.entries.filter((entry) => entry.filePath === renamedPath),
+    ).toHaveLength(1);
+
+    await rm(renamedPath, { force: true });
+    await window.getByRole('button', { name: 'Refresh local library' }).click();
+    await expect(window.getByText('Missing', { exact: true })).toBeVisible();
+    await window
+      .getByRole('button', { name: 'Remove recent artist-renamed.png' })
+      .click();
+    await window
+      .getByRole('button', { name: 'Remove recent artist-renamed Copy.png' })
+      .click();
+    await expect(
+      window.getByRole('button', {
+        name: 'Remove recent artist-renamed.png',
+      }),
+    ).toHaveCount(0);
+    await expect(
+      window.getByRole('button', {
+        name: 'Remove recent artist-renamed Copy.png',
+      }),
+    ).toHaveCount(0);
   } finally {
     await application.close();
     await rm(temporaryDirectory, { recursive: true, force: true });

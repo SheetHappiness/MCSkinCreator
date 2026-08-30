@@ -1,17 +1,33 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
 
-import type { SkinLibraryEntry } from '../../../electron/fileContract';
+import type {
+  RecentSkinEntry,
+  SkinLibraryCollection,
+  SkinLibraryEntry,
+} from '../../../electron/fileContract';
 import { useDocumentSessionState } from '../file-management/fileLifecycleStore';
 import {
   LOCAL_SKIN_LIBRARY_DRAG_TYPE,
   copyActiveDocumentToLibrary,
+  createLibraryCollection,
+  deleteLibraryCollection,
   deleteLibraryEntry,
   duplicateLibraryEntry,
   openLibraryEntry,
+  openRecentEntry,
   refreshLibrary,
+  removeRecentEntry,
+  renameLibraryCollection,
   renameLibraryEntry,
+  revealLibraryEntry,
+  setLibraryEntryCollections,
   useLocalSkinLibrary,
 } from './localSkinLibrary';
+import {
+  filterLibraryEntries,
+  filterRecentEntries,
+  updateCollectionSelection,
+} from './libraryQueries';
 
 interface LibraryPanelProps {
   readonly onCollapse?: () => void;
@@ -22,16 +38,177 @@ function formatByteLength(byteLength: number): string {
   return `${Math.ceil(byteLength / 1024)} KB`;
 }
 
+function Thumbnail({
+  dataUrl,
+  displayName,
+}: {
+  readonly dataUrl: string | undefined;
+  readonly displayName: string;
+}) {
+  return dataUrl === undefined ? (
+    <span
+      className="library-thumbnail library-thumbnail--empty"
+      aria-hidden="true"
+    >
+      —
+    </span>
+  ) : (
+    <img
+      className="library-thumbnail"
+      src={dataUrl}
+      alt={`${displayName} thumbnail`}
+      draggable={false}
+    />
+  );
+}
+
+function CollectionAssignment({
+  entry,
+  collections,
+  disabled,
+  onChange,
+}: {
+  readonly entry: SkinLibraryEntry;
+  readonly collections: readonly SkinLibraryCollection[];
+  readonly disabled: boolean;
+  readonly onChange: (collectionIds: readonly string[]) => void;
+}) {
+  if (collections.length === 0) return null;
+  return (
+    <details className="library-entry__collections">
+      <summary>
+        Collections
+        {entry.collectionIds.length > 0
+          ? ` · ${entry.collectionIds.length}`
+          : ''}
+      </summary>
+      <div className="library-entry__collection-list">
+        {collections.map((collection) => {
+          const checked = entry.collectionIds.includes(collection.id);
+          return (
+            <label key={collection.id}>
+              <input
+                type="checkbox"
+                aria-label={`${checked ? 'Remove' : 'Add'} ${entry.displayName} ${checked ? 'from' : 'to'} ${collection.displayName}`}
+                checked={checked}
+                disabled={disabled}
+                onChange={(event) =>
+                  onChange(
+                    updateCollectionSelection(
+                      entry.collectionIds,
+                      collection.id,
+                      event.target.checked,
+                    ),
+                  )
+                }
+              />
+              <span>{collection.displayName}</span>
+            </label>
+          );
+        })}
+      </div>
+    </details>
+  );
+}
+
+function RecentEntry({
+  entry,
+  isBusy,
+  onOpen,
+  onRemove,
+}: {
+  readonly entry: RecentSkinEntry;
+  readonly isBusy: boolean;
+  readonly onOpen: () => void;
+  readonly onRemove: () => void;
+}) {
+  return (
+    <li className="recent-entry" data-testid="recent-entry">
+      <button
+        type="button"
+        className="recent-entry__open"
+        aria-label={`Open recent ${entry.displayName}`}
+        disabled={isBusy || !entry.isAvailable}
+        onClick={onOpen}
+      >
+        <Thumbnail
+          dataUrl={entry.thumbnailDataUrl}
+          displayName={entry.displayName}
+        />
+        <span className="recent-entry__name">{entry.displayName}</span>
+        {!entry.isAvailable ? (
+          <span className="recent-entry__missing">Missing</span>
+        ) : null}
+      </button>
+      <button
+        type="button"
+        className="recent-entry__remove"
+        aria-label={`Remove recent ${entry.displayName}`}
+        title="Remove from recent skins"
+        disabled={isBusy}
+        onClick={onRemove}
+      >
+        ×
+      </button>
+    </li>
+  );
+}
+
 export function LibraryPanel({ onCollapse }: LibraryPanelProps = {}) {
-  const { entries, rootDisplayName, isBusy, error } = useLocalSkinLibrary();
+  const {
+    entries,
+    collections,
+    recentEntries,
+    rootDisplayName,
+    isBusy,
+    error,
+  } = useLocalSkinLibrary();
   const { session } = useDocumentSessionState();
   const [renamingPath, setRenamingPath] = useState<string | undefined>();
   const [renameValue, setRenameValue] = useState('');
   const [deletingPath, setDeletingPath] = useState<string | undefined>();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCollectionId, setSelectedCollectionId] = useState<
+    string | undefined
+  >();
+  const [isCreatingCollection, setIsCreatingCollection] = useState(false);
+  const [collectionValue, setCollectionValue] = useState('');
+  const [renamingCollectionId, setRenamingCollectionId] = useState<
+    string | undefined
+  >();
+  const [collectionRenameValue, setCollectionRenameValue] = useState('');
+  const [deletingCollectionId, setDeletingCollectionId] = useState<
+    string | undefined
+  >();
 
   useEffect(() => {
     void refreshLibrary();
   }, []);
+
+  // A successful save of a library-backed tab changes the file bytes. Refresh
+  // only on the clean transition so painting does not re-read every stroke.
+  useEffect(() => {
+    if (session?.filePath !== undefined && !session.document.isDirty) {
+      void refreshLibrary();
+    }
+  }, [session?.filePath, session?.document.isDirty]);
+
+  const effectiveSelectedCollectionId =
+    selectedCollectionId !== undefined &&
+    collections.some((collection) => collection.id === selectedCollectionId)
+      ? selectedCollectionId
+      : undefined;
+
+  const visibleEntries = filterLibraryEntries(
+    entries,
+    collections,
+    searchQuery,
+    effectiveSelectedCollectionId,
+  );
+  const visibleRecentEntries = filterRecentEntries(recentEntries, searchQuery);
+  const selectedCollection = collections.find(
+    (collection) => collection.id === effectiveSelectedCollectionId,
+  );
 
   const beginRename = (entry: SkinLibraryEntry) => {
     setDeletingPath(undefined);
@@ -45,8 +222,7 @@ export function LibraryPanel({ onCollapse }: LibraryPanelProps = {}) {
   };
 
   const submitRename = async (entry: SkinLibraryEntry) => {
-    await renameLibraryEntry(entry, renameValue);
-    cancelRename();
+    if (await renameLibraryEntry(entry, renameValue)) cancelRename();
   };
 
   const handleRenameKeyDown = (
@@ -59,6 +235,34 @@ export function LibraryPanel({ onCollapse }: LibraryPanelProps = {}) {
     } else if (event.key === 'Escape') {
       event.preventDefault();
       cancelRename();
+    }
+  };
+
+  const submitCollection = async () => {
+    if (await createLibraryCollection(collectionValue)) {
+      setIsCreatingCollection(false);
+      setCollectionValue('');
+    }
+  };
+
+  const submitCollectionRename = async (collection: SkinLibraryCollection) => {
+    if (await renameLibraryCollection(collection, collectionRenameValue)) {
+      setRenamingCollectionId(undefined);
+      setCollectionRenameValue('');
+    }
+  };
+
+  const handleCollectionRenameKeyDown = (
+    event: KeyboardEvent<HTMLInputElement>,
+    collection: SkinLibraryCollection,
+  ) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void submitCollectionRename(collection);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      setRenamingCollectionId(undefined);
+      setCollectionRenameValue('');
     }
   };
 
@@ -97,6 +301,181 @@ export function LibraryPanel({ onCollapse }: LibraryPanelProps = {}) {
         </div>
       </header>
 
+      <div className="library-panel__toolbar">
+        <label className="library-search">
+          <span>Search</span>
+          <input
+            aria-label="Search local library"
+            type="search"
+            value={searchQuery}
+            placeholder="Filename or collection"
+            onChange={(event) => setSearchQuery(event.target.value)}
+          />
+        </label>
+        <div className="library-collection-toolbar">
+          <select
+            aria-label="Filter local library by collection"
+            value={effectiveSelectedCollectionId ?? ''}
+            disabled={isBusy}
+            onChange={(event) =>
+              setSelectedCollectionId(event.target.value || undefined)
+            }
+          >
+            <option value="">All skins</option>
+            {collections.map((collection) => (
+              <option key={collection.id} value={collection.id}>
+                {collection.displayName} ({collection.entryCount})
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            aria-label="Create library collection"
+            disabled={isBusy}
+            onClick={() => {
+              setRenamingCollectionId(undefined);
+              setDeletingCollectionId(undefined);
+              setIsCreatingCollection(true);
+            }}
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      {isCreatingCollection ? (
+        <div className="library-collection-form">
+          <input
+            aria-label="New collection name"
+            value={collectionValue}
+            placeholder="Collection name"
+            disabled={isBusy}
+            onChange={(event) => setCollectionValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                void submitCollection();
+              } else if (event.key === 'Escape') {
+                setIsCreatingCollection(false);
+                setCollectionValue('');
+              }
+            }}
+          />
+          <button
+            type="button"
+            aria-label="Create collection"
+            disabled={isBusy}
+            onClick={() => void submitCollection()}
+          >
+            Create
+          </button>
+          <button
+            type="button"
+            aria-label="Cancel create collection"
+            disabled={isBusy}
+            onClick={() => {
+              setIsCreatingCollection(false);
+              setCollectionValue('');
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
+
+      {selectedCollection !== undefined ? (
+        <div className="library-selected-collection">
+          {renamingCollectionId === selectedCollection.id ? (
+            <>
+              <input
+                aria-label={`New name for collection ${selectedCollection.displayName}`}
+                value={collectionRenameValue}
+                disabled={isBusy}
+                onChange={(event) =>
+                  setCollectionRenameValue(event.target.value)
+                }
+                onKeyDown={(event) =>
+                  handleCollectionRenameKeyDown(event, selectedCollection)
+                }
+              />
+              <button
+                type="button"
+                aria-label={`Save rename for collection ${selectedCollection.displayName}`}
+                disabled={isBusy}
+                onClick={() => void submitCollectionRename(selectedCollection)}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                aria-label={`Cancel rename for collection ${selectedCollection.displayName}`}
+                disabled={isBusy}
+                onClick={() => {
+                  setRenamingCollectionId(undefined);
+                  setCollectionRenameValue('');
+                }}
+              >
+                Cancel
+              </button>
+            </>
+          ) : deletingCollectionId === selectedCollection.id ? (
+            <>
+              <span>Delete “{selectedCollection.displayName}”?</span>
+              <button
+                type="button"
+                aria-label={`Confirm delete collection ${selectedCollection.displayName}`}
+                disabled={isBusy}
+                onClick={() => {
+                  void deleteLibraryCollection(selectedCollection).then(
+                    (ok) => {
+                      if (ok) {
+                        setDeletingCollectionId(undefined);
+                        setSelectedCollectionId(undefined);
+                      }
+                    },
+                  );
+                }}
+              >
+                Confirm
+              </button>
+              <button
+                type="button"
+                aria-label={`Cancel delete collection ${selectedCollection.displayName}`}
+                disabled={isBusy}
+                onClick={() => setDeletingCollectionId(undefined)}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="library-selected-collection__name">
+                {selectedCollection.displayName}
+              </span>
+              <button
+                type="button"
+                aria-label={`Rename collection ${selectedCollection.displayName}`}
+                disabled={isBusy}
+                onClick={() => {
+                  setRenamingCollectionId(selectedCollection.id);
+                  setCollectionRenameValue(selectedCollection.displayName);
+                }}
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                aria-label={`Delete collection ${selectedCollection.displayName}`}
+                disabled={isBusy}
+                onClick={() => setDeletingCollectionId(selectedCollection.id)}
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
+
       {error === undefined ? null : (
         <p className="library-panel__error" role="alert">
           {error.message}
@@ -104,133 +483,203 @@ export function LibraryPanel({ onCollapse }: LibraryPanelProps = {}) {
       )}
 
       <div className="library-panel__content">
-        {entries.length === 0 ? (
-          <p className="library-panel__empty">
-            {isBusy ? 'Refreshing…' : 'No PNG skins in the library.'}
-          </p>
-        ) : (
-          <ul className="library-entry-list">
-            {entries.map((entry) => {
-              const isRenaming = renamingPath === entry.filePath;
-              const isDeleting = deletingPath === entry.filePath;
-              return (
-                <li
-                  className="library-entry"
-                  data-testid="library-entry"
+        {visibleRecentEntries.length > 0 ? (
+          <section
+            className="library-section"
+            aria-labelledby="recent-skins-heading"
+          >
+            <div className="library-section__header">
+              <h3 id="recent-skins-heading">Recently Opened</h3>
+              <span>{recentEntries.length}/12</span>
+            </div>
+            <ul className="recent-entry-list">
+              {visibleRecentEntries.map((entry) => (
+                <RecentEntry
                   key={entry.filePath}
-                >
-                  {isRenaming ? (
-                    <div className="library-entry__rename">
-                      <input
-                        aria-label={`New name for ${entry.displayName}`}
-                        value={renameValue}
-                        disabled={isBusy}
-                        onChange={(event) => setRenameValue(event.target.value)}
-                        onKeyDown={(event) => handleRenameKeyDown(event, entry)}
-                      />
-                      <button
-                        type="button"
-                        aria-label={`Save rename for ${entry.displayName}`}
-                        disabled={isBusy}
-                        onClick={() => void submitRename(entry)}
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Cancel rename for ${entry.displayName}`}
-                        disabled={isBusy}
-                        onClick={cancelRename}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="library-entry__summary">
+                  entry={entry}
+                  isBusy={isBusy}
+                  onOpen={() => void openRecentEntry(entry)}
+                  onRemove={() => void removeRecentEntry(entry)}
+                />
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        <section
+          className="library-section"
+          aria-labelledby="library-skins-heading"
+        >
+          <div className="library-section__header">
+            <h3 id="library-skins-heading">
+              {selectedCollection === undefined
+                ? 'Library skins'
+                : selectedCollection.displayName}
+            </h3>
+            <span>{visibleEntries.length}</span>
+          </div>
+          {visibleEntries.length === 0 ? (
+            <p className="library-panel__empty">
+              {isBusy
+                ? 'Refreshing…'
+                : entries.length === 0
+                  ? 'No PNG skins in the library.'
+                  : 'No skins match this view.'}
+            </p>
+          ) : (
+            <ul className="library-entry-list">
+              {visibleEntries.map((entry) => {
+                const isRenaming = renamingPath === entry.filePath;
+                const isDeleting = deletingPath === entry.filePath;
+                return (
+                  <li
+                    className="library-entry"
+                    data-testid="library-entry"
+                    key={entry.filePath}
+                  >
+                    {isRenaming ? (
+                      <div className="library-entry__rename">
+                        <input
+                          aria-label={`New name for ${entry.displayName}`}
+                          value={renameValue}
+                          disabled={isBusy}
+                          onChange={(event) =>
+                            setRenameValue(event.target.value)
+                          }
+                          onKeyDown={(event) =>
+                            handleRenameKeyDown(event, entry)
+                          }
+                        />
                         <button
                           type="button"
-                          className="library-entry__open"
-                          draggable
-                          aria-label={`Open ${entry.displayName}`}
+                          aria-label={`Save rename for ${entry.displayName}`}
                           disabled={isBusy}
-                          onDragStart={(event) => {
-                            event.dataTransfer.effectAllowed = 'copy';
-                            event.dataTransfer.setData(
-                              LOCAL_SKIN_LIBRARY_DRAG_TYPE,
-                              entry.filePath,
-                            );
-                            event.dataTransfer.setData(
-                              'text/plain',
-                              `minecraft-skin-library:${entry.filePath}`,
-                            );
-                          }}
-                          onClick={() => void openLibraryEntry(entry)}
+                          onClick={() => void submitRename(entry)}
                         >
-                          {entry.displayName}
+                          Save
                         </button>
-                        <span>{formatByteLength(entry.byteLength)}</span>
+                        <button
+                          type="button"
+                          aria-label={`Cancel rename for ${entry.displayName}`}
+                          disabled={isBusy}
+                          onClick={cancelRename}
+                        >
+                          Cancel
+                        </button>
                       </div>
-                      <div className="library-entry__actions">
-                        <button
-                          type="button"
-                          aria-label={`Rename ${entry.displayName}`}
-                          disabled={isBusy}
-                          onClick={() => beginRename(entry)}
-                        >
-                          Rename
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Duplicate ${entry.displayName}`}
-                          disabled={isBusy}
-                          onClick={() => void duplicateLibraryEntry(entry)}
-                        >
-                          Duplicate
-                        </button>
-                        {isDeleting ? (
-                          <>
-                            <button
-                              type="button"
-                              aria-label={`Confirm delete ${entry.displayName}`}
-                              disabled={isBusy}
-                              onClick={() => {
-                                setDeletingPath(undefined);
-                                void deleteLibraryEntry(entry);
-                              }}
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={`Cancel delete ${entry.displayName}`}
-                              disabled={isBusy}
-                              onClick={() => setDeletingPath(undefined)}
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
+                    ) : (
+                      <>
+                        <div className="library-entry__summary">
                           <button
                             type="button"
-                            aria-label={`Delete ${entry.displayName}`}
+                            className="library-entry__open"
+                            draggable
+                            aria-label={`Open ${entry.displayName}`}
                             disabled={isBusy}
-                            onClick={() => {
-                              setRenamingPath(undefined);
-                              setDeletingPath(entry.filePath);
+                            onDragStart={(event) => {
+                              event.dataTransfer.effectAllowed = 'copy';
+                              event.dataTransfer.setData(
+                                LOCAL_SKIN_LIBRARY_DRAG_TYPE,
+                                entry.filePath,
+                              );
+                              event.dataTransfer.setData(
+                                'text/plain',
+                                `minecraft-skin-library:${entry.filePath}`,
+                              );
                             }}
+                            onClick={() => void openLibraryEntry(entry)}
                           >
-                            Delete
+                            <Thumbnail
+                              dataUrl={entry.thumbnailDataUrl}
+                              displayName={entry.displayName}
+                            />
+                            <span className="library-entry__name">
+                              {entry.displayName}
+                            </span>
                           </button>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                          <span>{formatByteLength(entry.byteLength)}</span>
+                        </div>
+                        <CollectionAssignment
+                          entry={entry}
+                          collections={collections}
+                          disabled={isBusy}
+                          onChange={(collectionIds) =>
+                            void setLibraryEntryCollections(
+                              entry,
+                              collectionIds,
+                            )
+                          }
+                        />
+                        <div className="library-entry__actions">
+                          <button
+                            type="button"
+                            aria-label={`Rename ${entry.displayName}`}
+                            disabled={isBusy}
+                            onClick={() => beginRename(entry)}
+                          >
+                            Rename
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Duplicate ${entry.displayName}`}
+                            disabled={isBusy}
+                            onClick={() => void duplicateLibraryEntry(entry)}
+                          >
+                            Duplicate
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Reveal ${entry.displayName}`}
+                            disabled={isBusy}
+                            onClick={() => void revealLibraryEntry(entry)}
+                          >
+                            Reveal
+                          </button>
+                          {isDeleting ? (
+                            <>
+                              <button
+                                type="button"
+                                aria-label={`Confirm delete ${entry.displayName}`}
+                                disabled={isBusy}
+                                onClick={() => {
+                                  void deleteLibraryEntry(entry).then((ok) => {
+                                    if (ok) setDeletingPath(undefined);
+                                  });
+                                }}
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`Cancel delete ${entry.displayName}`}
+                                disabled={isBusy}
+                                onClick={() => setDeletingPath(undefined)}
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              aria-label={`Delete ${entry.displayName}`}
+                              disabled={isBusy}
+                              onClick={() => {
+                                setRenamingPath(undefined);
+                                setDeletingPath(entry.filePath);
+                              }}
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
       </div>
 
       <footer className="library-panel__footer">
