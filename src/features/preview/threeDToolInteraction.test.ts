@@ -14,7 +14,10 @@ import {
   setToolOptions,
 } from '../editor/toolOptions';
 import { resetSymmetryMode, setSymmetryMode } from '../editor/symmetryStore';
-import { ThreeDToolInteraction } from './threeDToolInteraction';
+import {
+  isThreeDInspectAction,
+  ThreeDToolInteraction,
+} from './threeDToolInteraction';
 
 const PAINT_COLOR: RgbaColor = { r: 220, g: 80, b: 40, a: 255 };
 
@@ -39,6 +42,37 @@ function pick(
 }
 
 describe('direct 3D tool interaction', () => {
+  it('reserves Ctrl/Cmd plus left click for semantic inspection', () => {
+    expect(
+      isThreeDInspectAction({
+        button: 0,
+        ctrlKey: true,
+        metaKey: false,
+      }),
+    ).toBe(true);
+    expect(
+      isThreeDInspectAction({
+        button: 0,
+        ctrlKey: false,
+        metaKey: true,
+      }),
+    ).toBe(true);
+    expect(
+      isThreeDInspectAction({
+        button: 0,
+        ctrlKey: false,
+        metaKey: false,
+      }),
+    ).toBe(false);
+    expect(
+      isThreeDInspectAction({
+        button: 2,
+        ctrlKey: true,
+        metaKey: false,
+      }),
+    ).toBe(false);
+  });
+
   afterEach(() => {
     resetEditorColors();
     resetToolOptions();

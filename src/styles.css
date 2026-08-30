@@ -1819,6 +1819,11 @@ body.is-workspace-resizing-horizontal * {
   flex: 1 1 auto;
 }
 
+.skin-preview-select-button {
+  flex: 0 0 29px;
+  padding-inline: 2px !important;
+}
+
 .skin-preview-isolate-button {
   flex: 0 0 37px;
   padding-inline: 2px !important;

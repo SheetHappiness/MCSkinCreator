@@ -23,6 +23,13 @@ import { getToolOptions } from '../editor/toolOptions';
 
 type SurfaceIdentity = SymmetrySurface;
 
+/** Ctrl/Cmd + left click is reserved for semantic inspection/focus. */
+export function isThreeDInspectAction(
+  event: Pick<PointerEvent, 'button' | 'ctrlKey' | 'metaKey'>,
+): boolean {
+  return event.button === 0 && (event.ctrlKey || event.metaKey);
+}
+
 function surfaceIdentity(pick: SkinPickResult): SurfaceIdentity {
   return {
     model: pick.model,

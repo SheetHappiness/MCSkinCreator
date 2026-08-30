@@ -10,6 +10,8 @@ import {
   getTextureFocusBounds,
   queryTextureSemantic,
   queryTextureSemantics,
+  sameSkinSemanticTarget,
+  skinSemanticTargetKey,
   type BodyPart,
   type CubeFace,
   type SkinLayer,
@@ -17,6 +19,29 @@ import {
 } from '.';
 
 describe('canonical texture semantics', () => {
+  it('exposes a stable renderer-independent target address', () => {
+    const target = queryTextureSemantic({
+      model: 'slim',
+      x: 44,
+      y: 20,
+      layer: 'base',
+    });
+
+    expect(target).toMatchObject({
+      model: 'slim',
+      bodyPart: 'rightArm',
+      layer: 'base',
+      face: 'front',
+    });
+    expect(skinSemanticTargetKey(target!)).toBe('slim:rightArm:base:front');
+    expect(sameSkinSemanticTarget(target, target)).toBe(true);
+    expect(sameSkinSemanticTarget(target, { ...target!, face: 'back' })).toBe(
+      false,
+    );
+    expect(sameSkinSemanticTarget(undefined, undefined)).toBe(true);
+    expect(sameSkinSemanticTarget(target, undefined)).toBe(false);
+  });
+
   it('maps every canonical face texel to exactly one semantic within a model and layer', () => {
     for (const model of SKIN_MODELS) {
       for (const entry of collectCanonicalRegions(model)) {
@@ -39,6 +64,7 @@ describe('canonical texture semantics', () => {
               }),
             ).toEqual([
               {
+                model,
                 bodyPart: entry.bodyPart,
                 layer: entry.layer,
                 face: entry.face,

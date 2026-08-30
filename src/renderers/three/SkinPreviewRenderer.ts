@@ -12,7 +12,12 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import type { SkinDocument } from '../../engine/document';
 import type { EditorTool } from '../../engine/tools';
-import { BODY_PARTS, type BodyPart } from '../../engine/minecraft-skin-spec';
+import {
+  BODY_PARTS,
+  skinSemanticTargetKey,
+  type BodyPart,
+  type SkinSemanticTarget,
+} from '../../engine/minecraft-skin-spec';
 import { SkinModelResources } from './SkinModelBuilder';
 import { pickSkinAtClientPoint, type SkinPickResult } from './SkinPicking';
 import { SkinTexture } from './SkinTexture';
@@ -129,6 +134,8 @@ export class SkinPreviewRenderer {
   private readonly onPointerCancel: SkinPreviewRendererOptions['onPointerCancel'];
   private readonly onPointerLeave: SkinPreviewRendererOptions['onPointerLeave'];
   private lastPickKey: string | undefined;
+  private highlightedTarget: SkinSemanticTarget | undefined;
+  private selectedTarget: SkinSemanticTarget | undefined;
 
   constructor(
     private readonly mount: HTMLElement,
@@ -150,8 +157,9 @@ export class SkinPreviewRenderer {
     this.renderer.domElement.setAttribute('role', 'img');
     this.renderer.domElement.setAttribute(
       'aria-label',
-      '3D skin preview; left drag edits, Shift plus left uses secondary, right drag orbits',
+      '3D skin preview; left drag edits, Shift plus left uses secondary, Ctrl plus left click focuses the 2D canvas, right drag orbits',
     );
+    this.renderer.domElement.dataset.inspectAction = 'Control+click';
     this.renderer.domElement.tabIndex = 0;
     this.renderer.domElement.setAttribute('data-preview-ready', 'true');
     this.mount.append(this.renderer.domElement);
@@ -176,6 +184,7 @@ export class SkinPreviewRenderer {
       'pointerleave',
       this.handlePointerLeave,
     );
+    this.renderer.domElement.addEventListener('blur', this.handleCanvasBlur);
     this.ownerWindow?.addEventListener('blur', this.cancelActivePointers);
 
     this.camera.position.copy(CAMERA_POSITION);
@@ -214,6 +223,11 @@ export class SkinPreviewRenderer {
   setDocument(document: SkinDocument): void {
     if (this.disposed || document === this.document) return;
 
+    this.publishPick(undefined);
+    this.highlightedTarget = undefined;
+    this.selectedTarget = undefined;
+    this.modelResources.setHighlightedTarget(undefined);
+    this.modelResources.setSelectedTarget(undefined);
     this.unsubscribeDocument();
     this.document = document;
     this.skinTexture.update(document);
@@ -272,6 +286,34 @@ export class SkinPreviewRenderer {
     this.renderer.domElement.dataset.editingTool = tool;
   }
 
+  setHighlightedTarget(target: SkinSemanticTarget | undefined): void {
+    if (this.disposed) return;
+    if (
+      this.semanticTargetKey(this.highlightedTarget) ===
+      this.semanticTargetKey(target)
+    ) {
+      return;
+    }
+    this.highlightedTarget = target;
+    this.modelResources.setHighlightedTarget(target);
+    this.syncDebugState();
+    this.requestRender();
+  }
+
+  setSelectedTarget(target: SkinSemanticTarget | undefined): void {
+    if (this.disposed) return;
+    if (
+      this.semanticTargetKey(this.selectedTarget) ===
+      this.semanticTargetKey(target)
+    ) {
+      return;
+    }
+    this.selectedTarget = target;
+    this.modelResources.setSelectedTarget(target);
+    this.syncDebugState();
+    this.requestRender();
+  }
+
   cancelPointerInteractions(): void {
     if (this.disposed) return;
     this.cancelActivePointers();
@@ -281,6 +323,8 @@ export class SkinPreviewRenderer {
     if (this.disposed || visible === this.outerVisible) return;
     this.outerVisible = visible;
     this.modelResources.setOuterVisible(visible);
+    this.clearSemanticTargets();
+    this.publishPick(undefined);
     this.syncDebugState();
     this.requestRender();
   }
@@ -289,6 +333,8 @@ export class SkinPreviewRenderer {
     if (this.disposed || visible === this.baseVisible) return;
     this.baseVisible = visible;
     this.modelResources.setBaseVisible(visible);
+    this.clearSemanticTargets();
+    this.publishPick(undefined);
     this.syncDebugState();
     this.requestRender();
   }
@@ -299,6 +345,8 @@ export class SkinPreviewRenderer {
     }
     this.bodyPartVisibility.set(bodyPart, visible);
     this.modelResources.setBodyPartVisible(bodyPart, visible);
+    this.clearSemanticTargets();
+    this.publishPick(undefined);
     this.syncDebugState();
     this.requestRender();
   }
@@ -311,6 +359,7 @@ export class SkinPreviewRenderer {
     this.controls.removeEventListener('change', this.handleControlsChange);
     this.controls.dispose();
     this.ownerWindow?.removeEventListener('blur', this.cancelActivePointers);
+    this.renderer.domElement.removeEventListener('blur', this.handleCanvasBlur);
     this.renderer.domElement.removeEventListener(
       'pointermove',
       this.handlePointerMove,
@@ -376,6 +425,7 @@ export class SkinPreviewRenderer {
 
   private readonly handlePointerCancel = (event: PointerEvent) => {
     this.activePointerIds.delete(event.pointerId);
+    this.publishPick(undefined);
     this.onPointerCancel?.(event, undefined);
   };
 
@@ -388,6 +438,11 @@ export class SkinPreviewRenderer {
   private readonly handlePointerLeave = (event: PointerEvent) => {
     this.publishPick(undefined);
     this.onPointerLeave?.(event, undefined);
+  };
+
+  private readonly handleCanvasBlur = () => {
+    this.cancelActivePointers();
+    this.publishPick(undefined);
   };
 
   private publishPick(result: SkinPickResult | undefined): void {
@@ -417,6 +472,7 @@ export class SkinPreviewRenderer {
     const PointerEventConstructor = globalThis.PointerEvent;
     if (PointerEventConstructor === undefined) {
       this.activePointerIds.clear();
+      this.publishPick(undefined);
       return;
     }
 
@@ -426,12 +482,16 @@ export class SkinPreviewRenderer {
       );
     }
     this.activePointerIds.clear();
+    this.publishPick(undefined);
   };
 
   private handleDocumentMutation(): void {
     if (this.disposed) return;
 
     if (this.document.model !== this.currentModel) {
+      this.publishPick(undefined);
+      this.highlightedTarget = undefined;
+      this.selectedTarget = undefined;
       this.modelResources.dispose();
       this.currentModel = this.document.model;
       this.modelResources = new SkinModelResources(
@@ -495,5 +555,38 @@ export class SkinPreviewRenderer {
     canvas.dataset.visibleBodyParts = BODY_PARTS.filter((bodyPart) =>
       this.bodyPartVisibility.get(bodyPart),
     ).join(',');
+    const highlightTarget = this.modelResources.isTargetVisible(
+      this.highlightedTarget,
+    )
+      ? this.highlightedTarget
+      : undefined;
+    const selectedTarget = this.modelResources.isTargetVisible(
+      this.selectedTarget,
+    )
+      ? this.selectedTarget
+      : undefined;
+    if (highlightTarget === undefined) {
+      delete canvas.dataset.highlightTarget;
+    } else {
+      canvas.dataset.highlightTarget = skinSemanticTargetKey(highlightTarget);
+    }
+    if (selectedTarget === undefined) {
+      delete canvas.dataset.selectedTarget;
+    } else {
+      canvas.dataset.selectedTarget = skinSemanticTargetKey(selectedTarget);
+    }
+  }
+
+  private semanticTargetKey(
+    target: SkinSemanticTarget | undefined,
+  ): string | undefined {
+    return target === undefined ? undefined : skinSemanticTargetKey(target);
+  }
+
+  private clearSemanticTargets(): void {
+    this.highlightedTarget = undefined;
+    this.selectedTarget = undefined;
+    this.modelResources.setHighlightedTarget(undefined);
+    this.modelResources.setSelectedTarget(undefined);
   }
 }

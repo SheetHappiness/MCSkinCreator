@@ -77,4 +77,54 @@ describe('Minecraft model construction', () => {
     model.dispose();
     texture.dispose();
   });
+
+  it('keeps semantic face highlights view-only and visibility-aware', () => {
+    const document = SkinDocument.createBlank({ id: 'semantic-model' });
+    const texture = new SkinTexture(document);
+    const model = new SkinModelResources('classic', texture.texture);
+    const selectedTarget = {
+      model: 'classic' as const,
+      bodyPart: 'head' as const,
+      layer: 'outer' as const,
+      face: 'front' as const,
+    };
+    const highlightedTarget = {
+      model: 'classic' as const,
+      bodyPart: 'torso' as const,
+      layer: 'base' as const,
+      face: 'front' as const,
+    };
+    const revision = document.revision;
+
+    model.setSelectedTarget(selectedTarget);
+    model.setHighlightedTarget(highlightedTarget);
+
+    expect(model.getPickableMeshes()).toHaveLength(12);
+    expect(
+      model.root
+        .getObjectByName('head')
+        ?.getObjectByName('skin-semantic-selected-face')?.visible,
+    ).toBe(true);
+    expect(
+      model.root
+        .getObjectByName('torso')
+        ?.getObjectByName('skin-semantic-highlight-face')?.visible,
+    ).toBe(true);
+    expect(model.isTargetVisible(highlightedTarget)).toBe(true);
+
+    model.setBaseVisible(false);
+    expect(model.isTargetVisible(highlightedTarget)).toBe(false);
+    expect(
+      model.root
+        .getObjectByName('torso')
+        ?.getObjectByName('skin-semantic-highlight-face')?.visible,
+    ).toBe(false);
+    model.setBaseVisible(true);
+    model.setOuterVisible(false);
+    expect(model.isTargetVisible(selectedTarget)).toBe(false);
+    expect(document.revision).toBe(revision);
+
+    model.dispose();
+    texture.dispose();
+  });
 });

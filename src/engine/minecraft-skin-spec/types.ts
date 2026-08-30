@@ -25,6 +25,34 @@ export const CUBE_FACES = [
 export type CubeFace = (typeof CUBE_FACES)[number];
 
 /**
+ * A renderer-independent semantic address inside the canonical skin model.
+ * Coordinates, UVs, and Three.js objects are intentionally not part of it.
+ */
+export interface SkinSemanticTarget {
+  readonly model: SkinModel;
+  readonly bodyPart: BodyPart;
+  readonly layer: SkinLayer;
+  readonly face: CubeFace;
+}
+
+export function skinSemanticTargetKey(target: SkinSemanticTarget): string {
+  return `${target.model}:${target.bodyPart}:${target.layer}:${target.face}`;
+}
+
+export function sameSkinSemanticTarget(
+  left: SkinSemanticTarget | undefined,
+  right: SkinSemanticTarget | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return (
+    left.model === right.model &&
+    left.bodyPart === right.bodyPart &&
+    left.layer === right.layer &&
+    left.face === right.face
+  );
+}
+
+/**
  * A half-open rectangle of source texels in a 64x64 skin PNG.
  *
  * The texture origin is top-left. x increases rightward, y increases

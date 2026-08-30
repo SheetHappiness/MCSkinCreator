@@ -10,7 +10,12 @@ import {
 import type { RgbaColor, SkinDocument, SkinModel } from '../../engine/document';
 import type { DocumentHistory } from '../../engine/history';
 import { isAdvancedPaintTool, type EditorTool } from '../../engine/tools';
-import { BODY_PARTS, type BodyPart } from '../../engine/minecraft-skin-spec';
+import {
+  BODY_PARTS,
+  type BodyPart,
+  type SkinLayer,
+  type SkinSemanticTarget,
+} from '../../engine/minecraft-skin-spec';
 import {
   SkinPreviewRenderer,
   type SkinPickResult,
@@ -38,7 +43,10 @@ import {
   setLayerVisibility,
   type SkinViewState,
 } from './skinViewState';
-import { ThreeDToolInteraction } from './threeDToolInteraction';
+import {
+  isThreeDInspectAction,
+  ThreeDToolInteraction,
+} from './threeDToolInteraction';
 import {
   createPopoutPreviewState,
   isPopoutBoundTo,
@@ -62,6 +70,15 @@ interface SkinPreviewPanelProps {
   readonly rightInspectorHeight?: number;
   readonly onInspectorHeightChange?: (value: number) => void;
   readonly onCollapse?: () => void;
+  readonly canvasHoverTarget?: SkinSemanticTarget;
+  readonly selectedTarget?: SkinSemanticTarget;
+  readonly onSemanticHoverChange?: (
+    target: SkinSemanticTarget | undefined,
+  ) => void;
+  readonly onSemanticFocus?: (target: SkinSemanticTarget) => void;
+  readonly onSelectSemanticTarget?: (target: SkinSemanticTarget) => void;
+  readonly onViewStateChange?: (state: SkinViewState) => void;
+  readonly onClearSemanticState?: () => void;
 }
 
 const MODEL_OPTIONS: readonly {
@@ -125,6 +142,13 @@ export function SkinPreviewPanel({
   rightInspectorHeight,
   onInspectorHeightChange,
   onCollapse,
+  canvasHoverTarget,
+  selectedTarget,
+  onSemanticHoverChange,
+  onSemanticFocus,
+  onSelectSemanticTarget,
+  onViewStateChange,
+  onClearSemanticState,
 }: SkinPreviewPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
   const mountRef = useRef<HTMLDivElement>(null);
@@ -143,6 +167,11 @@ export function SkinPreviewPanel({
   const temporaryEyedropperRef = useRef(false);
   const temporaryEyedropperSlotRef = useRef<ColorSlot | undefined>(undefined);
   const interactionRef = useRef<ThreeDToolInteraction | undefined>(undefined);
+  const semanticHoverChangeRef = useRef(onSemanticHoverChange);
+  const semanticFocusRef = useRef(onSemanticFocus);
+  const selectSemanticTargetRef = useRef(onSelectSemanticTarget);
+  const viewStateChangeRef = useRef(onViewStateChange);
+  const clearSemanticStateRef = useRef(onClearSemanticState);
   const defaultView = useMemo(
     () => ({
       documentId: document.id,
@@ -159,6 +188,7 @@ export function SkinPreviewPanel({
       ? viewStateEntry.state
       : defaultView.state;
   const [hoveredPick, setHoveredPick] = useState<SkinPickResult | undefined>();
+  const [targetLayer, setTargetLayer] = useState<SkinLayer>('base');
   const [temporaryEyedropper, setTemporaryEyedropper] = useState(false);
   const [previewNotice, setPreviewNotice] = useState<string | undefined>();
   const preferredInspectorHeight = rightInspectorHeight ?? localInspectorHeight;
@@ -179,6 +209,20 @@ export function SkinPreviewPanel({
     primaryColor,
     secondaryColor,
     temporaryEyedropper,
+  ]);
+
+  useEffect(() => {
+    semanticHoverChangeRef.current = onSemanticHoverChange;
+    semanticFocusRef.current = onSemanticFocus;
+    selectSemanticTargetRef.current = onSelectSemanticTarget;
+    viewStateChangeRef.current = onViewStateChange;
+    clearSemanticStateRef.current = onClearSemanticState;
+  }, [
+    onClearSemanticState,
+    onSemanticFocus,
+    onSemanticHoverChange,
+    onSelectSemanticTarget,
+    onViewStateChange,
   ]);
 
   const subscribe = useCallback(
@@ -210,8 +254,33 @@ export function SkinPreviewPanel({
     );
     interactionRef.current = interaction;
     const renderer = new SkinPreviewRenderer(mount, document, undefined, {
-      onPickChange: setHoveredPick,
+      onPickChange: (result) => {
+        setHoveredPick(result);
+        semanticHoverChangeRef.current?.(
+          result === undefined
+            ? undefined
+            : {
+                model: result.model,
+                bodyPart: result.bodyPart,
+                layer: result.layer,
+                face: result.face,
+              },
+        );
+      },
       onPointerDown: (event, pick) => {
+        if (isThreeDInspectAction(event)) {
+          interaction.cancel();
+          event.preventDefault();
+          if (pick !== undefined) {
+            semanticFocusRef.current?.({
+              model: pick.model,
+              bodyPart: pick.bodyPart,
+              layer: pick.layer,
+              face: pick.face,
+            });
+          }
+          return;
+        }
         const tool = temporaryEyedropperRef.current
           ? 'eyedropper'
           : activeToolRef.current;
@@ -277,8 +346,21 @@ export function SkinPreviewPanel({
       renderer.dispose();
       interactionRef.current = undefined;
       setHoveredPick(undefined);
+      semanticHoverChangeRef.current?.(undefined);
     };
   }, [defaultView, document, history]);
+
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (renderer === undefined) return;
+    renderer.setHighlightedTarget(canvasHoverTarget ?? hoveredPick);
+  }, [canvasHoverTarget, hoveredPick]);
+
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (renderer === undefined) return;
+    renderer.setSelectedTarget(selectedTarget);
+  }, [selectedTarget]);
 
   useEffect(() => {
     const renderer = rendererRef.current;
@@ -333,6 +415,7 @@ export function SkinPreviewPanel({
 
   const updateViewState = (update: (state: SkinViewState) => SkinViewState) => {
     cancelActiveEditorInteraction();
+    clearSemanticStateRef.current?.();
     setViewStateEntry((current) => {
       const state =
         current.documentId === defaultView.documentId
@@ -340,6 +423,34 @@ export function SkinPreviewPanel({
           : defaultView.state;
       return { documentId: defaultView.documentId, state: update(state) };
     });
+  };
+
+  useEffect(() => {
+    viewStateChangeRef.current?.(viewState);
+  }, [viewState]);
+
+  const targetLayerForSelection =
+    selectedTarget?.model === document.model
+      ? selectedTarget.layer
+      : targetLayer;
+
+  const selectBodyPart = (bodyPart: BodyPart) => {
+    selectSemanticTargetRef.current?.({
+      model: document.model,
+      bodyPart,
+      layer: targetLayerForSelection,
+      face: 'front',
+    });
+  };
+
+  const selectTargetLayer = (layer: SkinLayer) => {
+    setTargetLayer(layer);
+    if (
+      selectedTarget !== undefined &&
+      selectedTarget.model === document.model
+    ) {
+      selectSemanticTargetRef.current?.({ ...selectedTarget, layer });
+    }
   };
 
   const handleOpenPopout = async () => {
@@ -435,6 +546,29 @@ export function SkinPreviewPanel({
           aria-label="Visibility and focus"
         >
           <div
+            className="skin-preview-visibility-row skin-preview-target-row"
+            role="group"
+            aria-label="Semantic target layer"
+          >
+            <span className="skin-preview-visibility-label">Target</span>
+            <button
+              type="button"
+              aria-label="Target base layer"
+              aria-pressed={targetLayerForSelection === 'base'}
+              onClick={() => selectTargetLayer('base')}
+            >
+              Base
+            </button>
+            <button
+              type="button"
+              aria-label="Target outer layer"
+              aria-pressed={targetLayerForSelection === 'outer'}
+              onClick={() => selectTargetLayer('outer')}
+            >
+              Outer
+            </button>
+          </div>
+          <div
             className="skin-preview-visibility-row"
             role="group"
             aria-label="Layers"
@@ -497,14 +631,28 @@ export function SkinPreviewPanel({
                   </button>
                   <button
                     type="button"
+                    className="skin-preview-select-button"
+                    aria-label={`Select ${label}`}
+                    aria-pressed={
+                      selectedTarget?.model === document.model &&
+                      selectedTarget.bodyPart === bodyPart
+                    }
+                    title={`Link ${label} to the 2D canvas`}
+                    onClick={() => selectBodyPart(bodyPart)}
+                  >
+                    Sel
+                  </button>
+                  <button
+                    type="button"
                     className="skin-preview-isolate-button"
                     aria-label={`Isolate ${label}`}
                     aria-pressed={viewState.isolatedBodyPart === bodyPart}
-                    onClick={() =>
+                    onClick={() => {
                       updateViewState((state) =>
                         isolateBodyPart(state, bodyPart),
-                      )
-                    }
+                      );
+                      selectBodyPart(bodyPart);
+                    }}
                   >
                     Isolate
                   </button>

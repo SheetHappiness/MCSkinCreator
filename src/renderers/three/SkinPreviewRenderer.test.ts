@@ -209,4 +209,77 @@ describe('Three.js preview lifecycle', () => {
     expect(picks.at(-1)).toBeUndefined();
     preview.dispose();
   });
+
+  it('coordinates semantic overlays and clears stale targets on visibility changes', () => {
+    const mount = document.createElement('div');
+    mount.getBoundingClientRect = () =>
+      ({ width: 280, height: 500 }) as DOMRect;
+    const canvas = document.createElement('canvas');
+    canvas.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        right: 280,
+        bottom: 500,
+        width: 280,
+        height: 500,
+      }) as DOMRect;
+    const renderer = {
+      domElement: canvas,
+      outputColorSpace: '',
+      setClearColor: vi.fn(),
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+      forceContextLoss: vi.fn(),
+    };
+    const controls = {
+      target: new Vector3(),
+      enablePan: true,
+      enableDamping: true,
+      minDistance: 0,
+      maxDistance: 0,
+      minPolarAngle: 0,
+      maxPolarAngle: 0,
+      mouseButtons: {},
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      update: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const resizeObserver = { observe: vi.fn(), disconnect: vi.fn() };
+    const environment: SkinPreviewRendererEnvironment = {
+      createRenderer: () => renderer,
+      createControls: () => controls,
+      createResizeObserver: () => resizeObserver,
+      requestFrame: vi.fn(() => 1),
+      cancelFrame: vi.fn(),
+      devicePixelRatio: () => 1,
+    };
+    const skinDocument = SkinDocument.createBlank({ id: 'semantic-renderer' });
+    const preview = new SkinPreviewRenderer(mount, skinDocument, environment);
+    const target = {
+      model: 'classic' as const,
+      bodyPart: 'torso' as const,
+      layer: 'outer' as const,
+      face: 'front' as const,
+    };
+
+    preview.setHighlightedTarget(target);
+    preview.setSelectedTarget(target);
+    expect(canvas.dataset.highlightTarget).toBe('classic:torso:outer:front');
+    expect(canvas.dataset.selectedTarget).toBe('classic:torso:outer:front');
+
+    preview.setOuterVisible(false);
+    expect(canvas.dataset.highlightTarget).toBeUndefined();
+    expect(canvas.dataset.selectedTarget).toBeUndefined();
+    preview.setOuterVisible(true);
+    expect(canvas.dataset.highlightTarget).toBeUndefined();
+    expect(canvas.dataset.selectedTarget).toBeUndefined();
+    expect(skinDocument.revision).toBe(0);
+    expect(skinDocument.isDirty).toBe(false);
+
+    preview.dispose();
+  });
 });

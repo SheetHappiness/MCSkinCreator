@@ -205,4 +205,83 @@ describe('Canvas 2D skin rendering', () => {
     expect(destinationContext.setLineDash).toHaveBeenCalledWith([4, 3]);
     expect(destinationContext.stroke).toHaveBeenCalledTimes(2);
   });
+
+  it('draws a view-only semantic highlight from a canonical face target', () => {
+    const destinationContext = createContext();
+    const sourceContext = createContext();
+    const sourceCanvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => sourceContext),
+    };
+    const canvas = {
+      width: 0,
+      height: 0,
+      ownerDocument: { createElement: vi.fn(() => sourceCanvas) },
+      getContext: vi.fn(() => destinationContext),
+    } as unknown as HTMLCanvasElement;
+    const document = SkinDocument.createBlank({ id: 'semantic-highlight' });
+    const before = document.copyPixelData();
+    const revision = document.revision;
+
+    renderSkinCanvas(
+      canvas,
+      document,
+      { zoom: 8, offsetX: 20, offsetY: 30 },
+      { width: 640, height: 480 },
+      {
+        showGrid: false,
+        pixelRatio: 2,
+        semanticHighlight: {
+          model: 'classic',
+          bodyPart: 'torso',
+          layer: 'base',
+          face: 'front',
+        },
+      },
+    );
+
+    expect(destinationContext.fillRect).toHaveBeenCalledWith(180, 190, 64, 96);
+    expect(destinationContext.stroke).toHaveBeenCalledTimes(2);
+    expect(document.copyPixelData()).toEqual(before);
+    expect(document.revision).toBe(revision);
+  });
+
+  it('dims unrelated canonical regions for view-only isolation', () => {
+    const destinationContext = createContext();
+    const sourceContext = createContext();
+    const sourceCanvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => sourceContext),
+    };
+    const canvas = {
+      width: 0,
+      height: 0,
+      ownerDocument: { createElement: vi.fn(() => sourceCanvas) },
+      getContext: vi.fn(() => destinationContext),
+    } as unknown as HTMLCanvasElement;
+
+    renderSkinCanvas(
+      canvas,
+      SkinDocument.createBlank({ id: 'semantic-isolation' }),
+      { zoom: 4, offsetX: 12, offsetY: 16 },
+      { width: 640, height: 480 },
+      {
+        showGrid: false,
+        pixelRatio: 1,
+        isolatedBodyPart: 'head',
+      },
+    );
+
+    // The torso base front [20,20)×[20,32) is dimmed; the isolated head is
+    // intentionally absent from the isolation fill calls.
+    expect(destinationContext.fillRect).toHaveBeenCalledWith(92, 96, 32, 48);
+    expect(destinationContext.fillRect).not.toHaveBeenCalledWith(
+      44,
+      16,
+      32,
+      32,
+    );
+  });
 });

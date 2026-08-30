@@ -11,8 +11,8 @@ import {
   SKIN_TEXTURE_HEIGHT,
   SKIN_TEXTURE_WIDTH,
   type BodyPart,
-  type CubeFace,
   type SkinLayer,
+  type SkinSemanticTarget,
   type SkinModel,
 } from '../../engine/minecraft-skin-spec';
 import {
@@ -35,11 +35,7 @@ export interface SkinPickPoint {
  * A renderer-independent description of the source texel under a 3D hit.
  * Three.js objects and mutable vectors are intentionally not exposed here.
  */
-export interface SkinPickResult {
-  readonly model: SkinModel;
-  readonly bodyPart: BodyPart;
-  readonly layer: SkinLayer;
-  readonly face: CubeFace;
+export interface SkinPickResult extends SkinSemanticTarget {
   readonly x: number;
   readonly y: number;
   readonly uv: SkinPickUv;

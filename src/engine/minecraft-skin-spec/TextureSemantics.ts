@@ -5,6 +5,7 @@ import {
   type BodyPart,
   type CubeFace,
   type SkinLayer,
+  type SkinSemanticTarget,
   type SkinModel,
   type TextureRegion,
 } from './types';
@@ -38,10 +39,7 @@ export interface TexelSemanticQuery {
   readonly layer?: TextureLayerFilter;
 }
 
-export interface TextureSemantic {
-  readonly bodyPart: BodyPart;
-  readonly layer: SkinLayer;
-  readonly face: CubeFace;
+export interface TextureSemantic extends SkinSemanticTarget {
   readonly region: TextureRegion;
 }
 
@@ -130,7 +128,13 @@ export function queryTextureSemantics(
           face,
         });
         if (containsTexel(query.x, query.y, region)) {
-          matches.push({ bodyPart, layer, face, region });
+          matches.push({
+            model: query.model,
+            bodyPart,
+            layer,
+            face,
+            region,
+          });
         }
       }
     }

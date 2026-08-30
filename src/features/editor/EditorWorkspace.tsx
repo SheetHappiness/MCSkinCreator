@@ -22,9 +22,15 @@ import {
 } from '../../engine/selection';
 import {
   formatTextureSemantic,
+  getBodyPartTextureBounds,
+  getFaceRegion,
   getTextureFocusBounds,
   queryTextureSemantic,
+  sameSkinSemanticTarget,
+  skinSemanticTargetKey,
+  type BodyPart,
   type SkinLayer,
+  type SkinSemanticTarget,
   type TextureFocusTarget,
   type TextureLayerFilter,
 } from '../../engine/minecraft-skin-spec';
@@ -54,6 +60,7 @@ import {
 } from '../../engine/viewport';
 import { renderSkinCanvas } from '../../renderers/canvas2d';
 import { SkinPreviewPanel } from '../preview/SkinPreviewPanel';
+import type { SkinViewState } from '../preview/skinViewState';
 import {
   COLLAPSED_PANEL_SIZE,
   CollapsedWorkspacePanel,
@@ -479,9 +486,28 @@ export function EditorWorkspace({
   const [hoveredPixel, setHoveredPixel] = useState<
     TextureCoordinate | undefined
   >(undefined);
+  const [hovered3DTarget, setHovered3DTarget] = useState<
+    SkinSemanticTarget | undefined
+  >(undefined);
+  const [selectedSemanticTarget, setSelectedSemanticTarget] = useState<
+    SkinSemanticTarget | undefined
+  >(undefined);
+  const [isolatedBodyPart, setIsolatedBodyPart] = useState<
+    BodyPart | undefined
+  >(undefined);
+  const isolatedBodyPartRef = useRef<BodyPart | undefined>(undefined);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [temporaryEyedropper, setTemporaryEyedropper] = useState(false);
+
+  const handleSemanticHoverChange = useCallback(
+    (target: SkinSemanticTarget | undefined) => {
+      setHovered3DTarget((current) =>
+        sameSkinSemanticTarget(current, target) ? current : target,
+      );
+    },
+    [],
+  );
   const rightPanelBounds = getRightPanelWidthBounds(editorMainSize.width);
   const effectiveRightPanelWidth = rightPanelCollapsed
     ? COLLAPSED_PANEL_SIZE
@@ -499,6 +525,23 @@ export function EditorWorkspace({
       cancelActiveEditorInteraction();
       setFocusTarget(target);
       setHoveredPixel(undefined);
+      if (
+        target === 'head' ||
+        target === 'torso' ||
+        target === 'rightArm' ||
+        target === 'leftArm' ||
+        target === 'rightLeg' ||
+        target === 'leftLeg'
+      ) {
+        setSelectedSemanticTarget({
+          model: skinDocument.model,
+          bodyPart: target,
+          layer: layer === 'outer' ? 'outer' : 'base',
+          face: 'front',
+        });
+      } else {
+        setSelectedSemanticTarget(undefined);
+      }
       if (size.width <= 0 || size.height <= 0) return;
       setViewport(
         fitViewportToRegion(
@@ -513,6 +556,69 @@ export function EditorWorkspace({
     },
     [size, skinDocument.model, uvLayer],
   );
+
+  const focusSemanticTarget = useCallback(
+    (target: SkinSemanticTarget) => {
+      if (target.model !== skinDocument.model) return;
+      cancelActiveEditorInteraction();
+      setSelectedSemanticTarget(target);
+      setFocusTarget(target.bodyPart);
+      setUvLayer(target.layer);
+      setHoveredPixel(undefined);
+      if (size.width <= 0 || size.height <= 0) return;
+      setViewport(fitViewportToRegion(size, getFaceRegion(target)));
+    },
+    [size, skinDocument.model],
+  );
+
+  const handlePreviewViewStateChange = useCallback(
+    (state: SkinViewState) => {
+      const previous = isolatedBodyPartRef.current;
+      isolatedBodyPartRef.current = state.isolatedBodyPart;
+      setIsolatedBodyPart(state.isolatedBodyPart);
+      if (previous === state.isolatedBodyPart) return;
+
+      setHoveredPixel(undefined);
+      setHovered3DTarget(undefined);
+      if (state.isolatedBodyPart === undefined) {
+        setSelectedSemanticTarget(undefined);
+        setFocusTarget('whole');
+        if (size.width > 0 && size.height > 0) {
+          setViewport(fitViewportToView(size, skinDocument));
+        }
+        return;
+      }
+
+      const layer: SkinLayer = state.layers.outer ? 'outer' : 'base';
+      setSelectedSemanticTarget({
+        model: skinDocument.model,
+        bodyPart: state.isolatedBodyPart,
+        layer,
+        face: 'front',
+      });
+      setFocusTarget(state.isolatedBodyPart);
+      setUvLayer(layer);
+      if (size.width > 0 && size.height > 0) {
+        setViewport(
+          fitViewportToRegion(
+            size,
+            getBodyPartTextureBounds({
+              model: skinDocument.model,
+              bodyPart: state.isolatedBodyPart,
+              layer,
+            }),
+          ),
+        );
+      }
+    },
+    [size, skinDocument],
+  );
+
+  const clearSemanticState = useCallback(() => {
+    setHoveredPixel(undefined);
+    setHovered3DTarget(undefined);
+    setSelectedSemanticTarget(undefined);
+  }, []);
 
   const handleUvLayerChange = useCallback(
     (layer: TextureLayerFilter) => {
@@ -534,6 +640,16 @@ export function EditorWorkspace({
     }
   }, [size, skinDocument]);
 
+  const hoveredSemantic =
+    hoveredPixel === undefined
+      ? undefined
+      : queryTextureSemantic({
+          model: skinDocument.model,
+          x: hoveredPixel.x,
+          y: hoveredPixel.y,
+          layer: 'both',
+        });
+
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (canvas === null || size.width <= 0 || size.height <= 0) return;
@@ -542,6 +658,9 @@ export function EditorWorkspace({
       pixelRatio: window.devicePixelRatio || 1,
       selection: selectionState,
       uvOverlay: showUvOverlay ? { layer: uvLayer } : undefined,
+      semanticHighlight: hovered3DTarget,
+      semanticSelection: selectedSemanticTarget,
+      isolatedBodyPart,
     });
   }, [
     selectionState,
@@ -549,6 +668,9 @@ export function EditorWorkspace({
     showUvOverlay,
     size,
     skinDocument,
+    hovered3DTarget,
+    isolatedBodyPart,
+    selectedSemanticTarget,
     uvLayer,
     viewport,
   ]);
@@ -608,6 +730,9 @@ export function EditorWorkspace({
   const updateHoveredPixel = useCallback(
     (clientX: number, clientY: number) => {
       const next = texturePoint(clientX, clientY);
+      setHovered3DTarget((current) =>
+        current === undefined ? current : undefined,
+      );
       setHoveredPixel((current) =>
         current?.x === next?.x && current?.y === next?.y ? current : next,
       );
@@ -701,6 +826,7 @@ export function EditorWorkspace({
     cancelStroke();
     cancelSelectionGesture();
     selectionController.cancelTransient();
+    setHoveredPixel(undefined);
     spacePressedRef.current = false;
     setIsSpacePressed(false);
     temporaryEyedropperSlotRef.current = undefined;
@@ -1098,15 +1224,6 @@ export function EditorWorkspace({
 
   const zoomPercent = Math.round(viewport.zoom * 100);
   const selectedHex = colorToHex(selectedColor);
-  const hoveredSemantic =
-    hoveredPixel === undefined
-      ? undefined
-      : queryTextureSemantic({
-          model: skinDocument.model,
-          x: hoveredPixel.x,
-          y: hoveredPixel.y,
-          layer: 'both',
-        });
   const semanticReadout =
     hoveredPixel === undefined ? '—' : formatTextureSemantic(hoveredSemantic);
   const visibleSelection =
@@ -1173,6 +1290,17 @@ export function EditorWorkspace({
             data-uv-overlay={showUvOverlay ? 'visible' : 'hidden'}
             data-uv-layer={uvLayer}
             data-focus-target={focusTarget}
+            data-semantic-highlight={
+              hovered3DTarget === undefined
+                ? undefined
+                : skinSemanticTargetKey(hovered3DTarget)
+            }
+            data-semantic-selection={
+              selectedSemanticTarget === undefined
+                ? undefined
+                : skinSemanticTargetKey(selectedSemanticTarget)
+            }
+            data-isolated-body-part={isolatedBodyPart}
             data-selection-rect={selectionRectAttribute}
             data-selection-state={
               selectionState.floating !== undefined
@@ -1286,6 +1414,13 @@ export function EditorWorkspace({
             rightInspectorHeight={rightInspectorHeight}
             onInspectorHeightChange={onRightInspectorHeightChange}
             onCollapse={onRightPanelCollapse}
+            canvasHoverTarget={hoveredSemantic}
+            selectedTarget={selectedSemanticTarget}
+            onSemanticHoverChange={handleSemanticHoverChange}
+            onSemanticFocus={focusSemanticTarget}
+            onSelectSemanticTarget={focusSemanticTarget}
+            onViewStateChange={handlePreviewViewStateChange}
+            onClearSemanticState={clearSemanticState}
           />
           <CollapsedWorkspacePanel
             side="right"

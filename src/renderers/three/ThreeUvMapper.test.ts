@@ -15,6 +15,7 @@ import {
 } from '../../engine/minecraft-skin-spec';
 import {
   createSkinCuboidGeometry,
+  createSkinFaceHighlightGeometry,
   mapFaceDefinitionToThreeQuad,
 } from './ThreeUvMapper';
 
@@ -168,6 +169,28 @@ describe('M6 face to Three.js UV conversion', () => {
     expect(geometry.getAttribute('position').count).toBe(24);
     expect(geometry.getAttribute('uv').count).toBe(24);
     expect(geometry.index?.count).toBe(36);
+    geometry.dispose();
+  });
+
+  it('creates an offset, non-textured face quad from the canonical geometry', () => {
+    const definition = getFaceDefinition({
+      model: 'classic',
+      bodyPart: 'torso',
+      layer: 'base',
+      face: 'front',
+    });
+    const geometry = createSkinFaceHighlightGeometry(
+      'front',
+      { width: 8, height: 12, depth: 4 },
+      definition,
+    );
+
+    expect(geometry.getAttribute('position').count).toBe(4);
+    expect(geometry.getAttribute('uv')).toBeUndefined();
+    expect(geometry.index?.count).toBe(6);
+    const positions = geometry.getAttribute('position').array;
+    expect(positions[2]).toBeCloseTo(2.04);
+    expect(positions[5]).toBeCloseTo(2.04);
     geometry.dispose();
   });
 });

@@ -378,6 +378,122 @@ test('exposes UV semantics, layer-aware focus, and a non-blocking overlay', asyn
   }
 });
 
+test('links semantic hover, inspect focus, selection, and isolation across 2D and 3D', async () => {
+  const application = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      MINECRAFT_SKIN_EDITOR_E2E: '1',
+      MINECRAFT_SKIN_EDITOR_E2E_UNSAVED_DECISION: 'discard',
+    },
+  });
+
+  try {
+    const window = await application.firstWindow();
+    await expect(
+      window.getByRole('heading', { name: 'Minecraft Skin Editor' }),
+    ).toBeVisible();
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('file-new')?.click();
+    });
+    const dialog = window.getByRole('dialog', { name: 'New Skin' });
+    await dialog
+      .getByRole('button', { name: 'Classic skin model', exact: true })
+      .click();
+    await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+
+    const canvas = window.getByRole('img', { name: '2D skin canvas' });
+    const preview = window.getByRole('img', { name: '3D skin preview' });
+    const visibility = window.getByLabel('Visibility and focus');
+    const editorStatus = window.getByLabel('Editor status');
+    await expect(preview).toHaveAttribute('data-preview-ready', 'true');
+
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox).not.toBeNull();
+    const zoom =
+      Number.parseInt(
+        (await window.getByTestId('zoom-value').textContent()) ?? '',
+        10,
+      ) / 100;
+    const texturePoint = (x: number, y: number) => ({
+      x: canvasBox!.x + (canvasBox!.width - 64 * zoom) / 2 + (x + 0.5) * zoom,
+      y: canvasBox!.y + (canvasBox!.height - 64 * zoom) / 2 + (y + 0.5) * zoom,
+    });
+
+    await window.mouse.move(texturePoint(8, 8).x, texturePoint(8, 8).y);
+    await expect(preview).toHaveAttribute(
+      'data-highlight-target',
+      'classic:head:base:front',
+    );
+
+    const previewBox = await preview.boundingBox();
+    expect(previewBox).not.toBeNull();
+    const previewPoint = {
+      x: previewBox!.x + previewBox!.width / 2,
+      y: previewBox!.y + previewBox!.height / 2,
+    };
+    await window.mouse.move(previewPoint.x, previewPoint.y);
+    await expect(preview).toHaveAttribute('data-pick', /.+:.+:.+:.+,\d+$/);
+    const pickData = await preview.getAttribute('data-pick');
+    const pickParts = pickData?.split(':');
+    expect(pickParts).toHaveLength(4);
+    const [bodyPart, layer, face] = pickParts!;
+    const targetKey = `classic:${bodyPart}:${layer}:${face}`;
+    await expect(canvas).toHaveAttribute('data-semantic-highlight', targetKey);
+    await expect(preview).toHaveAttribute('data-highlight-target', targetKey);
+
+    await window.keyboard.down('Control');
+    await window.mouse.click(previewPoint.x, previewPoint.y);
+    await window.keyboard.up('Control');
+    await expect(canvas).toHaveAttribute('data-semantic-selection', targetKey);
+    await expect(canvas).toHaveAttribute('data-focus-target', bodyPart!);
+    await expect(preview).toHaveAttribute('data-selected-target', targetKey);
+    await expect(
+      editorStatus.getByText('Untitled.png •', { exact: true }),
+    ).toHaveCount(0);
+
+    await visibility
+      .getByRole('button', { name: 'Target outer layer', exact: true })
+      .click();
+    await visibility
+      .getByRole('button', { name: 'Select Left Arm', exact: true })
+      .click();
+    const leftArmOuterTarget = 'classic:leftArm:outer:front';
+    await expect(canvas).toHaveAttribute(
+      'data-semantic-selection',
+      leftArmOuterTarget,
+    );
+    await expect(canvas).toHaveAttribute('data-focus-target', 'leftArm');
+    await expect(preview).toHaveAttribute(
+      'data-selected-target',
+      leftArmOuterTarget,
+    );
+
+    await visibility
+      .getByRole('button', { name: 'Isolate Left Arm', exact: true })
+      .click();
+    await expect(preview).toHaveAttribute('data-visible-body-parts', 'leftArm');
+    await expect(canvas).toHaveAttribute('data-isolated-body-part', 'leftArm');
+    await expect(canvas).toHaveAttribute('data-focus-target', 'leftArm');
+
+    await visibility
+      .getByRole('button', { name: 'Restore all visibility', exact: true })
+      .click();
+    await expect(preview).toHaveAttribute(
+      'data-visible-body-parts',
+      'head,torso,rightArm,leftArm,rightLeg,leftLeg',
+    );
+    await expect(canvas).not.toHaveAttribute('data-isolated-body-part', /.+/);
+    await expect(canvas).toHaveAttribute('data-focus-target', 'whole');
+    await expect(canvas).not.toHaveAttribute('data-semantic-selection', /.+/);
+    await expect(
+      editorStatus.getByText('Untitled.png •', { exact: true }),
+    ).toHaveCount(0);
+  } finally {
+    await application.close();
+  }
+});
+
 test('selects exact pixels, previews paste and move, supports rollback, and cleans selection per document', async () => {
   const temporaryDirectory = await mkdtemp(
     path.join(tmpdir(), 'minecraft-skin-editor-selection-e2e-'),

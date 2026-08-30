@@ -115,6 +115,11 @@ advanced color controls, swatches, advanced paint tools, contextual tool
 options, history timeline, multi-document local workflows, and pop-out
 preview utilities.
 
+Roadmap 3 A06 adds a view-only semantic link between the 2D canvas and 3D
+preview: canonical body-part, layer, and face targets can be highlighted from
+either surface, Ctrl/Cmd+left-click in 3D focuses the corresponding 2D face,
+and visibility isolation keeps the two views coordinated.
+
 The formal MCSkin3D comparison, compatibility boundary, and explicit
 exclusions are recorded in
 [`docs/MCSKIN3D_PARITY.md`](docs/MCSKIN3D_PARITY.md).
@@ -224,10 +229,12 @@ The UI must allow users to:
 
 The current editor provides body-part visibility and isolation. The 2D canvas
 also exposes a view-only UV-aware workflow: optional canonical face boundaries,
-semantic hover identification, and focus views for the whole texture and body
-parts. Structural selection remains outside the current parity slice;
-paired-limb transfer uses the canonical UV specification without turning the
-canvas into a structural selector.
+semantic hover identification, focus views for the whole texture and body
+parts, and linked semantic selection. A semantic target is always a canonical
+body-part/layer/face tuple; it is a view-only coordination state and does not
+replace rectangular pixel selection. Paired-limb transfer uses the canonical
+UV specification without turning the canvas into a structural editing
+selector.
 
 ---
 
@@ -247,6 +254,8 @@ v0.1 requirements:
 - camera rotation;
 - zoom;
 - real-time texture updates after editing;
+- linked semantic hover and selection with the 2D canvas;
+- Ctrl/Cmd+left-click inspect/focus without changing pixels;
 - Pop Out and Snapshot utilities.
 
 The 2D editor and 3D preview must use the same underlying document state.
@@ -752,9 +761,10 @@ Save
 
 ## Stage 2 — Further Artist Tools
 
-The defined Roadmap 2 parity slice is complete, and Roadmap 3 A04 adds live
-symmetry on top of the selection and paired-limb work. The ideas below are
-possible future work beyond those slices and require separate scope:
+The defined Roadmap 2 parity slice is complete, and Roadmap 3 A04–A06 adds
+live symmetry plus coordinated 2D/3D semantic inspection on top of the
+selection and paired-limb work. The ideas below are possible future work
+beyond those slices and require separate scope:
 
 - advanced fill;
 - replace color;
@@ -763,7 +773,7 @@ possible future work beyond those slices and require separate scope:
 - reference panel;
 - richer brush and shape workflows.
 
-Examples:
+The implemented semantic workflow includes:
 
 ```text
 hover 3D arm

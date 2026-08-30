@@ -94,6 +94,15 @@ const FACE_CENTERS = {
   Record<CubeFace, (dimensions: BoxDimensions) => ModelVector3>
 >;
 
+const FACE_NORMALS: Readonly<Record<CubeFace, ModelVector3>> = {
+  top: { x: 0, y: 1, z: 0 },
+  bottom: { x: 0, y: -1, z: 0 },
+  front: { x: 0, y: 0, z: 1 },
+  back: { x: 0, y: 0, z: -1 },
+  left: { x: 1, y: 0, z: 0 },
+  right: { x: -1, y: 0, z: 0 },
+};
+
 function directionExtent(
   direction: ModelDirection,
   dimensions: BoxDimensions,
@@ -159,6 +168,37 @@ export function mapFaceDefinitionToThreeQuad(
       { u: x / SKIN_WIDTH, v: (y + height) / SKIN_HEIGHT },
     ],
   };
+}
+
+/**
+ * Creates a non-pickable, slightly offset quad used for view-only semantic
+ * highlighting. It reuses the canonical face orientation and cube geometry;
+ * no renderer-specific UV rectangle is introduced here.
+ */
+export function createSkinFaceHighlightGeometry(
+  face: CubeFace,
+  dimensions: BoxDimensions,
+  definition: FaceUvDefinition,
+  offset = 0.04,
+): BufferGeometry {
+  if (!Number.isFinite(offset) || offset < 0) {
+    throw new RangeError(
+      'Face highlight offset must be finite and non-negative.',
+    );
+  }
+
+  const normal = FACE_NORMALS[face];
+  const quad = mapFaceDefinitionToThreeQuad(face, dimensions, definition);
+  const positions = quad.positions.flatMap((position) => [
+    position.x + normal.x * offset,
+    position.y + normal.y * offset,
+    position.z + normal.z * offset,
+  ]);
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setIndex([0, 2, 1, 0, 3, 2]);
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 export interface CreateSkinCuboidGeometryOptions {

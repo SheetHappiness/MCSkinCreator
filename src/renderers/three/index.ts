@@ -24,6 +24,7 @@ export type {
 export { SkinTexture } from './SkinTexture';
 export {
   createSkinCuboidGeometry,
+  createSkinFaceHighlightGeometry,
   getSkinCuboidGeometryMetadata,
   getSkinTriangleMetadata,
   mapFaceDefinitionToThreeQuad,

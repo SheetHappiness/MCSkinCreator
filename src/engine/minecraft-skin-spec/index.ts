@@ -33,7 +33,14 @@ export {
   queryTextureSemantics,
 } from './TextureSemantics';
 
-export { BODY_PARTS, CUBE_FACES, SKIN_LAYERS, SKIN_MODELS } from './types';
+export {
+  BODY_PARTS,
+  CUBE_FACES,
+  SKIN_LAYERS,
+  SKIN_MODELS,
+  sameSkinSemanticTarget,
+  skinSemanticTargetKey,
+} from './types';
 
 export type {
   BodyPart,
@@ -49,6 +56,7 @@ export type {
   ModelVector3,
   OuterLayerGeometry,
   OuterLayerMeaning,
+  SkinSemanticTarget,
   SkinLayer,
   SkinModel,
   TextureRegion,

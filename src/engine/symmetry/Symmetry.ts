@@ -9,7 +9,7 @@ import {
   type BodyPart,
   type CubeFace,
   type ModelDirection,
-  type SkinLayer,
+  type SkinSemanticTarget,
   type SkinModel,
 } from '../minecraft-skin-spec';
 import type { TextureCoordinate } from '../viewport';
@@ -24,12 +24,7 @@ export const SYMMETRY_MODE_LABELS: Readonly<Record<SymmetryMode, string>> =
     'body-pair': 'Body Pair',
   });
 
-export interface SymmetrySurface {
-  readonly model: SkinModel;
-  readonly bodyPart: BodyPart;
-  readonly layer: SkinLayer;
-  readonly face: CubeFace;
-}
+export type SymmetrySurface = SkinSemanticTarget;
 
 export interface SymmetrySource extends TextureCoordinate {
   readonly surface?: SymmetrySurface;

@@ -296,7 +296,7 @@ export function App() {
             ) : (
               <>
                 <EditorWorkspace
-                  key={session.document.id}
+                  key={`${session.document.id}:${session.document.model}`}
                   document={session.document}
                   history={session.history}
                   displayName={session.displayName}

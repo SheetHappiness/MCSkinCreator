@@ -2,8 +2,11 @@ import type { SkinDocument } from '../../engine/document';
 import {
   BODY_PARTS,
   CUBE_FACES,
+  getFaceRegion,
   getBodyPartRegions,
+  type BodyPart,
   type SkinLayer,
+  type SkinSemanticTarget,
   type SkinModel,
   type TextureLayerFilter,
   type TextureRegion,
@@ -33,6 +36,11 @@ const GRID_COLOR = 'rgba(10, 12, 15, 0.26)';
 const TEXTURE_BOUNDARY_COLOR = 'rgba(225, 229, 235, 0.32)';
 const UV_BASE_BOUNDARY_COLOR = 'rgba(221, 230, 240, 0.42)';
 const UV_OUTER_BOUNDARY_COLOR = 'rgba(184, 202, 221, 0.46)';
+const SEMANTIC_SELECTION_FILL = 'rgba(239, 198, 107, 0.12)';
+const SEMANTIC_SELECTION_STROKE = 'rgba(248, 211, 128, 0.9)';
+const SEMANTIC_HIGHLIGHT_FILL = 'rgba(112, 201, 255, 0.24)';
+const SEMANTIC_HIGHLIGHT_STROKE = 'rgba(150, 221, 255, 0.96)';
+const ISOLATION_FILL = 'rgba(12, 15, 19, 0.48)';
 
 export interface SkinCanvasRenderOptions {
   readonly showGrid: boolean;
@@ -42,6 +50,12 @@ export interface SkinCanvasRenderOptions {
   readonly uvOverlay?: {
     readonly layer: TextureLayerFilter;
   };
+  /** A transient semantic target received from the 3D hover surface. */
+  readonly semanticHighlight?: SkinSemanticTarget;
+  /** A persistent view-only semantic target selected by an inspect action. */
+  readonly semanticSelection?: SkinSemanticTarget;
+  /** Dims unrelated canonical UV regions without changing pointer semantics. */
+  readonly isolatedBodyPart?: BodyPart;
 }
 
 function drawTransparencySurface(
@@ -327,6 +341,97 @@ function layersForOverlay(layer: TextureLayerFilter): readonly SkinLayer[] {
   return layer === 'both' ? ['base', 'outer'] : [layer];
 }
 
+function drawTextureRegionFill(
+  context: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  region: TextureRegion,
+): void {
+  context.fillRect(
+    viewport.offsetX + region.x * viewport.zoom,
+    viewport.offsetY + region.y * viewport.zoom,
+    region.width * viewport.zoom,
+    region.height * viewport.zoom,
+  );
+}
+
+/** Dims unrelated canonical regions while leaving the canvas pointer-safe. */
+function drawIsolationOverlay(
+  context: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  model: SkinModel,
+  isolatedBodyPart: BodyPart | undefined,
+): void {
+  if (isolatedBodyPart === undefined) return;
+
+  context.save();
+  context.fillStyle = ISOLATION_FILL;
+  for (const bodyPart of BODY_PARTS) {
+    if (bodyPart === isolatedBodyPart) continue;
+    for (const layer of ['base', 'outer'] as const) {
+      const definitions = getBodyPartRegions({ model, bodyPart, layer });
+      for (const face of CUBE_FACES) {
+        drawTextureRegionFill(context, viewport, definitions[face].region);
+      }
+    }
+  }
+  context.restore();
+}
+
+function drawSemanticRegion(
+  context: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  surface: CanvasSurface,
+  target: SkinSemanticTarget,
+  fill: string,
+  stroke: string,
+): void {
+  const region = getFaceRegion(target);
+  const left = viewport.offsetX + region.x * viewport.zoom;
+  const top = viewport.offsetY + region.y * viewport.zoom;
+  const width = region.width * viewport.zoom;
+  const height = region.height * viewport.zoom;
+
+  context.save();
+  context.fillStyle = fill;
+  context.fillRect(left, top, width, height);
+  context.strokeStyle = stroke;
+  context.lineWidth = 1 / surface.pixelRatio;
+  context.beginPath();
+  drawUvRegionPath(context, viewport, region, surface);
+  context.stroke();
+  context.restore();
+}
+
+function drawSemanticTargetOverlays(
+  context: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  surface: CanvasSurface,
+  model: SkinModel,
+  selection: SkinSemanticTarget | undefined,
+  highlight: SkinSemanticTarget | undefined,
+): void {
+  if (selection !== undefined && selection.model === model) {
+    drawSemanticRegion(
+      context,
+      viewport,
+      surface,
+      selection,
+      SEMANTIC_SELECTION_FILL,
+      SEMANTIC_SELECTION_STROKE,
+    );
+  }
+  if (highlight !== undefined && highlight.model === model) {
+    drawSemanticRegion(
+      context,
+      viewport,
+      surface,
+      highlight,
+      SEMANTIC_HIGHLIGHT_FILL,
+      SEMANTIC_HIGHLIGHT_STROKE,
+    );
+  }
+}
+
 /** Draws canonical face boundaries without creating a pointer-intercepting DOM layer. */
 function drawUvBoundaryOverlay(
   context: CanvasRenderingContext2D,
@@ -420,6 +525,13 @@ export function renderSkinCanvas(
     );
   }
 
+  drawIsolationOverlay(
+    context,
+    viewport,
+    skinDocument.model,
+    options.isolatedBodyPart,
+  );
+
   drawTextureBoundary(context, viewport, skinDocument, surface);
 
   if (options.uvOverlay !== undefined) {
@@ -431,6 +543,15 @@ export function renderSkinCanvas(
       surface,
     );
   }
+
+  drawSemanticTargetOverlays(
+    context,
+    viewport,
+    surface,
+    skinDocument.model,
+    options.semanticSelection,
+    options.semanticHighlight,
+  );
 
   if (shouldRenderPixelGrid(options.showGrid, viewport.zoom)) {
     drawPixelGrid(context, viewport, skinDocument, surface);
