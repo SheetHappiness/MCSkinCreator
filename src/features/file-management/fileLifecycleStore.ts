@@ -17,6 +17,7 @@ import {
   cancelActiveEditorInteraction,
   dispatchActiveEditorCommand,
 } from '../editor/activeEditorInteraction';
+import { shouldRouteEditorCommandToCanvas } from '../editor/editorShortcuts';
 
 interface NewSkinDialogState {
   readonly isOpen: boolean;
@@ -146,6 +147,8 @@ function runFileCommand(command: FileCommand): void {
 nativeFiles.onFileCommand(runFileCommand);
 
 function runEditCommand(command: EditCommand): void {
+  if (!shouldRouteEditorCommandToCanvas(document.activeElement)) return;
+
   if (command === 'undo') {
     cancelActiveEditorInteraction();
     documentSessionController.undo();

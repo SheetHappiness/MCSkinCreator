@@ -175,6 +175,26 @@ function pickerHsvFromPointer(
 
 function SaturationValuePicker({ hsv, onChange }: SaturationValuePickerProps) {
   const activePointerIdRef = useRef<number | undefined>(undefined);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const cancelActivePointer = () => {
+      const pointerId = activePointerIdRef.current;
+      activePointerIdRef.current = undefined;
+      if (pointerId === undefined) return;
+
+      const picker = pickerRef.current;
+      if (picker?.hasPointerCapture?.(pointerId)) {
+        picker.releasePointerCapture?.(pointerId);
+      }
+    };
+
+    window.addEventListener('blur', cancelActivePointer);
+    return () => {
+      window.removeEventListener('blur', cancelActivePointer);
+      cancelActivePointer();
+    };
+  }, []);
 
   const updateFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
     onChange(
@@ -209,6 +229,7 @@ function SaturationValuePicker({ hsv, onChange }: SaturationValuePickerProps) {
 
   return (
     <div
+      ref={pickerRef}
       className="advanced-color-sv-picker"
       role="slider"
       aria-label="Visual color picker"

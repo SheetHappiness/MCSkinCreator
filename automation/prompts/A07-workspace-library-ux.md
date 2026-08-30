@@ -34,6 +34,7 @@ If any preflight condition fails, STOP and report the exact state.
 # Scope
 
 Implement/refine:
+
 - useful local skin thumbnails;
 - folders/collections using the storage model that best matches the existing library;
 - local search;

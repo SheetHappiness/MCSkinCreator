@@ -34,6 +34,7 @@ If any preflight condition fails, STOP and report the exact state.
 # Scope
 
 Implement:
+
 - texel → semantic body part/layer/face query;
 - optional UV boundary overlay;
 - concise hover identification such as `Head · Front · Base`;

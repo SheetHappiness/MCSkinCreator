@@ -28,6 +28,12 @@ export function isEditableKeyboardTarget(target: EventTarget | null): boolean {
   );
 }
 
+export function shouldRouteEditorCommandToCanvas(
+  target: EventTarget | null,
+): boolean {
+  return !isEditableKeyboardTarget(target);
+}
+
 export function editorToolFromShortcut(key: string): EditorTool | undefined {
   return SHORTCUT_TO_TOOL[key.toLowerCase()];
 }

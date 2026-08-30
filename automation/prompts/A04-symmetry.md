@@ -34,6 +34,7 @@ If any preflight condition fails, STOP and report the exact state.
 # Scope
 
 Implement at minimum:
+
 - symmetry Off;
 - a useful generic canvas mirror mode;
 - Minecraft Body Pair symmetry;

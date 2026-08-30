@@ -34,6 +34,7 @@ If any preflight condition fails, STOP and report the exact state.
 # Scope
 
 Implement:
+
 - one shared semantic target model;
 - 2D hover → subtle 3D highlight;
 - 3D hover → corresponding 2D UV highlight;

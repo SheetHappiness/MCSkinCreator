@@ -120,6 +120,11 @@ preview: canonical body-part, layer, and face targets can be highlighted from
 either surface, Ctrl/Cmd+left-click in 3D focuses the corresponding 2D face,
 and visibility isolation keeps the two views coordinated.
 
+Roadmap 3 A08 completes the artist workflow quality pass for the existing
+A00–A07 slice: native Edit commands respect text-field focus, New Skin manages
+modal keyboard focus, HSV dragging cancels safely on window blur, and saved
+PNGs invalidate cached library thumbnails. No Roadmap 4 scope is included.
+
 The formal MCSkin3D comparison, compatibility boundary, and explicit
 exclusions are recorded in
 [`docs/MCSKIN3D_PARITY.md`](docs/MCSKIN3D_PARITY.md).

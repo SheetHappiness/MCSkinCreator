@@ -6,6 +6,7 @@ import {
   getEditorToolShortcut,
   getPointerAction,
   isEditableKeyboardTarget,
+  shouldRouteEditorCommandToCanvas,
 } from './editorShortcuts';
 
 describe('editor tool keyboard shortcuts', () => {
@@ -44,6 +45,28 @@ describe('editor tool keyboard shortcuts', () => {
     expect(isEditableKeyboardTarget(document.createElement('button'))).toBe(
       false,
     );
+  });
+
+  it('keeps native edit commands inside editable controls', () => {
+    expect(
+      shouldRouteEditorCommandToCanvas(document.createElement('input')),
+    ).toBe(false);
+    expect(
+      shouldRouteEditorCommandToCanvas(document.createElement('textarea')),
+    ).toBe(false);
+    expect(
+      shouldRouteEditorCommandToCanvas(document.createElement('select')),
+    ).toBe(false);
+
+    const editable = document.createElement('div');
+    editable.contentEditable = 'true';
+    expect(shouldRouteEditorCommandToCanvas(editable)).toBe(false);
+    expect(
+      shouldRouteEditorCommandToCanvas(document.createElement('canvas')),
+    ).toBe(true);
+    expect(
+      shouldRouteEditorCommandToCanvas(document.createElement('button')),
+    ).toBe(true);
   });
 
   it('suppresses tool changes in inputs and with command modifiers', () => {

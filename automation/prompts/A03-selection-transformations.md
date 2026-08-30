@@ -34,6 +34,7 @@ If any preflight condition fails, STOP and report the exact state.
 # Scope
 
 Implement:
+
 - flip horizontal;
 - flip vertical;
 - duplicate;

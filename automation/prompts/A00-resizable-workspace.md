@@ -34,6 +34,7 @@ If any preflight condition fails, STOP and report the exact state.
 # Scope
 
 Implement:
+
 - draggable splitter between Local Library and the central 2D workspace;
 - draggable splitter between the central workspace and the right-side workspace;
 - a vertical splitter inside the right workspace where the current controls/history/3D composition naturally supports it;

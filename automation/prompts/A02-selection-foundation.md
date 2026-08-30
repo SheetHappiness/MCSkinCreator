@@ -34,6 +34,7 @@ If any preflight condition fails, STOP and report the exact state.
 # Scope
 
 Implement:
+
 - rectangular selection tool;
 - visible selection overlay;
 - exact internal RGBA clipboard;

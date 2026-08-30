@@ -27,6 +27,37 @@ describe('NewSkinDialog', () => {
     ).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('moves focus into the dialog, wraps Tab navigation, and restores focus', () => {
+    const trigger = document.createElement('button');
+    document.body.append(trigger);
+    trigger.focus();
+
+    const view = render(
+      <NewSkinDialog
+        isOpen
+        isBusy={false}
+        onCancel={vi.fn()}
+        onCreate={vi.fn()}
+      />,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'New Skin' });
+    const classic = screen.getByRole('button', { name: 'Classic skin model' });
+    const create = screen.getByRole('button', { name: 'Create' });
+
+    expect(classic).toHaveFocus();
+
+    create.focus();
+    fireEvent.keyDown(dialog, { key: 'Tab' });
+    expect(classic).toHaveFocus();
+
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+    expect(create).toHaveFocus();
+
+    view.unmount();
+    expect(trigger).toHaveFocus();
+    trigger.remove();
+  });
+
   it('submits the selected model and closes on Escape', () => {
     const onCreate = vi.fn();
     const onCancel = vi.fn();

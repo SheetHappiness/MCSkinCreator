@@ -16,6 +16,7 @@ import {
   type SaveSkinPngResult,
 } from './fileContract';
 import { recordRecentSkin } from './recentSkinIpc';
+import { invalidatePngThumbnail } from './skinThumbnail';
 
 const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 const MAX_ENCODED_SKIN_BYTES = 1024 * 1024;
@@ -148,6 +149,7 @@ async function persistPng(
 ): Promise<SaveSkinPngResult> {
   try {
     await writeFile(filePath, bytes);
+    invalidatePngThumbnail(filePath);
     return { status: 'success' };
   } catch {
     return {

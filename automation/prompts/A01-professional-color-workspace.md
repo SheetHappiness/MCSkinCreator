@@ -34,6 +34,7 @@ If any preflight condition fails, STOP and report the exact state.
 # Scope
 
 Implement/refine:
+
 - clear Primary and Secondary color swatches and active-slot indication;
 - deterministic swap/reset behavior where compatible with existing Roadmap 2 contracts;
 - compact color popup/inspector;

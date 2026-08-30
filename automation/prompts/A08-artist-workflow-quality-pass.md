@@ -34,6 +34,7 @@ If any preflight condition fails, STOP and report the exact state.
 # Scope
 
 Audit and improve only existing Roadmap 3 functionality:
+
 - resizable workspace;
 - professional manual color workflow;
 - selections;
@@ -77,6 +78,7 @@ Fix concrete defects/friction. Do not add a new feature family.
 Add focused regression tests for every defect fixed where practical. Avoid giant snapshot tests.
 
 Manual QA matrix:
+
 - layout: large / 1200×760 / minimum + persisted custom layout;
 - color: primary/secondary, HSV, hex, alpha, recents, swatches;
 - selection: copy/cut/paste/delete/move/transforms/body transfer;

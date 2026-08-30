@@ -6,6 +6,8 @@ import {
   readFile,
   readdir,
   rm,
+  stat,
+  utimes,
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -198,6 +200,9 @@ test('creates a new skin and opens one controlled dropped PNG', async () => {
     });
     const dialog = window.getByRole('dialog', { name: 'New Skin' });
     await expect(dialog).toBeVisible();
+    await expect(
+      dialog.getByRole('button', { name: 'Classic skin model', exact: true }),
+    ).toBeFocused();
     await dialog
       .getByRole('button', { name: 'Slim skin model', exact: true })
       .click();
@@ -958,6 +963,25 @@ test('paints, erases, undoes, redoes, and saves exact RGBA pixels', async () => 
     });
     await expect(editorStatus.getByText('input-skin.png •')).toBeVisible();
 
+    const librarySearch = window.getByLabel('Search local library');
+    await librarySearch.fill('input');
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('edit-undo')?.click();
+    });
+    await expect(editorStatus.getByText('input-skin.png •')).toBeVisible();
+    await expect(librarySearch).toHaveValue('input');
+    await canvas.focus();
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('edit-undo')?.click();
+    });
+    await expect(
+      editorStatus.getByText('input-skin.png', { exact: true }),
+    ).toBeVisible();
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('edit-redo')?.click();
+    });
+    await expect(editorStatus.getByText('input-skin.png •')).toBeVisible();
+
     await window.keyboard.press('e');
     await expect(
       window.getByRole('button', { name: 'Eraser' }),
@@ -1611,18 +1635,17 @@ test('organizes library skins with thumbnails, search, collections, recents, and
   const savedRecentPath = path.join(temporaryDirectory, 'saved-recent.png');
   const initialPixels = new Uint8Array(64 * 64 * 4);
   initialPixels.set([15, 25, 35, 255], 0);
+  const initialBytes = encode({
+    width: 64,
+    height: 64,
+    data: initialPixels,
+    channels: 4,
+    depth: 8,
+  });
   await mkdir(libraryDirectory, { recursive: true });
   await mkdir(recentSourceDirectory, { recursive: true });
-  await writeFile(
-    libraryPath,
-    encode({
-      width: 64,
-      height: 64,
-      data: initialPixels,
-      channels: 4,
-      depth: 8,
-    }),
-  );
+  await writeFile(libraryPath, initialBytes);
+  const initialMetadata = await stat(libraryPath);
 
   let application = await electron.launch({
     args: ['.'],
@@ -1652,6 +1675,72 @@ test('organizes library skins with thumbnails, search, collections, recents, and
     expect(initialListing?.entries[0]?.thumbnailDataUrl).toMatch(
       /^data:image\/png;base64,/,
     );
+
+    const cacheUpdatedPixels = new Uint8Array(initialPixels);
+    cacheUpdatedPixels.set([16, 25, 35, 255], 0);
+    const cacheUpdatedBytes = encode({
+      width: 64,
+      height: 64,
+      data: cacheUpdatedPixels,
+      channels: 4,
+      depth: 8,
+    });
+    expect(cacheUpdatedBytes.byteLength).toBe(initialBytes.byteLength);
+    const updatedLibrarySave = await window.evaluate(
+      async ({ bytes, filePath }) => {
+        const browser = globalThis as typeof globalThis & {
+          skinFiles?: {
+            saveSkinPng(request: {
+              filePath: string;
+              bytes: Uint8Array;
+            }): Promise<{ status: string }>;
+          };
+        };
+        return browser.skinFiles?.saveSkinPng({
+          filePath,
+          bytes: Uint8Array.from(bytes),
+        });
+      },
+      { bytes: Array.from(cacheUpdatedBytes), filePath: libraryPath },
+    );
+    expect(updatedLibrarySave).toEqual({ status: 'success' });
+    await utimes(libraryPath, initialMetadata.atime, initialMetadata.mtime);
+    await window.getByRole('button', { name: 'Refresh local library' }).click();
+    const updatedSaveListing = await window.evaluate(async () => {
+      const browser = globalThis as typeof globalThis & {
+        skinLibrary?: {
+          listLibrarySkins(): Promise<{
+            status: string;
+            entries: Array<{ displayName: string; thumbnailDataUrl?: string }>;
+          }>;
+        };
+      };
+      return browser.skinLibrary?.listLibrarySkins();
+    });
+    expect(updatedSaveListing?.entries[0]?.thumbnailDataUrl).not.toBe(
+      initialListing?.entries[0]?.thumbnailDataUrl,
+    );
+
+    const restoredLibrarySave = await window.evaluate(
+      async ({ bytes, filePath }) => {
+        const browser = globalThis as typeof globalThis & {
+          skinFiles?: {
+            saveSkinPng(request: {
+              filePath: string;
+              bytes: Uint8Array;
+            }): Promise<{ status: string }>;
+          };
+        };
+        return browser.skinFiles?.saveSkinPng({
+          filePath,
+          bytes: Uint8Array.from(bytes),
+        });
+      },
+      { bytes: Array.from(initialBytes), filePath: libraryPath },
+    );
+    expect(restoredLibrarySave).toEqual({ status: 'success' });
+    await utimes(libraryPath, initialMetadata.atime, initialMetadata.mtime);
+    await window.getByRole('button', { name: 'Refresh local library' }).click();
 
     const recentSourcePaths = Array.from({ length: 13 }, (_, index) =>
       path.join(recentSourceDirectory, `recent-${index + 1}.png`),

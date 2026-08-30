@@ -231,6 +231,45 @@ describe('advanced color controls', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('cancels a visual color picker drag when the window loses focus', () => {
+    const onChange = vi.fn();
+    render(
+      <ColorControls
+        primaryColor={PRIMARY}
+        secondaryColor={SECONDARY}
+        activeSlot="primary"
+        onSelectSlot={vi.fn()}
+        onChange={onChange}
+        onSwap={vi.fn()}
+        onReset={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Color controls' }));
+    const picker = screen.getByRole('slider', {
+      name: 'Visual color picker',
+    });
+    fireEvent.pointerDown(picker, {
+      pointerId: 17,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.pointerMove(picker, {
+      pointerId: 17,
+      clientX: 20,
+      clientY: 20,
+    });
+    expect(onChange).toHaveBeenCalledTimes(2);
+
+    window.dispatchEvent(new Event('blur'));
+    fireEvent.pointerMove(picker, {
+      pointerId: 17,
+      clientX: 30,
+      clientY: 30,
+    });
+    expect(onChange).toHaveBeenCalledTimes(2);
+  });
+
   it('normalizes popup focus and dismisses on Escape or outside pointer input', () => {
     render(
       <ColorControls
