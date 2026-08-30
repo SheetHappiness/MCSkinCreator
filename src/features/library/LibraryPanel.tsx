@@ -148,7 +148,7 @@ function RecentEntry({
       </button>
       <button
         type="button"
-        className="recent-entry__remove"
+        className="recent-entry__remove ts-icon-button ts-icon-button--compact"
         aria-label={`Remove recent ${entry.displayName}`}
         title="Remove from recent skins"
         disabled={isBusy}
@@ -321,7 +321,7 @@ export function LibraryPanel({
         <div className="library-panel__header-actions">
           <button
             type="button"
-            className="library-panel__expand-button"
+            className="library-panel__expand-button ts-icon-button ts-icon-button--compact"
             aria-label={isExpanded ? 'Collapse Library' : 'Expand Library'}
             aria-expanded={isExpanded}
             aria-controls="library-details"
@@ -333,7 +333,7 @@ export function LibraryPanel({
           {onCollapse === undefined ? null : (
             <button
               type="button"
-              className="library-panel__collapse-button"
+              className="library-panel__collapse-button ts-icon-button ts-icon-button--compact"
               aria-label="Collapse Local Library"
               title="Collapse Local Library"
               onClick={onCollapse}
@@ -343,6 +343,7 @@ export function LibraryPanel({
           )}
           <button
             type="button"
+            className="ts-icon-button ts-icon-button--compact"
             aria-label="Refresh local library"
             title="Refresh local library"
             disabled={isBusy}
@@ -373,6 +374,7 @@ export function LibraryPanel({
             <label className="library-search">
               <span>Search</span>
               <input
+                className="ts-field"
                 aria-label="Search local library"
                 type="search"
                 value={searchQuery}
@@ -382,6 +384,7 @@ export function LibraryPanel({
             </label>
             <div className="library-collection-toolbar">
               <select
+                className="ts-field"
                 aria-label="Filter local library by collection"
                 value={effectiveSelectedCollectionId ?? ''}
                 disabled={isBusy}
@@ -398,6 +401,7 @@ export function LibraryPanel({
               </select>
               <button
                 type="button"
+                className="ts-icon-button ts-icon-button--compact"
                 aria-label="Create library collection"
                 disabled={isBusy}
                 onClick={() => {
@@ -414,6 +418,7 @@ export function LibraryPanel({
           {isCreatingCollection ? (
             <div className="library-collection-form">
               <input
+                className="ts-field"
                 aria-label="New collection name"
                 value={collectionValue}
                 placeholder="Collection name"
@@ -431,6 +436,7 @@ export function LibraryPanel({
               />
               <button
                 type="button"
+                className="ts-button"
                 aria-label="Create collection"
                 disabled={isBusy}
                 onClick={() => void submitCollection()}
@@ -439,6 +445,7 @@ export function LibraryPanel({
               </button>
               <button
                 type="button"
+                className="ts-button"
                 aria-label="Cancel create collection"
                 disabled={isBusy}
                 onClick={() => {
@@ -456,6 +463,7 @@ export function LibraryPanel({
               {renamingCollectionId === selectedCollection.id ? (
                 <>
                   <input
+                    className="ts-field"
                     aria-label={`New name for collection ${selectedCollection.displayName}`}
                     value={collectionRenameValue}
                     disabled={isBusy}
@@ -468,6 +476,7 @@ export function LibraryPanel({
                   />
                   <button
                     type="button"
+                    className="ts-button"
                     aria-label={`Save rename for collection ${selectedCollection.displayName}`}
                     disabled={isBusy}
                     onClick={() =>
@@ -478,6 +487,7 @@ export function LibraryPanel({
                   </button>
                   <button
                     type="button"
+                    className="ts-button"
                     aria-label={`Cancel rename for collection ${selectedCollection.displayName}`}
                     disabled={isBusy}
                     onClick={() => {
@@ -493,6 +503,7 @@ export function LibraryPanel({
                   <span>Delete “{selectedCollection.displayName}”?</span>
                   <button
                     type="button"
+                    className="ts-button"
                     aria-label={`Confirm delete collection ${selectedCollection.displayName}`}
                     disabled={isBusy}
                     onClick={() => {
@@ -510,6 +521,7 @@ export function LibraryPanel({
                   </button>
                   <button
                     type="button"
+                    className="ts-button"
                     aria-label={`Cancel delete collection ${selectedCollection.displayName}`}
                     disabled={isBusy}
                     onClick={() => setDeletingCollectionId(undefined)}
@@ -524,6 +536,7 @@ export function LibraryPanel({
                   </span>
                   <button
                     type="button"
+                    className="ts-button"
                     aria-label={`Rename collection ${selectedCollection.displayName}`}
                     disabled={isBusy}
                     onClick={() => {
@@ -535,6 +548,7 @@ export function LibraryPanel({
                   </button>
                   <button
                     type="button"
+                    className="ts-button"
                     aria-label={`Delete collection ${selectedCollection.displayName}`}
                     disabled={isBusy}
                     onClick={() =>
@@ -612,6 +626,7 @@ export function LibraryPanel({
                         {isRenaming ? (
                           <div className="library-entry__rename">
                             <input
+                              className="ts-field"
                               aria-label={`New name for ${entry.displayName}`}
                               value={renameValue}
                               disabled={isBusy}
@@ -624,6 +639,7 @@ export function LibraryPanel({
                             />
                             <button
                               type="button"
+                              className="ts-button"
                               aria-label={`Save rename for ${entry.displayName}`}
                               disabled={isBusy}
                               onClick={() => void submitRename(entry)}
@@ -632,6 +648,7 @@ export function LibraryPanel({
                             </button>
                             <button
                               type="button"
+                              className="ts-button"
                               aria-label={`Cancel rename for ${entry.displayName}`}
                               disabled={isBusy}
                               onClick={cancelRename}
@@ -685,6 +702,7 @@ export function LibraryPanel({
                             <div className="library-entry__actions">
                               <button
                                 type="button"
+                                className="ts-button"
                                 aria-label={`Rename ${entry.displayName}`}
                                 disabled={isBusy}
                                 onClick={() => beginRename(entry)}
@@ -693,6 +711,7 @@ export function LibraryPanel({
                               </button>
                               <button
                                 type="button"
+                                className="ts-button"
                                 aria-label={`Duplicate ${entry.displayName}`}
                                 disabled={isBusy}
                                 onClick={() =>
@@ -703,6 +722,7 @@ export function LibraryPanel({
                               </button>
                               <button
                                 type="button"
+                                className="ts-button"
                                 aria-label={`Reveal ${entry.displayName}`}
                                 disabled={isBusy}
                                 onClick={() => void revealLibraryEntry(entry)}
@@ -713,6 +733,7 @@ export function LibraryPanel({
                                 <>
                                   <button
                                     type="button"
+                                    className="ts-button"
                                     aria-label={`Confirm delete ${entry.displayName}`}
                                     disabled={isBusy}
                                     onClick={() => {
@@ -727,6 +748,7 @@ export function LibraryPanel({
                                   </button>
                                   <button
                                     type="button"
+                                    className="ts-button"
                                     aria-label={`Cancel delete ${entry.displayName}`}
                                     disabled={isBusy}
                                     onClick={() => setDeletingPath(undefined)}
@@ -737,6 +759,7 @@ export function LibraryPanel({
                               ) : (
                                 <button
                                   type="button"
+                                  className="ts-button"
                                   aria-label={`Delete ${entry.displayName}`}
                                   disabled={isBusy}
                                   onClick={() => {
@@ -761,6 +784,7 @@ export function LibraryPanel({
           <footer className="library-panel__footer">
             <button
               type="button"
+              className="ts-button"
               disabled={isBusy || session === undefined}
               onClick={() => void copyActiveDocumentToLibrary()}
             >

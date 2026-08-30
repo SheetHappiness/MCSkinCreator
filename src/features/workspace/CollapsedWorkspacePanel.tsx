@@ -19,6 +19,7 @@ export function CollapsedWorkspacePanel({
     >
       <button
         type="button"
+        className="ts-icon-button"
         aria-label={`Expand ${panelLabel}`}
         title={`Expand ${panelLabel}`}
         onClick={onRestore}

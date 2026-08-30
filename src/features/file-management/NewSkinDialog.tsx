@@ -127,6 +127,7 @@ export function NewSkinDialog({
             <button
               key={option}
               type="button"
+              className="ts-button"
               aria-label={`${label} skin model`}
               aria-pressed={model === option}
               disabled={isBusy}
@@ -138,12 +139,17 @@ export function NewSkinDialog({
           ))}
         </div>
         <footer className="new-skin-dialog__actions">
-          <button type="button" disabled={isBusy} onClick={onCancel}>
+          <button
+            type="button"
+            className="ts-button"
+            disabled={isBusy}
+            onClick={onCancel}
+          >
             Cancel
           </button>
           <button
             type="button"
-            className="new-skin-dialog__create"
+            className="new-skin-dialog__create ts-button ts-button--primary"
             disabled={isBusy}
             onClick={() => onCreate(model)}
           >

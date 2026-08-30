@@ -120,6 +120,7 @@ function NumericField({
     <label className="advanced-color-field">
       <span>{label}</span>
       <input
+        className="ts-field"
         type="number"
         inputMode={integer ? 'numeric' : 'decimal'}
         aria-label={ariaLabel}
@@ -347,6 +348,7 @@ function AdvancedColorEditor({ color, onChange }: AdvancedColorEditorProps) {
         <label className="advanced-color-hue-picker">
           <span>Hue</span>
           <input
+            className="ts-range"
             type="range"
             aria-label="Hue picker"
             min={0}
@@ -365,6 +367,7 @@ function AdvancedColorEditor({ color, onChange }: AdvancedColorEditorProps) {
         <label className="advanced-color-alpha-picker">
           <span>Alpha</span>
           <input
+            className="ts-range"
             type="range"
             aria-label="Alpha slider"
             min={0}
@@ -383,6 +386,7 @@ function AdvancedColorEditor({ color, onChange }: AdvancedColorEditorProps) {
       <label className="advanced-hex-field">
         <span>Hex</span>
         <input
+          className="ts-field"
           type="text"
           aria-label="Advanced hex color"
           aria-invalid={parseExactHex(hexValue, color.a) === undefined}
@@ -656,7 +660,7 @@ export function ColorControls({
         <button
           ref={advancedTriggerRef}
           type="button"
-          className="color-controls__button"
+          className="color-controls__button ts-button"
           aria-expanded={isAdvancedOpen}
           aria-controls="advanced-color-controls"
           aria-haspopup="dialog"
@@ -670,7 +674,7 @@ export function ColorControls({
       )}
       <button
         type="button"
-        className="color-controls__button"
+        className="color-controls__button ts-button"
         aria-label="Add current color to swatches"
         title={`Add ${activeSlot} color to local swatches`}
         onClick={addCurrentSwatch}
@@ -727,7 +731,7 @@ export function ColorControls({
                     <button
                       key={`${colorToHexRgba(color)}-${index}`}
                       type="button"
-                      className="color-recent-list__chip"
+                      className="color-recent-list__chip ts-button"
                       aria-label={`Apply recent ${hex} color to ${slotLabel(activeSlot)}`}
                       title={`${hex} · A ${color.a} · Apply to ${slotLabel(activeSlot)}`}
                       data-color={colorToHexRgba(color)}
@@ -740,7 +744,7 @@ export function ColorControls({
             )}
             <button
               type="button"
-              className="color-library__clear"
+              className="color-library__clear ts-button"
               disabled={recentColors.length === 0}
               onClick={resetRecentColors}
             >
@@ -751,7 +755,11 @@ export function ColorControls({
           <section className="color-swatch-library" aria-label={palette.name}>
             <div className="color-library__header">
               <span>{palette.name}</span>
-              <button type="button" onClick={addCurrentSwatch}>
+              <button
+                type="button"
+                className="ts-button"
+                onClick={addCurrentSwatch}
+              >
                 Add current
               </button>
             </div>
@@ -780,7 +788,7 @@ export function ColorControls({
                     >
                       <button
                         type="button"
-                        className="color-swatch-list__chip"
+                        className="color-swatch-list__chip ts-button"
                         aria-pressed={selected}
                         aria-label={`Apply ${label} swatch to active color`}
                         title={`${label} · ${exactColor} · Apply to ${slotLabel(activeSlot)}`}
@@ -797,7 +805,7 @@ export function ColorControls({
                       <div className="color-swatch-list__actions">
                         <button
                           type="button"
-                          className="color-swatch-list__slot"
+                          className="color-swatch-list__slot ts-button"
                           aria-label={`Apply ${label} swatch to Primary`}
                           title={`Apply ${exactColor} to Primary`}
                           onClick={() => applySwatch(swatch, 'primary')}
@@ -806,7 +814,7 @@ export function ColorControls({
                         </button>
                         <button
                           type="button"
-                          className="color-swatch-list__slot"
+                          className="color-swatch-list__slot ts-button"
                           aria-label={`Apply ${label} swatch to Secondary`}
                           title={`Apply ${exactColor} to Secondary`}
                           onClick={() => applySwatch(swatch, 'secondary')}
@@ -815,7 +823,7 @@ export function ColorControls({
                         </button>
                         <button
                           type="button"
-                          className="color-swatch-list__icon"
+                          className="color-swatch-list__icon ts-icon-button ts-icon-button--compact"
                           aria-label={`Move ${label} swatch up`}
                           disabled={index === 0}
                           onClick={() => moveColorSwatch(swatch.id, -1)}
@@ -824,7 +832,7 @@ export function ColorControls({
                         </button>
                         <button
                           type="button"
-                          className="color-swatch-list__icon"
+                          className="color-swatch-list__icon ts-icon-button ts-icon-button--compact"
                           aria-label={`Move ${label} swatch down`}
                           disabled={index === swatches.length - 1}
                           onClick={() => moveColorSwatch(swatch.id, 1)}
@@ -833,7 +841,7 @@ export function ColorControls({
                         </button>
                         <button
                           type="button"
-                          className="color-swatch-list__icon"
+                          className="color-swatch-list__icon ts-icon-button ts-icon-button--compact"
                           aria-label={`Remove ${label} swatch`}
                           onClick={() => removeColorSwatch(swatch.id)}
                         >
@@ -850,6 +858,7 @@ export function ColorControls({
           <div className="color-palette-actions">
             <button
               type="button"
+              className="ts-button"
               onClick={() => importInputRef.current?.click()}
             >
               Import GPL
@@ -864,12 +873,17 @@ export function ColorControls({
             />
             <button
               type="button"
+              className="ts-button"
               disabled={swatches.length === 0}
               onClick={exportSwatches}
             >
               Export GPL
             </button>
-            <button type="button" onClick={resetColorSwatches}>
+            <button
+              type="button"
+              className="ts-button"
+              onClick={resetColorSwatches}
+            >
               Restore defaults
             </button>
           </div>

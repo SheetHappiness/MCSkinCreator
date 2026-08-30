@@ -513,7 +513,7 @@ export function SkinPreviewPanel({
             {onCollapse === undefined ? null : (
               <button
                 type="button"
-                className="skin-preview-collapse-button"
+                className="skin-preview-collapse-button ts-icon-button ts-icon-button--compact"
                 aria-label="Collapse 3D Preview"
                 title="Collapse 3D Preview"
                 onClick={onCollapse}
@@ -522,12 +522,17 @@ export function SkinPreviewPanel({
               </button>
             )}
           </div>
-          <div className="model-selector" role="group" aria-label="Skin model">
+          <div
+            className="model-selector ts-segmented"
+            role="group"
+            aria-label="Skin model"
+          >
             <span className="model-selector__label">Model</span>
             {MODEL_OPTIONS.map(({ model, label }) => (
               <button
                 key={model}
                 type="button"
+                className="ts-button"
                 aria-pressed={document.model === model}
                 title={`${label} arm geometry`}
                 onClick={() => {
@@ -552,6 +557,7 @@ export function SkinPreviewPanel({
             <span className="skin-preview-visibility-label">Target</span>
             <button
               type="button"
+              className="ts-button"
               aria-label="Target base layer"
               aria-pressed={targetLayerForSelection === 'base'}
               onClick={() => selectTargetLayer('base')}
@@ -560,6 +566,7 @@ export function SkinPreviewPanel({
             </button>
             <button
               type="button"
+              className="ts-button"
               aria-label="Target outer layer"
               aria-pressed={targetLayerForSelection === 'outer'}
               onClick={() => selectTargetLayer('outer')}
@@ -575,6 +582,7 @@ export function SkinPreviewPanel({
             <span className="skin-preview-visibility-label">Layers</span>
             <button
               type="button"
+              className="ts-button"
               aria-label="Show base layer"
               aria-pressed={viewState.layers.base}
               onClick={() =>
@@ -587,6 +595,7 @@ export function SkinPreviewPanel({
             </button>
             <button
               type="button"
+              className="ts-button"
               aria-label="Show outer layer"
               aria-pressed={viewState.layers.outer}
               onClick={() =>
@@ -599,6 +608,7 @@ export function SkinPreviewPanel({
             </button>
             <button
               type="button"
+              className="ts-button"
               aria-label="Restore all visibility"
               onClick={() => updateViewState(() => restoreAllVisibility())}
             >
@@ -618,6 +628,7 @@ export function SkinPreviewPanel({
                 <div className="skin-preview-body-part" key={bodyPart}>
                   <button
                     type="button"
+                    className="ts-button"
                     aria-label={`${visible ? 'Hide' : 'Show'} ${label}`}
                     aria-pressed={visible}
                     onClick={() =>
@@ -630,7 +641,7 @@ export function SkinPreviewPanel({
                   </button>
                   <button
                     type="button"
-                    className="skin-preview-select-button"
+                    className="skin-preview-select-button ts-button"
                     aria-label={`Select ${label}`}
                     aria-pressed={
                       selectedTarget?.model === document.model &&
@@ -643,7 +654,7 @@ export function SkinPreviewPanel({
                   </button>
                   <button
                     type="button"
-                    className="skin-preview-isolate-button"
+                    className="skin-preview-isolate-button ts-button"
                     aria-label={`Isolate ${label}`}
                     aria-pressed={viewState.isolatedBodyPart === bodyPart}
                     onClick={() => {
@@ -690,14 +701,23 @@ export function SkinPreviewPanel({
             {formatPick(hoveredPick)}
           </output>
           <div className="skin-preview-actions">
-            <button type="button" onClick={() => void handleOpenPopout()}>
+            <button
+              type="button"
+              className="ts-button"
+              onClick={() => void handleOpenPopout()}
+            >
               Pop Out
             </button>
-            <button type="button" onClick={() => void handleSnapshot()}>
+            <button
+              type="button"
+              className="ts-button"
+              onClick={() => void handleSnapshot()}
+            >
               Snapshot
             </button>
             <button
               type="button"
+              className="ts-button"
               title="Reset 3D camera"
               onClick={() => rendererRef.current?.resetView()}
             >

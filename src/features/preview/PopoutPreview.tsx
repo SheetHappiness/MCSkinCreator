@@ -116,6 +116,7 @@ export function PopoutPreview() {
         </div>
         <button
           type="button"
+          className="ts-button"
           disabled={previewState === undefined}
           onClick={() => void handleSnapshot()}
         >
@@ -139,6 +140,7 @@ export function PopoutPreview() {
         {notice === undefined ? null : <span role="status">{notice}</span>}
         <button
           type="button"
+          className="ts-button"
           disabled={
             previewState === undefined || decodedPreview?.error !== undefined
           }

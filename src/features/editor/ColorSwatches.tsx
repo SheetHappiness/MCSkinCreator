@@ -36,7 +36,7 @@ function ColorSlotButton({
   return (
     <button
       type="button"
-      className={`color-slot-button color-slot-button--${slot}`}
+      className={`color-slot-button ts-button color-slot-button--${slot}`}
       aria-label={`${label} color`}
       aria-pressed={active}
       title={`${label} ${colorToHex(color)} · Alpha ${color.a} · ${action}`}
@@ -119,6 +119,7 @@ export function ColorSwatches({
       <div className="color-control__actions">
         <button
           type="button"
+          className="ts-icon-button ts-icon-button--compact"
           aria-label="Swap primary and secondary colors"
           title="Swap colors (X)"
           onClick={onSwap}
@@ -127,6 +128,7 @@ export function ColorSwatches({
         </button>
         <button
           type="button"
+          className="ts-icon-button ts-icon-button--compact"
           aria-label="Reset primary and secondary colors"
           title="Reset colors (D)"
           onClick={onReset}

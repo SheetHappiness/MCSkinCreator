@@ -345,6 +345,7 @@ function SelectionTransformMenu({
       </span>
       <button
         type="button"
+        className="ts-button"
         aria-label="Flip Horizontal"
         title="Flip selection horizontally"
         onClick={() => controller.flipHorizontal()}
@@ -353,6 +354,7 @@ function SelectionTransformMenu({
       </button>
       <button
         type="button"
+        className="ts-button"
         aria-label="Flip Vertical"
         title="Flip selection vertically"
         onClick={() => controller.flipVertical()}
@@ -363,6 +365,7 @@ function SelectionTransformMenu({
         <>
           <button
             type="button"
+            className="ts-button"
             aria-label="Duplicate selection"
             title="Duplicate selection as a movable copy"
             aria-keyshortcuts="Control+D"
@@ -371,7 +374,7 @@ function SelectionTransformMenu({
             Duplicate
           </button>
           <details className="selection-transform-menu__transfer">
-            <summary>Transfer</summary>
+            <summary className="ts-button">Transfer</summary>
             <div className="selection-transform-menu__transfer-panel">
               <label>
                 <span>Layer</span>
@@ -415,6 +418,7 @@ function SelectionTransformMenu({
               </label>
               <button
                 type="button"
+                className="ts-button"
                 aria-label={`Transfer ${transferOption.label}`}
                 onClick={() =>
                   controller.transferBodyPart({
@@ -1248,7 +1252,7 @@ export function EditorWorkspace({
               <button
                 key={tool}
                 type="button"
-                className="tool-button"
+                className="tool-button ts-icon-button"
                 aria-label={label}
                 aria-pressed={activeTool === tool}
                 aria-keyshortcuts={shortcut}
@@ -1364,6 +1368,7 @@ export function EditorWorkspace({
               </span>
               <button
                 type="button"
+                className="ts-button"
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={() => selectionController.commitFloating()}
               >
@@ -1371,6 +1376,7 @@ export function EditorWorkspace({
               </button>
               <button
                 type="button"
+                className="ts-button"
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={() => selectionController.cancelFloating()}
               >
@@ -1428,6 +1434,7 @@ export function EditorWorkspace({
         <div className="viewport-controls" aria-label="Viewport controls">
           <button
             type="button"
+            className="ts-icon-button ts-icon-button--compact"
             aria-label="Zoom out"
             onClick={() => zoomFromCenter(1 / VIEWPORT_ZOOM_BUTTON_FACTOR)}
           >
@@ -1438,16 +1445,18 @@ export function EditorWorkspace({
           </output>
           <button
             type="button"
+            className="ts-icon-button ts-icon-button--compact"
             aria-label="Zoom in"
             onClick={() => zoomFromCenter(VIEWPORT_ZOOM_BUTTON_FACTOR)}
           >
             +
           </button>
-          <button type="button" onClick={fitToView}>
+          <button type="button" className="ts-button" onClick={fitToView}>
             Fit
           </button>
           <button
             type="button"
+            className="ts-button"
             aria-pressed={showGrid}
             onClick={() => setShowGrid((current) => !current)}
           >

@@ -36,7 +36,7 @@ export function HistoryTimeline({ history }: HistoryTimelineProps) {
     <section className="history-timeline" aria-label="History timeline">
       <button
         type="button"
-        className="history-timeline__summary"
+        className="history-timeline__summary ts-button ts-button--quiet"
         aria-expanded={isExpanded}
         aria-controls="history-timeline-list"
         onClick={() => setIsExpanded((expanded) => !expanded)}
@@ -60,7 +60,7 @@ export function HistoryTimeline({ history }: HistoryTimelineProps) {
               <li key={entry.index}>
                 <button
                   type="button"
-                  className="history-timeline__entry"
+                  className="history-timeline__entry ts-button ts-button--quiet"
                   data-history-index={entry.index}
                   data-history-state={entry.state}
                   aria-current={entry.isCurrent ? 'step' : undefined}

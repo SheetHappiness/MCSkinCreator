@@ -30,7 +30,7 @@ export function DocumentTabs({
                 role="tab"
                 aria-selected={isActive}
                 aria-controls="active-document-panel"
-                className="document-tab__select"
+                className="document-tab__select ts-button"
                 title={session.filePath ?? session.displayName}
                 onClick={() => onActivate(documentId)}
               >
@@ -45,7 +45,7 @@ export function DocumentTabs({
               </button>
               <button
                 type="button"
-                className="document-tab__close"
+                className="document-tab__close ts-icon-button ts-icon-button--compact"
                 aria-label={closeLabel}
                 title={closeLabel}
                 onClick={() => onClose(documentId)}

@@ -70,6 +70,7 @@ export function ColorFields({ color, colorSlot, onChange }: ColorFieldsProps) {
       <label className="color-field color-field--hex">
         <span>Hex</span>
         <input
+          className="ts-field"
           type="text"
           aria-label="Paint hex color"
           aria-invalid={!hexIsValid}
@@ -92,6 +93,7 @@ export function ColorFields({ color, colorSlot, onChange }: ColorFieldsProps) {
       <label className="color-field color-field--alpha">
         <span>Alpha</span>
         <input
+          className="ts-field"
           type="text"
           inputMode="numeric"
           aria-label="Paint alpha"

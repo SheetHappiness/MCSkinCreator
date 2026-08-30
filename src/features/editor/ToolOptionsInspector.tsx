@@ -38,6 +38,7 @@ function RangeOption({ label, ariaLabel, value, onChange }: RangeOptionProps) {
     <label className="tool-options-inspector__control">
       <span>{label}</span>
       <input
+        className="ts-range"
         type="range"
         aria-label={ariaLabel}
         min={0}
@@ -56,6 +57,7 @@ function NoiseSeedOption({ options }: { readonly options: NoiseToolOptions }) {
     <label className="tool-options-inspector__control tool-options-inspector__seed">
       <span>Seed</span>
       <input
+        className="ts-field"
         type="number"
         aria-label="Noise seed"
         min={0}
@@ -80,6 +82,7 @@ function StampPatternOption() {
     <label className="tool-options-inspector__control tool-options-inspector__select">
       <span>Pattern</span>
       <select
+        className="ts-field"
         aria-label="Stamp pattern"
         value={options.pattern}
         onChange={(event) => {
@@ -185,6 +188,7 @@ function SymmetryOption({ activeTool }: { readonly activeTool: EditorTool }) {
       <label className="tool-options-inspector__control tool-options-inspector__select">
         <span>Symmetry</span>
         <select
+          className="ts-field"
           aria-label="Symmetry"
           value={mode}
           onChange={(event) => {

@@ -58,6 +58,7 @@ export function UvCanvasControls({
     >
       <button
         type="button"
+        className="ts-button"
         aria-label="UV boundaries"
         aria-pressed={showUvOverlay}
         title="Toggle canonical UV boundaries"
@@ -65,11 +66,16 @@ export function UvCanvasControls({
       >
         UV
       </button>
-      <div className="canvas-layer-controls" role="group" aria-label="UV layer">
+      <div
+        className="canvas-layer-controls ts-segmented"
+        role="group"
+        aria-label="UV layer"
+      >
         {LAYER_OPTIONS.map((option) => (
           <button
             key={option.value}
             type="button"
+            className="ts-button"
             aria-label={option.label}
             aria-pressed={layer === option.value}
             title={`Use ${option.label} layer for UV overlay and focus`}
@@ -82,6 +88,7 @@ export function UvCanvasControls({
       <label className="canvas-focus-control">
         <span>Focus</span>
         <select
+          className="ts-field"
           aria-label="Canvas focus"
           value={focusTarget}
           onChange={(event) => {

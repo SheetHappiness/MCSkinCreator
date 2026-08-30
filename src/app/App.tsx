@@ -221,6 +221,7 @@ export function App() {
             <>
               <button
                 type="button"
+                className="ts-button"
                 disabled={isBusy || !session.document.isDirty}
                 title="Save (Ctrl+S)"
                 onClick={() => void documentSessionController.save()}
@@ -229,6 +230,7 @@ export function App() {
               </button>
               <button
                 type="button"
+                className="ts-button"
                 disabled={isBusy || !hasDirtyDocuments}
                 title="Save All (Ctrl+Alt+S)"
                 onClick={() => void documentSessionController.saveAll()}
@@ -237,6 +239,7 @@ export function App() {
               </button>
               <button
                 type="button"
+                className="ts-button"
                 disabled={isBusy}
                 title="Save As (Ctrl+Shift+S)"
                 onClick={() => void documentSessionController.saveAs()}
@@ -247,6 +250,7 @@ export function App() {
           )}
           <button
             type="button"
+            className="ts-button"
             title="Reset Layout"
             onClick={resetWorkspaceLayout}
           >
@@ -364,6 +368,7 @@ export function App() {
                   <div className="file-actions" aria-label="File actions">
                     <button
                       type="button"
+                      className="ts-button"
                       disabled={isBusy}
                       onClick={requestNewSkin}
                     >
@@ -371,6 +376,7 @@ export function App() {
                     </button>
                     <button
                       type="button"
+                      className="ts-button"
                       disabled={isBusy}
                       onClick={() => void documentSessionController.open()}
                     >
