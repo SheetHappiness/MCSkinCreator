@@ -448,6 +448,112 @@ test('selects exact pixels, previews paste and move, supports rollback, and clea
   }
 });
 
+test('runs selection flips, duplicate, and explicit paired-limb transfer from the contextual menu', async () => {
+  const temporaryDirectory = await mkdtemp(
+    path.join(tmpdir(), 'minecraft-skin-editor-transform-e2e-'),
+  );
+  const inputPath = path.join(temporaryDirectory, 'transform.png');
+  const pixels = new Uint8Array(64 * 64 * 4);
+  const setPixel = (x: number, y: number, rgba: number[]) => {
+    pixels.set(rgba, (y * 64 + x) * 4);
+  };
+  setPixel(10, 10, [10, 20, 30, 255]);
+  setPixel(11, 10, [40, 50, 60, 0]);
+  setPixel(12, 10, [70, 80, 90, 255]);
+  setPixel(10, 11, [100, 110, 120, 255]);
+  setPixel(11, 11, [130, 140, 150, 255]);
+  setPixel(12, 11, [160, 170, 180, 255]);
+  setPixel(44, 20, [201, 32, 32, 255]);
+  setPixel(47, 20, [32, 201, 32, 255]);
+  await writeFile(
+    inputPath,
+    encode({ width: 64, height: 64, data: pixels, channels: 4, depth: 8 }),
+  );
+
+  const application = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      MINECRAFT_SKIN_EDITOR_E2E: '1',
+      MINECRAFT_SKIN_EDITOR_E2E_OPEN_PATH: inputPath,
+      MINECRAFT_SKIN_EDITOR_E2E_UNSAVED_DECISION: 'discard',
+    },
+  });
+
+  try {
+    const window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Open PNG' }).click();
+    const canvas = window.getByRole('img', { name: '2D skin canvas' });
+    await expect(canvas).toBeVisible();
+    await window.getByRole('button', { name: 'Fit' }).click();
+
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox).not.toBeNull();
+    const zoom =
+      Number.parseInt(
+        (await window.getByTestId('zoom-value').textContent()) ?? '',
+        10,
+      ) / 100;
+    const textureLeft = (canvasBox!.width - 64 * zoom) / 2;
+    const textureTop = (canvasBox!.height - 64 * zoom) / 2;
+    const texturePoint = (x: number, y: number) => ({
+      x: canvasBox!.x + textureLeft + (x + 0.5) * zoom,
+      y: canvasBox!.y + textureTop + (y + 0.5) * zoom,
+    });
+
+    await window
+      .getByRole('button', { name: 'Selection', exact: true })
+      .click();
+    const first = texturePoint(10, 10);
+    const last = texturePoint(12, 11);
+    await window.mouse.move(first.x, first.y);
+    await window.mouse.down();
+    await window.mouse.move(last.x, last.y);
+    await window.mouse.up();
+
+    const transforms = window.getByTestId('selection-transform-menu');
+    const history = window.getByLabel('History timeline');
+    await expect(transforms).toBeVisible();
+    await transforms.getByRole('button', { name: 'Flip Horizontal' }).click();
+    await transforms.getByRole('button', { name: 'Flip Vertical' }).click();
+    await expect(history).toContainText('Flip Vertical');
+
+    await transforms
+      .getByRole('button', { name: 'Duplicate selection' })
+      .click();
+    await expect(canvas).toHaveAttribute('data-selection-state', 'floating');
+    await expect(transforms).toBeVisible();
+    await transforms.getByRole('button', { name: 'Flip Horizontal' }).click();
+    await canvas.focus();
+    await window.keyboard.press('ArrowRight');
+    await window.keyboard.press('Enter');
+    await expect(canvas).toHaveAttribute('data-selection-state', 'selected');
+    await expect(history).toContainText('Duplicate');
+
+    await transforms.getByText('Transfer', { exact: true }).click();
+    await transforms.getByLabel('Transfer layer').selectOption('base');
+    await transforms
+      .getByLabel('Body transfer pair')
+      .selectOption('right-arm-to-left-arm');
+    await transforms
+      .getByRole('button', { name: 'Transfer Right Arm → Left Arm' })
+      .click();
+    await expect(history).toContainText('Transfer Right Arm');
+
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('edit-undo')?.click();
+    });
+    await expect(history).toContainText('Duplicate');
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('edit-redo')?.click();
+    });
+    await expect(history).toContainText('Transfer Right Arm');
+  } finally {
+    await application.close();
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
 test('paints, erases, undoes, redoes, and saves exact RGBA pixels', async () => {
   const temporaryDirectory = await mkdtemp(
     path.join(tmpdir(), 'minecraft-skin-editor-e2e-'),

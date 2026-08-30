@@ -186,6 +186,12 @@ Delete clear to transparent black in one history transaction. Paste and move
 use a floating selection that previews clipped placement before an explicit
 commit; Escape cancels it without changing the document.
 
+Selection transforms add exact horizontal and vertical flips plus Duplicate as
+a movable floating copy. The contextual Selection menu also provides explicit
+character-relative Right Arm ↔ Left Arm and Right Leg ↔ Left Leg transfers for
+either Base only or Outer only, using the current Classic or Slim UV mapping;
+the other layer is never changed implicitly. `Ctrl+D` starts Duplicate.
+
 A Minecraft texture pixel must remain a discrete source pixel regardless of display zoom.
 
 Example:
@@ -216,8 +222,10 @@ The UI must allow users to:
 - edit them intentionally;
 - understand which layer is active.
 
-The current editor provides body-part visibility and isolation. UV-aware and
-body-part structural selection remain outside the current parity slice.
+The current editor provides body-part visibility and isolation. UV-aware canvas
+identification and structural selection remain outside the current parity
+slice; paired-limb transfer uses the canonical UV specification without
+turning the canvas into a structural selector.
 
 ---
 
@@ -742,18 +750,16 @@ Save
 
 ## Stage 2 — Further Artist Tools
 
-The defined Roadmap 2 parity slice is complete. The ideas below are possible
-future work beyond that slice and require separate scope:
+The defined Roadmap 2 parity slice is complete, and Roadmap 3 A03 adds
+selection transforms and paired-limb transfer. The ideas below are possible
+future work beyond those slices and require separate scope:
 
-- selection transformations;
 - symmetry;
-- mirroring;
 - advanced fill;
 - replace color;
 - palette ramps;
 - custom workspaces;
 - reference panel;
-- selection-based transformations;
 - richer brush and shape workflows.
 
 Examples:

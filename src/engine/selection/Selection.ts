@@ -7,6 +7,16 @@ import {
   type SkinDocument,
 } from '../document';
 import type { DocumentEditOperation, DocumentHistory } from '../history';
+import {
+  CUBE_FACES,
+  getBodyPartRegions,
+  type BodyPart,
+  type CubeFace,
+  type ModelDirection,
+  type SkinLayer,
+  type SkinModel,
+  type TextureRegion,
+} from '../minecraft-skin-spec';
 import type { Size, TextureCoordinate } from '../viewport';
 
 export interface SelectionRect {
@@ -27,17 +37,43 @@ export interface InternalClipboard {
 }
 
 export interface FloatingSelectionState {
-  readonly kind: 'move' | 'paste';
+  readonly kind: 'move' | 'paste' | 'duplicate';
   readonly rect: PixelRegion;
   readonly sourceRect?: SelectionRect;
   readonly data: Uint8ClampedArray;
+}
+
+export type SelectionFlipAxis = 'horizontal' | 'vertical';
+
+export type TransferableBodyPart = Extract<
+  BodyPart,
+  'rightArm' | 'leftArm' | 'rightLeg' | 'leftLeg'
+>;
+
+export interface BodyPartTransferRequest {
+  /** Character-relative source limb. */
+  readonly source: TransferableBodyPart;
+  /** Character-relative target limb. */
+  readonly target: TransferableBodyPart;
+  /** Exactly one layer is transferred by one command. */
+  readonly layer: SkinLayer;
+}
+
+export interface BodyPartFaceTransferMapping {
+  readonly sourceFace: CubeFace;
+  readonly targetFace: CubeFace;
+  readonly sourceRegion: TextureRegion;
+  readonly targetRegion: TextureRegion;
+  /** Whether source U/V must be reversed for the mirrored target face. */
+  readonly flipU: boolean;
+  readonly flipV: boolean;
 }
 
 export interface SelectionState {
   readonly selection: SelectionRect | undefined;
   /** The in-progress rectangle while the selection tool is being dragged. */
   readonly draft: SelectionRect | undefined;
-  /** A paste or move which has not yet been committed. */
+  /** A paste, duplicate, or move which has not yet been committed. */
   readonly floating: FloatingSelectionState | undefined;
 }
 
@@ -188,6 +224,190 @@ export function translatePixelRegion(
   };
 }
 
+export const MIRRORED_BODY_FACES: Readonly<Record<CubeFace, CubeFace>> =
+  Object.freeze({
+    top: 'top',
+    bottom: 'bottom',
+    front: 'front',
+    back: 'back',
+    left: 'right',
+    right: 'left',
+  });
+
+const PAIRED_BODY_PARTS: Readonly<
+  Record<TransferableBodyPart, TransferableBodyPart>
+> = Object.freeze({
+  rightArm: 'leftArm',
+  leftArm: 'rightArm',
+  rightLeg: 'leftLeg',
+  leftLeg: 'rightLeg',
+});
+
+function isTransferableBodyPart(
+  bodyPart: unknown,
+): bodyPart is TransferableBodyPart {
+  return typeof bodyPart === 'string' && bodyPart in PAIRED_BODY_PARTS;
+}
+
+function assertBodyPartTransfer(request: BodyPartTransferRequest): void {
+  if (request === null || typeof request !== 'object') {
+    throw new TypeError('Body-part transfer request must be an object.');
+  }
+  if (!isTransferableBodyPart(request.source)) {
+    throw new TypeError(
+      `Unsupported transfer source: ${String(request.source)}.`,
+    );
+  }
+  if (!isTransferableBodyPart(request.target)) {
+    throw new TypeError(
+      `Unsupported transfer target: ${String(request.target)}.`,
+    );
+  }
+  if (request.source === request.target) {
+    throw new RangeError('A body-part transfer source and target must differ.');
+  }
+  if (PAIRED_BODY_PARTS[request.source] !== request.target) {
+    throw new RangeError(
+      'Body-part transfers are limited to paired arms or paired legs.',
+    );
+  }
+  if (request.layer !== 'base' && request.layer !== 'outer') {
+    throw new TypeError(
+      `Unsupported transfer layer: ${String(request.layer)}.`,
+    );
+  }
+}
+
+function reflectAcrossCharacterCenter(
+  direction: ModelDirection,
+): ModelDirection {
+  switch (direction) {
+    case 'positiveX':
+      return 'negativeX';
+    case 'negativeX':
+      return 'positiveX';
+    case 'positiveY':
+      return 'positiveY';
+    case 'negativeY':
+      return 'negativeY';
+    case 'positiveZ':
+      return 'positiveZ';
+    case 'negativeZ':
+      return 'negativeZ';
+  }
+}
+
+function oppositeDirection(direction: ModelDirection): ModelDirection {
+  switch (direction) {
+    case 'positiveX':
+      return 'negativeX';
+    case 'negativeX':
+      return 'positiveX';
+    case 'positiveY':
+      return 'negativeY';
+    case 'negativeY':
+      return 'positiveY';
+    case 'positiveZ':
+      return 'negativeZ';
+    case 'negativeZ':
+      return 'positiveZ';
+  }
+}
+
+function needsDirectionReversal(
+  reflectedSource: ModelDirection,
+  target: ModelDirection,
+  axis: 'U' | 'V',
+): boolean {
+  if (reflectedSource === target) return false;
+  if (oppositeDirection(reflectedSource) === target) return true;
+  throw new RangeError(
+    `Cannot map body-transfer ${axis} orientation ${reflectedSource} to ${target}.`,
+  );
+}
+
+function bodyPartLabel(bodyPart: TransferableBodyPart): string {
+  switch (bodyPart) {
+    case 'rightArm':
+      return 'Right Arm';
+    case 'leftArm':
+      return 'Left Arm';
+    case 'rightLeg':
+      return 'Right Leg';
+    case 'leftLeg':
+      return 'Left Leg';
+  }
+}
+
+function defaultBodyTransferLabel(request: BodyPartTransferRequest): string {
+  return `Transfer ${bodyPartLabel(request.source)} → ${bodyPartLabel(request.target)} · ${request.layer === 'base' ? 'Base' : 'Outer'}`;
+}
+
+/** Returns the paired face used by a character-left/right mirrored transfer. */
+export function getMirroredBodyFace(face: CubeFace): CubeFace {
+  if (!CUBE_FACES.includes(face)) {
+    throw new TypeError(`Unsupported cube face: ${String(face)}.`);
+  }
+  return MIRRORED_BODY_FACES[face];
+}
+
+/**
+ * Builds a canonical face-by-face transfer plan. The source is reflected
+ * across the character's center plane, so side faces swap and U/V orientation
+ * metadata determines whether each source axis must be reversed.
+ */
+export function getBodyPartTransferMappings(
+  model: SkinModel,
+  request: BodyPartTransferRequest,
+): readonly BodyPartFaceTransferMapping[] {
+  assertBodyPartTransfer(request);
+
+  const sourceFaces = getBodyPartRegions({
+    model,
+    bodyPart: request.source,
+    layer: request.layer,
+  });
+  const targetFaces = getBodyPartRegions({
+    model,
+    bodyPart: request.target,
+    layer: request.layer,
+  });
+
+  const mappings = CUBE_FACES.map((sourceFace) => {
+    const targetFace = MIRRORED_BODY_FACES[sourceFace];
+    const sourceDefinition = sourceFaces[sourceFace];
+    const targetDefinition = targetFaces[targetFace];
+
+    if (
+      sourceDefinition.region.width !== targetDefinition.region.width ||
+      sourceDefinition.region.height !== targetDefinition.region.height
+    ) {
+      throw new RangeError(
+        `Paired ${model} ${request.layer} faces must have matching dimensions.`,
+      );
+    }
+
+    return Object.freeze({
+      sourceFace,
+      targetFace,
+      sourceRegion: sourceDefinition.region,
+      targetRegion: targetDefinition.region,
+      flipU: needsDirectionReversal(
+        reflectAcrossCharacterCenter(sourceDefinition.orientation.uDirection),
+        targetDefinition.orientation.uDirection,
+        'U',
+      ),
+      flipV: needsDirectionReversal(
+        reflectAcrossCharacterCenter(sourceDefinition.orientation.vDirection),
+        targetDefinition.orientation.vDirection,
+        'V',
+      ),
+    });
+  });
+
+  return Object.freeze(mappings);
+}
+
 function assertClipboard(clipboard: InternalClipboard): void {
   assertPositiveInteger(clipboard.width, 'Clipboard width');
   assertPositiveInteger(clipboard.height, 'Clipboard height');
@@ -253,6 +473,51 @@ function writeSelectionData(
       transaction.writePixel(x, y, colorFromData(clipboard.data, offset));
     }
   }
+}
+
+function assertFlipAxis(axis: SelectionFlipAxis): void {
+  if (axis !== 'horizontal' && axis !== 'vertical') {
+    throw new TypeError(`Unsupported selection flip axis: ${String(axis)}.`);
+  }
+}
+
+/** Returns an exact RGBA snapshot with the requested axis reversed. */
+export function flipClipboard(
+  clipboard: InternalClipboard,
+  axis: SelectionFlipAxis,
+): InternalClipboard {
+  assertClipboard(clipboard);
+  assertFlipAxis(axis);
+  const data = new Uint8ClampedArray(clipboard.data.length);
+
+  for (let row = 0; row < clipboard.height; row += 1) {
+    for (let column = 0; column < clipboard.width; column += 1) {
+      const sourceColumn =
+        axis === 'horizontal' ? clipboard.width - 1 - column : column;
+      const sourceRow = axis === 'vertical' ? clipboard.height - 1 - row : row;
+      const sourceOffset =
+        (sourceRow * clipboard.width + sourceColumn) * RGBA_CHANNEL_COUNT;
+      const targetOffset =
+        (row * clipboard.width + column) * RGBA_CHANNEL_COUNT;
+      for (let channel = 0; channel < RGBA_CHANNEL_COUNT; channel += 1) {
+        data[targetOffset + channel] = clipboard.data[sourceOffset + channel]!;
+      }
+    }
+  }
+
+  return createInternalClipboard(clipboard.width, clipboard.height, data);
+}
+
+export function flipClipboardHorizontally(
+  clipboard: InternalClipboard,
+): InternalClipboard {
+  return flipClipboard(clipboard, 'horizontal');
+}
+
+export function flipClipboardVertically(
+  clipboard: InternalClipboard,
+): InternalClipboard {
+  return flipClipboard(clipboard, 'vertical');
 }
 
 function runSelectionTransaction(
@@ -339,6 +604,110 @@ export function pasteClipboard(
   });
 }
 
+/** Applies one exact, transactional flip to an in-bounds selection. */
+export function transformSelection(
+  document: SkinDocument,
+  history: DocumentHistory,
+  rect: SelectionRect,
+  axis: SelectionFlipAxis,
+  label = axis === 'horizontal' ? 'Flip Horizontal' : 'Flip Vertical',
+): DocumentEditOperation | undefined {
+  assertSelectionRect(rect, document);
+  assertFlipAxis(axis);
+  const transformed = flipClipboard(copySelection(document, rect), axis);
+  return runSelectionTransaction(history, label, (transaction) => {
+    writeSelectionData(document, transaction, transformed, {
+      x: rect.x,
+      y: rect.y,
+    });
+  });
+}
+
+export function flipSelectionHorizontally(
+  document: SkinDocument,
+  history: DocumentHistory,
+  rect: SelectionRect,
+): DocumentEditOperation | undefined {
+  return transformSelection(document, history, rect, 'horizontal');
+}
+
+export function flipSelectionVertically(
+  document: SkinDocument,
+  history: DocumentHistory,
+  rect: SelectionRect,
+): DocumentEditOperation | undefined {
+  return transformSelection(document, history, rect, 'vertical');
+}
+
+/** Applies a mirrored paired-limb transfer to exactly one requested layer. */
+export function transferBodyPart(
+  document: SkinDocument,
+  history: DocumentHistory,
+  request: BodyPartTransferRequest,
+  label?: string,
+): DocumentEditOperation | undefined {
+  const mappings = getBodyPartTransferMappings(document.model, request);
+  const writes: Array<{
+    readonly x: number;
+    readonly y: number;
+    readonly color: RgbaColor;
+  }> = [];
+
+  // Snapshot every source face before opening the transaction. This keeps the
+  // operation correct even if a future canonical mapping introduces overlap.
+  for (const mapping of mappings) {
+    const sourcePixels: RgbaColor[][] = [];
+    for (let row = 0; row < mapping.sourceRegion.height; row += 1) {
+      const sourceRow: RgbaColor[] = [];
+      for (let column = 0; column < mapping.sourceRegion.width; column += 1) {
+        sourceRow.push(
+          document.readPixel(
+            mapping.sourceRegion.x + column,
+            mapping.sourceRegion.y + row,
+          ),
+        );
+      }
+      sourcePixels.push(sourceRow);
+    }
+
+    for (let row = 0; row < mapping.targetRegion.height; row += 1) {
+      for (let column = 0; column < mapping.targetRegion.width; column += 1) {
+        const sourceColumn = mapping.flipU
+          ? mapping.sourceRegion.width - 1 - column
+          : column;
+        const sourceRow = mapping.flipV
+          ? mapping.sourceRegion.height - 1 - row
+          : row;
+        writes.push({
+          x: mapping.targetRegion.x + column,
+          y: mapping.targetRegion.y + row,
+          color: sourcePixels[sourceRow]![sourceColumn]!,
+        });
+      }
+    }
+  }
+
+  return runSelectionTransaction(
+    history,
+    label ?? defaultBodyTransferLabel(request),
+    (transaction) => {
+      for (const write of writes) {
+        transaction.writePixel(write.x, write.y, write.color);
+      }
+    },
+  );
+}
+
+/** Explicit alias emphasizing that only paired limbs are accepted. */
+export function transferPairedBodyPart(
+  document: SkinDocument,
+  history: DocumentHistory,
+  request: BodyPartTransferRequest,
+  label?: string,
+): DocumentEditOperation | undefined {
+  return transferBodyPart(document, history, request, label);
+}
+
 /** Moves a snapshot, clears its source, and clips only at the texture edges. */
 export function moveSelection(
   document: SkinDocument,
@@ -367,7 +736,11 @@ export function applyFloatingSelection(
   document: SkinDocument,
   history: DocumentHistory,
   floating: FloatingSelectionState,
-  label = floating.kind === 'move' ? 'Move Selection' : 'Paste',
+  label = floating.kind === 'move'
+    ? 'Move Selection'
+    : floating.kind === 'duplicate'
+      ? 'Duplicate'
+      : 'Paste',
 ): DocumentEditOperation | undefined {
   assertPixelRegion(floating.rect);
   const clipboard = createInternalClipboard(
@@ -452,7 +825,8 @@ function freezeFloating(
 
 /**
  * Renderer-independent selection state and transactional selection commands.
- * Floating move/paste data is only applied to the document on commit.
+ * Floating move/paste/duplicate data is only applied to the document on
+ * commit.
  */
 export class SelectionController {
   private selectionValue: SelectionRect | undefined;
@@ -530,6 +904,86 @@ export class SelectionController {
     this.selectionDrag = undefined;
     this.publish();
     return true;
+  }
+
+  /** Flips the selected pixels, or the current floating snapshot, exactly. */
+  flip(axis: SelectionFlipAxis): DocumentEditOperation | undefined {
+    assertFlipAxis(axis);
+    if (this.floatingValue !== undefined) {
+      const transformed = flipClipboard(
+        createInternalClipboard(
+          this.floatingValue.rect.width,
+          this.floatingValue.rect.height,
+          this.floatingValue.data,
+        ),
+        axis,
+      );
+      this.floatingValue = {
+        ...this.floatingValue,
+        data: transformed.data,
+      };
+      this.publish();
+      return undefined;
+    }
+    if (this.selectionValue === undefined) return undefined;
+    return transformSelection(
+      this.document,
+      this.history,
+      this.selectionValue,
+      axis,
+    );
+  }
+
+  flipHorizontal(): DocumentEditOperation | undefined {
+    return this.flip('horizontal');
+  }
+
+  flipVertical(): DocumentEditOperation | undefined {
+    return this.flip('vertical');
+  }
+
+  /** Starts a movable copy without changing the document until commit. */
+  beginDuplicate(origin?: TextureCoordinate): boolean {
+    if (
+      this.floatingValue !== undefined ||
+      this.selectionDrag !== undefined ||
+      this.selectionValue === undefined
+    ) {
+      return false;
+    }
+
+    const clipboard = copySelection(this.document, this.selectionValue);
+    const target = origin ?? {
+      x: this.selectionValue.x,
+      y: this.selectionValue.y,
+    };
+    assertOrigin(target);
+    this.selectionBeforeFloating = this.selectionValue;
+    this.floatingValue = {
+      kind: 'duplicate',
+      rect: {
+        x: target.x,
+        y: target.y,
+        width: clipboard.width,
+        height: clipboard.height,
+      },
+      data: clipboard.data,
+    };
+    this.floatingDrag = undefined;
+    this.publish();
+    return true;
+  }
+
+  duplicate(origin?: TextureCoordinate): boolean {
+    return this.beginDuplicate(origin);
+  }
+
+  /** Transfers one character-relative paired limb and one explicit layer. */
+  transferBodyPart(
+    request: BodyPartTransferRequest,
+  ): DocumentEditOperation | undefined {
+    this.cancelTransient(false);
+    return transferBodyPart(this.document, this.history, request);
   }
 
   beginMove(point: TextureCoordinate): boolean {

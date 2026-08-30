@@ -512,6 +512,9 @@ body.is-workspace-resizing-horizontal * {
 .tool-options-inspector select:focus-visible,
 .history-timeline button:focus-visible,
 .selection-floating-actions button:focus-visible,
+.selection-transform-menu button:focus-visible,
+.selection-transform-menu summary:focus-visible,
+.selection-transform-menu select:focus-visible,
 .new-skin-dialog button:focus-visible,
 .skin-canvas:focus-visible,
 .workspace-splitter:focus-visible,
@@ -1471,6 +1474,104 @@ body.is-workspace-resizing-horizontal * {
 
 .skin-canvas.is-panning {
   cursor: grabbing;
+}
+
+.selection-transform-menu {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 24px);
+  padding: 4px;
+  border: 1px solid #454a51;
+  border-radius: var(--radius-control);
+  color: #cbd0d6;
+  background: rgb(32 34 37 / 94%);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 24%);
+  font-size: 10px;
+}
+
+.selection-transform-menu__label {
+  padding: 0 3px 0 2px;
+  color: var(--color-text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.selection-transform-menu button,
+.selection-transform-menu summary {
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid #454a51;
+  border-radius: var(--radius-control);
+  color: #cbd0d6;
+  background: #303338;
+  font: 10px/20px inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.selection-transform-menu button:hover,
+.selection-transform-menu summary:hover {
+  border-color: #6a7078;
+  color: #f0f2f5;
+  background: #3a3e44;
+}
+
+.selection-transform-menu__transfer {
+  position: relative;
+}
+
+.selection-transform-menu__transfer summary {
+  list-style: none;
+}
+
+.selection-transform-menu__transfer summary::-webkit-details-marker {
+  display: none;
+}
+
+.selection-transform-menu__transfer-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 3;
+  display: grid;
+  gap: 6px;
+  min-width: 214px;
+  padding: 7px;
+  border: 1px solid #4b5057;
+  border-radius: var(--radius-control);
+  background: #25272b;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 32%);
+}
+
+.selection-transform-menu__transfer-panel label {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 9px;
+}
+
+.selection-transform-menu__transfer-panel select {
+  min-width: 0;
+  height: 22px;
+  padding: 0 5px;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  color: #d7dade;
+  background: #24262a;
+  font: 10px/20px inherit;
+}
+
+.selection-transform-menu__transfer-panel > button {
+  justify-self: end;
 }
 
 .selection-floating-actions {

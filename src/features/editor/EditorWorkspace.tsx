@@ -16,7 +16,10 @@ import type { DocumentHistory } from '../../engine/history';
 import {
   SelectionController,
   selectionRectContainsPoint,
+  type BodyPartTransferRequest,
+  type SelectionState,
 } from '../../engine/selection';
+import type { SkinLayer } from '../../engine/minecraft-skin-spec';
 import {
   beginAdvancedPaintStroke,
   ERASER_COLOR,
@@ -245,6 +248,169 @@ function ToolIcon({ tool }: { readonly tool: EditorTool }) {
     <svg viewBox="0 0 20 20" aria-hidden="true">
       <path {...common} d="M4 4h12v12H4zM4 8h12M8 4v12" />
     </svg>
+  );
+}
+
+interface BodyTransferOption {
+  readonly value: string;
+  readonly label: string;
+  readonly source: BodyPartTransferRequest['source'];
+  readonly target: BodyPartTransferRequest['target'];
+}
+
+const BODY_TRANSFER_OPTIONS: readonly BodyTransferOption[] = [
+  {
+    value: 'right-arm-to-left-arm',
+    label: 'Right Arm → Left Arm',
+    source: 'rightArm',
+    target: 'leftArm',
+  },
+  {
+    value: 'left-arm-to-right-arm',
+    label: 'Left Arm → Right Arm',
+    source: 'leftArm',
+    target: 'rightArm',
+  },
+  {
+    value: 'right-leg-to-left-leg',
+    label: 'Right Leg → Left Leg',
+    source: 'rightLeg',
+    target: 'leftLeg',
+  },
+  {
+    value: 'left-leg-to-right-leg',
+    label: 'Left Leg → Right Leg',
+    source: 'leftLeg',
+    target: 'rightLeg',
+  },
+];
+
+type BodyTransferOptionValue = (typeof BODY_TRANSFER_OPTIONS)[number]['value'];
+
+interface SelectionTransformMenuProps {
+  readonly controller: SelectionController;
+  readonly selectionState: SelectionState;
+}
+
+function SelectionTransformMenu({
+  controller,
+  selectionState,
+}: SelectionTransformMenuProps) {
+  const [transferLayer, setTransferLayer] = useState<SkinLayer>('base');
+  const [transferOptionValue, setTransferOptionValue] =
+    useState<BodyTransferOptionValue>(BODY_TRANSFER_OPTIONS[0]!.value);
+
+  if (
+    (selectionState.selection === undefined &&
+      selectionState.floating === undefined) ||
+    selectionState.draft !== undefined
+  ) {
+    return null;
+  }
+
+  const isFloating = selectionState.floating !== undefined;
+  const transferOption = BODY_TRANSFER_OPTIONS.find(
+    (option) => option.value === transferOptionValue,
+  )!;
+
+  return (
+    <div
+      className="selection-transform-menu"
+      data-testid="selection-transform-menu"
+      role="group"
+      aria-label="Selection transformations"
+    >
+      <span className="selection-transform-menu__label">
+        {isFloating ? 'Floating' : 'Selection'}
+      </span>
+      <button
+        type="button"
+        aria-label="Flip Horizontal"
+        title="Flip selection horizontally"
+        onClick={() => controller.flipHorizontal()}
+      >
+        Flip H
+      </button>
+      <button
+        type="button"
+        aria-label="Flip Vertical"
+        title="Flip selection vertically"
+        onClick={() => controller.flipVertical()}
+      >
+        Flip V
+      </button>
+      {isFloating ? null : (
+        <>
+          <button
+            type="button"
+            aria-label="Duplicate selection"
+            title="Duplicate selection as a movable copy"
+            aria-keyshortcuts="Control+D"
+            onClick={() => controller.beginDuplicate()}
+          >
+            Duplicate
+          </button>
+          <details className="selection-transform-menu__transfer">
+            <summary>Transfer</summary>
+            <div className="selection-transform-menu__transfer-panel">
+              <label>
+                <span>Layer</span>
+                <select
+                  aria-label="Transfer layer"
+                  value={transferLayer}
+                  onChange={(event) => {
+                    const layer = event.currentTarget.value;
+                    if (layer === 'base' || layer === 'outer') {
+                      setTransferLayer(layer);
+                    }
+                  }}
+                >
+                  <option value="base">Base only</option>
+                  <option value="outer">Outer only</option>
+                </select>
+              </label>
+              <label>
+                <span>Pair</span>
+                <select
+                  aria-label="Body transfer pair"
+                  value={transferOptionValue}
+                  onChange={(event) => {
+                    const value = event.currentTarget
+                      .value as BodyTransferOptionValue;
+                    if (
+                      BODY_TRANSFER_OPTIONS.some(
+                        (option) => option.value === value,
+                      )
+                    ) {
+                      setTransferOptionValue(value);
+                    }
+                  }}
+                >
+                  {BODY_TRANSFER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                aria-label={`Transfer ${transferOption.label}`}
+                onClick={() =>
+                  controller.transferBodyPart({
+                    source: transferOption.source,
+                    target: transferOption.target,
+                    layer: transferLayer,
+                  })
+                }
+              >
+                Apply
+              </button>
+            </div>
+          </details>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -615,6 +781,20 @@ export function EditorWorkspace({
     }
 
     if (
+      (event.ctrlKey || event.metaKey) &&
+      !event.altKey &&
+      !event.shiftKey &&
+      commandKey === 'd' &&
+      selectionState.selection !== undefined &&
+      selectionState.draft === undefined &&
+      selectionState.floating === undefined
+    ) {
+      event.preventDefault();
+      selectionController.beginDuplicate();
+      return;
+    }
+
+    if (
       !event.ctrlKey &&
       !event.metaKey &&
       !event.altKey &&
@@ -952,6 +1132,10 @@ export function EditorWorkspace({
             }}
             onWheel={handleWheel}
           />
+          <SelectionTransformMenu
+            controller={selectionController}
+            selectionState={selectionState}
+          />
           {selectionState.floating === undefined ? null : (
             <div
               className="selection-floating-actions"
@@ -968,7 +1152,9 @@ export function EditorWorkspace({
               <span>
                 {selectionState.floating.kind === 'move'
                   ? 'Moving selection'
-                  : 'Pasted selection'}{' '}
+                  : selectionState.floating.kind === 'duplicate'
+                    ? 'Duplicated selection'
+                    : 'Pasted selection'}{' '}
                 · {selectionState.floating.rect.width}×
                 {selectionState.floating.rect.height}
               </span>
