@@ -218,7 +218,7 @@ export function App() {
         <h1>Minecraft Skin Editor</h1>
         <div className="title-bar__actions">
           {session === undefined ? null : (
-            <>
+            <div className="title-bar__document-actions">
               <button
                 type="button"
                 className="ts-button"
@@ -246,16 +246,18 @@ export function App() {
               >
                 Save As…
               </button>
-            </>
+            </div>
           )}
-          <button
-            type="button"
-            className="ts-button"
-            title="Reset Layout"
-            onClick={resetWorkspaceLayout}
-          >
-            Reset Layout
-          </button>
+          <div className="title-bar__workspace-actions">
+            <button
+              type="button"
+              className="ts-button ts-button--quiet"
+              title="Reset Layout"
+              onClick={resetWorkspaceLayout}
+            >
+              Reset Layout
+            </button>
+          </div>
         </div>
       </header>
 

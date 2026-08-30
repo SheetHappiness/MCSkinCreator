@@ -128,22 +128,47 @@ interface SelectionGesture {
   readonly mode: 'select' | 'move';
 }
 
+type ToolGroupId = 'selection' | 'paint' | 'adjust';
+
 interface ToolDefinition {
   readonly tool: EditorTool;
   readonly label: string;
   readonly shortcut: string;
+  readonly group: ToolGroupId;
 }
 
 const TOOLS: readonly ToolDefinition[] = [
-  { tool: 'selection', label: 'Selection', shortcut: 'S' },
-  { tool: 'pencil', label: 'Pencil', shortcut: 'P' },
-  { tool: 'eraser', label: 'Eraser', shortcut: 'E' },
-  { tool: 'fill', label: 'Fill', shortcut: 'G' },
-  { tool: 'eyedropper', label: 'Eyedropper', shortcut: 'I' },
-  { tool: 'lighten', label: 'Lighten', shortcut: 'L' },
-  { tool: 'darken', label: 'Darken', shortcut: 'K' },
-  { tool: 'noise', label: 'Noise', shortcut: 'N' },
-  { tool: 'stamp', label: 'Stamp', shortcut: 'T' },
+  { tool: 'selection', label: 'Selection', shortcut: 'S', group: 'selection' },
+  { tool: 'pencil', label: 'Pencil', shortcut: 'P', group: 'paint' },
+  { tool: 'eraser', label: 'Eraser', shortcut: 'E', group: 'paint' },
+  { tool: 'fill', label: 'Fill', shortcut: 'G', group: 'paint' },
+  { tool: 'eyedropper', label: 'Eyedropper', shortcut: 'I', group: 'paint' },
+  { tool: 'lighten', label: 'Lighten', shortcut: 'L', group: 'adjust' },
+  { tool: 'darken', label: 'Darken', shortcut: 'K', group: 'adjust' },
+  { tool: 'noise', label: 'Noise', shortcut: 'N', group: 'adjust' },
+  { tool: 'stamp', label: 'Stamp', shortcut: 'T', group: 'adjust' },
+];
+
+const TOOL_GROUPS: readonly {
+  readonly id: ToolGroupId;
+  readonly label: string;
+  readonly tools: readonly ToolDefinition[];
+}[] = [
+  {
+    id: 'selection',
+    label: 'Selection tools',
+    tools: TOOLS.filter(({ group }) => group === 'selection'),
+  },
+  {
+    id: 'paint',
+    label: 'Paint tools',
+    tools: TOOLS.filter(({ group }) => group === 'paint'),
+  },
+  {
+    id: 'adjust',
+    label: 'Adjust tools',
+    tools: TOOLS.filter(({ group }) => group === 'adjust'),
+  },
 ];
 
 const INITIAL_VIEWPORT: ViewportState = { zoom: 1, offsetX: 0, offsetY: 0 };
@@ -1247,21 +1272,30 @@ export function EditorWorkspace({
         }}
       >
         <aside className="tool-rail" aria-label="Painting tools">
-          <div className="tool-list">
-            {TOOLS.map(({ tool, label, shortcut }) => (
-              <button
-                key={tool}
-                type="button"
-                className="tool-button ts-icon-button"
-                aria-label={label}
-                aria-pressed={activeTool === tool}
-                aria-keyshortcuts={shortcut}
-                data-tooltip={`${label}\n${shortcut}`}
-                onClick={() => requestToolChange(tool)}
+          <div className="tool-rail__groups">
+            {TOOL_GROUPS.map(({ id, label: groupLabel, tools }) => (
+              <div
+                key={id}
+                className={`tool-list tool-list--${id}`}
+                role="group"
+                aria-label={groupLabel}
               >
-                <ToolIcon tool={tool} />
-                <span className="shortcut-hint">{shortcut}</span>
-              </button>
+                {tools.map(({ tool, label, shortcut }) => (
+                  <button
+                    key={tool}
+                    type="button"
+                    className="tool-button ts-icon-button"
+                    aria-label={label}
+                    aria-pressed={activeTool === tool}
+                    aria-keyshortcuts={shortcut}
+                    data-tooltip={`${label}\n${shortcut}`}
+                    onClick={() => requestToolChange(tool)}
+                  >
+                    <ToolIcon tool={tool} />
+                    <span className="shortcut-hint">{shortcut}</span>
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
         </aside>
@@ -1430,7 +1464,12 @@ export function EditorWorkspace({
           {displayName}
           {isDirty ? ' •' : ''}
         </span>
-        <span>64×64</span>
+        <span
+          className="editor-status-bar__dimensions"
+          title="Canvas dimensions"
+        >
+          64×64
+        </span>
         <div className="viewport-controls" aria-label="Viewport controls">
           <button
             type="button"

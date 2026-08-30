@@ -23,6 +23,8 @@ export function DocumentTabs({
           return (
             <div
               className={`document-tab${isActive ? ' is-active' : ''}`}
+              data-active={isActive ? 'true' : 'false'}
+              data-dirty={session.document.isDirty ? 'true' : 'false'}
               key={documentId}
             >
               <button

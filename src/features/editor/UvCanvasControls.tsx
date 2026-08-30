@@ -66,6 +66,7 @@ export function UvCanvasControls({
       >
         UV
       </button>
+      <span className="canvas-structure-controls__divider" aria-hidden="true" />
       <div
         className="canvas-layer-controls ts-segmented"
         role="group"
@@ -85,6 +86,7 @@ export function UvCanvasControls({
           </button>
         ))}
       </div>
+      <span className="canvas-structure-controls__divider" aria-hidden="true" />
       <label className="canvas-focus-control">
         <span>Focus</span>
         <select
