@@ -555,6 +555,16 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
     await expect(
       colors.getByRole('button', { name: 'Secondary color', exact: true }),
     ).toHaveAttribute('aria-pressed', 'false');
+    await expect(
+      colors.locator('.color-slot-button--primary').getByText('#000000', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      colors.locator('.color-slot-button--secondary').getByText('Alpha 255', {
+        exact: true,
+      }),
+    ).toBeVisible();
     await colors
       .getByRole('button', { name: 'Secondary color', exact: true })
       .click();
@@ -600,6 +610,14 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
     ).toBeVisible();
     await expect(
       advancedColors.getByLabel('Visual color picker'),
+    ).toBeVisible();
+    await expect(advancedColors.getByLabel('Advanced hex color')).toHaveValue(
+      '#12345680',
+    );
+    await expect(
+      advancedColors
+        .getByLabel('Recent colors')
+        .locator('[data-color="#12345680"]'),
     ).toBeVisible();
     await colorControls
       .getByRole('button', {

@@ -3,6 +3,7 @@ import { createStore } from 'zustand/vanilla';
 
 import type { RgbaColor } from '../../engine/document';
 import type { EditorTool } from '../../engine/tools';
+import { recordRecentColor } from './colorSwatchStore';
 
 export type ColorSlot = 'primary' | 'secondary';
 
@@ -60,6 +61,7 @@ export function setEditorColor(slot: ColorSlot, color: RgbaColor): void {
       ? { primaryColor: nextColor }
       : { secondaryColor: nextColor },
   );
+  recordRecentColor(nextColor);
 }
 
 export function setActiveColorSlot(activeColorSlot: ColorSlot): void {

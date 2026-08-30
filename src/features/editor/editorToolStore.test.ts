@@ -11,9 +11,11 @@ import {
   setEditorColor,
   swapEditorColors,
 } from './editorToolStore';
+import { getRecentColors, resetRecentColors } from './colorSwatchStore';
 
 afterEach(() => {
   resetEditorColors();
+  resetRecentColors();
 });
 
 describe('primary and secondary editor colors', () => {
@@ -38,6 +40,7 @@ describe('primary and secondary editor colors', () => {
     expect(skinDocument.revision).toBe(0);
     expect(skinDocument.isDirty).toBe(false);
     expect(history.canUndo).toBe(false);
+    expect(getRecentColors()[0]).toEqual(color);
   });
 
   it('swaps colors without changing the active slot', () => {

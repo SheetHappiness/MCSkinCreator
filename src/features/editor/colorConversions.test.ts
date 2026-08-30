@@ -37,6 +37,18 @@ describe('exact color conversions', () => {
       b: 255,
       a: 255,
     });
+    expect(hsvToRgba({ h: 360, s: 100, v: 100 }, 255)).toEqual({
+      r: 255,
+      g: 0,
+      b: 0,
+      a: 255,
+    });
+    expect(hsvToRgba({ h: 480, s: 100, v: 100 }, 255)).toEqual({
+      r: 0,
+      g: 255,
+      b: 0,
+      a: 255,
+    });
   });
 
   it('canonicalizes fractional and out-of-range UI values to exact bytes', () => {

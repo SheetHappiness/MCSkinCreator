@@ -5,6 +5,9 @@ import type { RgbaColor } from '../../engine/document';
 
 export const COLOR_SWATCH_STORAGE_KEY =
   'minecraft-skin-editor.color-swatches.v1';
+export const COLOR_RECENT_STORAGE_KEY =
+  'minecraft-skin-editor.recent-colors.v1';
+export const MAX_RECENT_COLORS = 12;
 
 export interface ColorSwatch {
   readonly id: string;
@@ -22,8 +25,14 @@ interface PersistedColorSwatches {
   readonly swatches: readonly ColorSwatch[];
 }
 
+interface PersistedRecentColors {
+  readonly version: 1;
+  readonly colors: readonly RgbaColor[];
+}
+
 interface ColorSwatchState {
   readonly swatches: readonly ColorSwatch[];
+  readonly recentColors: readonly RgbaColor[];
 }
 
 const DEFAULT_SWATCH_DEFINITIONS: readonly ColorSwatch[] = [
@@ -81,6 +90,10 @@ function colorsEqual(left: RgbaColor, right: RgbaColor): boolean {
   );
 }
 
+function freezeColor(color: RgbaColor): RgbaColor {
+  return Object.freeze({ ...color });
+}
+
 function freezeSwatch(
   swatch: ColorSwatchInput & { readonly id: string },
 ): ColorSwatch {
@@ -95,6 +108,19 @@ function freezeSwatches(
   swatches: readonly ColorSwatch[],
 ): readonly ColorSwatch[] {
   return Object.freeze(swatches.map((swatch) => freezeSwatch(swatch)));
+}
+
+function freezeRecentColors(
+  colors: readonly RgbaColor[],
+): readonly RgbaColor[] {
+  const unique: RgbaColor[] = [];
+  for (const color of colors) {
+    if (!isRgbaColor(color)) continue;
+    if (unique.some((existing) => colorsEqual(existing, color))) continue;
+    unique.push(freezeColor(color));
+    if (unique.length === MAX_RECENT_COLORS) break;
+  }
+  return Object.freeze(unique);
 }
 
 export function defaultColorSwatches(): readonly ColorSwatch[] {
@@ -141,6 +167,38 @@ export function deserializeColorSwatches(
   }
 }
 
+export function serializeRecentColors(colors: readonly RgbaColor[]): string {
+  const payload: PersistedRecentColors = {
+    version: 1,
+    colors: freezeRecentColors(colors),
+  };
+  return JSON.stringify(payload);
+}
+
+export function deserializeRecentColors(
+  raw: string | null,
+): readonly RgbaColor[] {
+  if (raw === null) return Object.freeze([]);
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) {
+      return Object.freeze([]);
+    }
+    const payload = parsed as Partial<PersistedRecentColors>;
+    if (
+      payload.version !== 1 ||
+      !Array.isArray(payload.colors) ||
+      payload.colors.some((color) => !isRgbaColor(color))
+    ) {
+      return Object.freeze([]);
+    }
+    return freezeRecentColors(payload.colors);
+  } catch {
+    return Object.freeze([]);
+  }
+}
+
 function getStorage(): Storage | undefined {
   try {
     return globalThis.localStorage;
@@ -159,8 +217,19 @@ function readInitialSwatches(): readonly ColorSwatch[] {
   }
 }
 
+function readInitialRecentColors(): readonly RgbaColor[] {
+  const storage = getStorage();
+  if (storage === undefined) return Object.freeze([]);
+  try {
+    return deserializeRecentColors(storage.getItem(COLOR_RECENT_STORAGE_KEY));
+  } catch {
+    return Object.freeze([]);
+  }
+}
+
 const colorSwatchStore = createStore<ColorSwatchState>(() => ({
   swatches: readInitialSwatches(),
+  recentColors: readInitialRecentColors(),
 }));
 
 function persist(swatches: readonly ColorSwatch[]): void {
@@ -179,6 +248,22 @@ function setSwatches(swatches: readonly ColorSwatch[]): void {
   persist(next);
 }
 
+function persistRecentColors(colors: readonly RgbaColor[]): void {
+  const storage = getStorage();
+  if (storage === undefined) return;
+  try {
+    storage.setItem(COLOR_RECENT_STORAGE_KEY, serializeRecentColors(colors));
+  } catch {
+    // Recent colors are optional preferences and must not interrupt editing.
+  }
+}
+
+function setRecentColors(colors: readonly RgbaColor[]): void {
+  const next = freezeRecentColors(colors);
+  colorSwatchStore.setState({ recentColors: next });
+  persistRecentColors(next);
+}
+
 function nextSwatchId(existing: readonly ColorSwatch[]): string {
   const randomUuid = globalThis.crypto?.randomUUID;
   if (randomUuid !== undefined) return randomUuid.call(globalThis.crypto);
@@ -193,6 +278,30 @@ function nextSwatchId(existing: readonly ColorSwatch[]): string {
 
 export function getColorSwatches(): readonly ColorSwatch[] {
   return colorSwatchStore.getState().swatches;
+}
+
+export function getRecentColors(): readonly RgbaColor[] {
+  return colorSwatchStore.getState().recentColors;
+}
+
+export function recordRecentColor(color: RgbaColor): void {
+  if (!isRgbaColor(color)) {
+    throw new RangeError(
+      'Recent colors must contain exact byte RGBA channels.',
+    );
+  }
+  const recentColors = getRecentColors();
+  if (recentColors[0] !== undefined && colorsEqual(recentColors[0], color)) {
+    return;
+  }
+  setRecentColors([
+    freezeColor(color),
+    ...recentColors.filter((existing) => !colorsEqual(existing, color)),
+  ]);
+}
+
+export function resetRecentColors(): void {
+  setRecentColors([]);
 }
 
 export function addColorSwatch(input: ColorSwatchInput): ColorSwatch {
@@ -268,4 +377,8 @@ export function resetColorSwatches(): void {
 
 export function useColorSwatches(): readonly ColorSwatch[] {
   return useStore(colorSwatchStore, (state) => state.swatches);
+}
+
+export function useRecentColors(): readonly RgbaColor[] {
+  return useStore(colorSwatchStore, (state) => state.recentColors);
 }
