@@ -40,7 +40,11 @@ export function DocumentTabs({
                   {session.displayName}
                 </span>
                 {session.document.isDirty ? (
-                  <span className="document-tab__dirty" aria-label="Dirty">
+                  <span
+                    className="document-tab__dirty"
+                    aria-label="Unsaved changes"
+                    title="Unsaved changes"
+                  >
                     •
                   </span>
                 ) : null}

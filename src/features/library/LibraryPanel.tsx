@@ -120,20 +120,27 @@ function CollectionAssignment({
 function RecentEntry({
   entry,
   isBusy,
+  isActive,
   onOpen,
   onRemove,
 }: {
   readonly entry: RecentSkinEntry;
   readonly isBusy: boolean;
+  readonly isActive: boolean;
   readonly onOpen: () => void;
   readonly onRemove: () => void;
 }) {
   return (
-    <li className="recent-entry" data-testid="recent-entry">
+    <li
+      className={`recent-entry${isActive ? ' is-active' : ''}`}
+      data-active={isActive ? 'true' : 'false'}
+      data-testid="recent-entry"
+    >
       <button
         type="button"
         className="recent-entry__open"
         aria-label={`Open recent ${entry.displayName}`}
+        aria-current={isActive ? 'page' : undefined}
         disabled={isBusy || !entry.isAvailable}
         onClick={onOpen}
       >
@@ -142,6 +149,9 @@ function RecentEntry({
           displayName={entry.displayName}
         />
         <span className="recent-entry__name">{entry.displayName}</span>
+        {isActive ? (
+          <span className="recent-entry__active-state">Active</span>
+        ) : null}
         {!entry.isAvailable ? (
           <span className="recent-entry__missing">Missing</span>
         ) : null}
@@ -312,9 +322,9 @@ export function LibraryPanel({
       aria-label="Local skin library"
     >
       <header className="library-panel__header">
-        <div>
+        <div className="library-panel__header-copy">
           <h2>Library</h2>
-          <span title={rootDisplayName}>
+          <span className="library-panel__count" title={rootDisplayName}>
             {entries.length} {entries.length === 1 ? 'item' : 'items'}
           </span>
         </div>
@@ -357,21 +367,28 @@ export function LibraryPanel({
       <div
         className="library-panel__active-skin"
         data-testid="library-active-skin"
+        data-active={session === undefined ? 'false' : 'true'}
+        data-dirty={session?.document.isDirty ? 'true' : 'false'}
       >
         <Thumbnail
           dataUrl={activeThumbnailDataUrl}
           displayName={activeDisplayName}
         />
         <div className="library-panel__active-skin-copy">
-          <span>Active skin</span>
-          <strong title={activeDisplayName}>{activeDisplayName}</strong>
+          <span className="library-panel__active-skin-label">Active skin</span>
+          <div className="library-panel__active-skin-name">
+            <strong title={activeDisplayName}>{activeDisplayName}</strong>
+            {session?.document.isDirty ? (
+              <span className="library-panel__active-skin-dirty">Unsaved</span>
+            ) : null}
+          </div>
         </div>
       </div>
 
       {isExpanded ? (
         <div id="library-details" className="library-panel__details">
           <div className="library-panel__toolbar">
-            <label className="library-search">
+            <label className="library-search library-filter-field">
               <span>Search</span>
               <input
                 className="ts-field"
@@ -383,22 +400,25 @@ export function LibraryPanel({
               />
             </label>
             <div className="library-collection-toolbar">
-              <select
-                className="ts-field"
-                aria-label="Filter local library by collection"
-                value={effectiveSelectedCollectionId ?? ''}
-                disabled={isBusy}
-                onChange={(event) =>
-                  setSelectedCollectionId(event.target.value || undefined)
-                }
-              >
-                <option value="">All skins</option>
-                {collections.map((collection) => (
-                  <option key={collection.id} value={collection.id}>
-                    {collection.displayName} ({collection.entryCount})
-                  </option>
-                ))}
-              </select>
+              <label className="library-filter-field library-filter-field--collection">
+                <span>Collection</span>
+                <select
+                  className="ts-field"
+                  aria-label="Filter local library by collection"
+                  value={effectiveSelectedCollectionId ?? ''}
+                  disabled={isBusy}
+                  onChange={(event) =>
+                    setSelectedCollectionId(event.target.value || undefined)
+                  }
+                >
+                  <option value="">All skins</option>
+                  {collections.map((collection) => (
+                    <option key={collection.id} value={collection.id}>
+                      {collection.displayName} ({collection.entryCount})
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 className="ts-icon-button ts-icon-button--compact"
@@ -584,6 +604,11 @@ export function LibraryPanel({
                       key={entry.filePath}
                       entry={entry}
                       isBusy={isBusy}
+                      isActive={
+                        activeLibraryPath !== undefined &&
+                        normalizedLibraryPath(entry.filePath) ===
+                          activeLibraryPath
+                      }
                       onOpen={() => void openRecentEntry(entry)}
                       onRemove={() => void removeRecentEntry(entry)}
                     />
@@ -617,9 +642,14 @@ export function LibraryPanel({
                   {visibleEntries.map((entry) => {
                     const isRenaming = renamingPath === entry.filePath;
                     const isDeleting = deletingPath === entry.filePath;
+                    const isActive =
+                      activeLibraryPath !== undefined &&
+                      normalizedLibraryPath(entry.filePath) ===
+                        activeLibraryPath;
                     return (
                       <li
-                        className="library-entry"
+                        className={`library-entry${isActive ? ' is-active' : ''}`}
+                        data-active={isActive ? 'true' : 'false'}
                         data-testid="library-entry"
                         key={entry.filePath}
                       >
@@ -664,6 +694,7 @@ export function LibraryPanel({
                                 className="library-entry__open"
                                 draggable
                                 aria-label={`Open ${entry.displayName}`}
+                                aria-current={isActive ? 'page' : undefined}
                                 disabled={isBusy}
                                 onDragStart={(event) => {
                                   event.dataTransfer.effectAllowed = 'copy';
@@ -685,8 +716,15 @@ export function LibraryPanel({
                                 <span className="library-entry__name">
                                   {entry.displayName}
                                 </span>
+                                {isActive ? (
+                                  <span className="library-entry__active-state">
+                                    Active
+                                  </span>
+                                ) : null}
                               </button>
-                              <span>{formatByteLength(entry.byteLength)}</span>
+                              <span className="library-entry__meta">
+                                {formatByteLength(entry.byteLength)}
+                              </span>
                             </div>
                             <CollectionAssignment
                               entry={entry}
@@ -702,7 +740,7 @@ export function LibraryPanel({
                             <div className="library-entry__actions">
                               <button
                                 type="button"
-                                className="ts-button"
+                                className="ts-button library-entry__action"
                                 aria-label={`Rename ${entry.displayName}`}
                                 disabled={isBusy}
                                 onClick={() => beginRename(entry)}
@@ -711,7 +749,7 @@ export function LibraryPanel({
                               </button>
                               <button
                                 type="button"
-                                className="ts-button"
+                                className="ts-button library-entry__action"
                                 aria-label={`Duplicate ${entry.displayName}`}
                                 disabled={isBusy}
                                 onClick={() =>
@@ -722,7 +760,7 @@ export function LibraryPanel({
                               </button>
                               <button
                                 type="button"
-                                className="ts-button"
+                                className="ts-button library-entry__action"
                                 aria-label={`Reveal ${entry.displayName}`}
                                 disabled={isBusy}
                                 onClick={() => void revealLibraryEntry(entry)}
@@ -733,7 +771,7 @@ export function LibraryPanel({
                                 <>
                                   <button
                                     type="button"
-                                    className="ts-button"
+                                    className="ts-button library-entry__action library-entry__action--danger"
                                     aria-label={`Confirm delete ${entry.displayName}`}
                                     disabled={isBusy}
                                     onClick={() => {
@@ -748,7 +786,7 @@ export function LibraryPanel({
                                   </button>
                                   <button
                                     type="button"
-                                    className="ts-button"
+                                    className="ts-button library-entry__action"
                                     aria-label={`Cancel delete ${entry.displayName}`}
                                     disabled={isBusy}
                                     onClick={() => setDeletingPath(undefined)}
@@ -759,7 +797,7 @@ export function LibraryPanel({
                               ) : (
                                 <button
                                   type="button"
-                                  className="ts-button"
+                                  className="ts-button library-entry__action library-entry__action--danger"
                                   aria-label={`Delete ${entry.displayName}`}
                                   disabled={isBusy}
                                   onClick={() => {
@@ -784,7 +822,7 @@ export function LibraryPanel({
           <footer className="library-panel__footer">
             <button
               type="button"
-              className="ts-button"
+              className="ts-button ts-button--primary"
               disabled={isBusy || session === undefined}
               onClick={() => void copyActiveDocumentToLibrary()}
             >
