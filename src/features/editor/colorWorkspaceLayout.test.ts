@@ -16,9 +16,9 @@ describe('responsive color swatch layout', () => {
   });
 
   it('prefers fewer large palette columns over tiny color chips', () => {
-    expect(getPaletteColumns(180)).toBe(4);
-    expect(getPaletteColumns(140)).toBe(3);
-    expect(getPaletteColumns(90)).toBe(2);
+    expect(getPaletteColumns(300)).toBe(2);
+    expect(getPaletteColumns(180)).toBe(1);
+    expect(getPaletteColumns(90)).toBe(1);
     expect(PALETTE_SWATCH_SIZE).toBeGreaterThan(RECENT_COLOR_SWATCH_SIZE);
   });
 

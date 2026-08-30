@@ -101,40 +101,46 @@ export function ColorSwatches({
           onSelect={() => onSelectSlot('secondary')}
         />
       </div>
-      <label className="color-editor" title="Edit active color as RGB">
-        <span className="visually-hidden">Active color</span>
-        <input
-          type="color"
-          aria-label="Paint color"
-          value={colorToHex(activeColor)}
-          onChange={(event) => {
-            const parsed = parseExactHex(
-              event.currentTarget.value,
-              activeColor.a,
-            );
-            if (parsed !== undefined) onChange(activeSlot, parsed);
-          }}
-        />
-      </label>
-      <div className="color-control__actions">
-        <button
-          type="button"
-          className="ts-icon-button ts-icon-button--compact"
-          aria-label="Swap primary and secondary colors"
-          title="Swap colors (X)"
-          onClick={onSwap}
+      <div className="color-control__utility-row">
+        <label
+          className="color-editor"
+          title="Open the native color picker for the active color"
         >
-          ⇄
-        </button>
-        <button
-          type="button"
-          className="ts-icon-button ts-icon-button--compact"
-          aria-label="Reset primary and secondary colors"
-          title="Reset colors (D)"
-          onClick={onReset}
-        >
-          D
-        </button>
+          <span className="color-editor__label">Quick</span>
+          <span className="visually-hidden">Active color</span>
+          <input
+            type="color"
+            aria-label="Paint color"
+            value={colorToHex(activeColor)}
+            onChange={(event) => {
+              const parsed = parseExactHex(
+                event.currentTarget.value,
+                activeColor.a,
+              );
+              if (parsed !== undefined) onChange(activeSlot, parsed);
+            }}
+          />
+        </label>
+        <div className="color-control__actions">
+          <button
+            type="button"
+            className="ts-icon-button ts-icon-button--compact"
+            aria-label="Swap primary and secondary colors"
+            title="Swap colors (X)"
+            onClick={onSwap}
+          >
+            ⇄
+          </button>
+          <button
+            type="button"
+            className="ts-icon-button ts-icon-button--compact"
+            aria-label="Reset primary and secondary colors"
+            title="Reset colors (D)"
+            onClick={onReset}
+          >
+            D
+          </button>
+        </div>
       </div>
     </div>
   );

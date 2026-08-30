@@ -1161,6 +1161,9 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
         exact: true,
       })
       .click();
+    await advancedColors
+      .getByRole('button', { name: 'Swatch actions for #123456', exact: true })
+      .click();
     await expect(
       advancedColors.getByRole('button', {
         name: 'Apply #123456 swatch to Secondary',

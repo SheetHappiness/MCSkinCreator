@@ -91,6 +91,12 @@ describe('advanced color controls', () => {
     fireEvent.click(
       within(
         screen.getByRole('dialog', { name: 'Advanced color controls' }),
+      ).getByRole('button', { name: 'Swatch actions for Black' }),
+    );
+
+    fireEvent.click(
+      within(
+        screen.getByRole('dialog', { name: 'Advanced color controls' }),
       ).getByRole('button', { name: 'Apply Black swatch to Secondary' }),
     );
     expect(onChange).toHaveBeenCalledWith('secondary', {

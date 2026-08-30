@@ -329,186 +329,208 @@ function AdvancedColorEditor({ color, onChange }: AdvancedColorEditorProps) {
 
   return (
     <div className="advanced-color-editor">
-      <div className="advanced-color-preview-row">
-        <div
-          className="advanced-color-preview"
-          aria-label="Current exact color"
-          style={rgbaSurfaceStyle(color)}
-        />
-        <div className="advanced-color-preview-copy">
-          <strong>{colorToHexRgba(color)}</strong>
-          <span>
-            RGBA {color.r}, {color.g}, {color.b}, {color.a}
-          </span>
+      <section
+        className="advanced-color-picker-field"
+        aria-label="Surface and value picker"
+      >
+        <div className="advanced-color-section-heading">
+          <span>Surface / Value</span>
+          <output>H {formatNumber(hsv.h, 0)}°</output>
         </div>
-      </div>
-
-      <div className="advanced-color-picker-field">
         <SaturationValuePicker hsv={hsv} onChange={updatePickerHsv} />
-        <label className="advanced-color-hue-picker">
-          <span>Hue</span>
-          <input
-            className="ts-range"
-            type="range"
-            aria-label="Hue picker"
+        <div className="advanced-color-slider-stack">
+          <label className="advanced-color-hue-picker">
+            <span>Hue</span>
+            <input
+              className="ts-range"
+              type="range"
+              aria-label="Hue picker"
+              min={0}
+              max={360}
+              step={1}
+              value={hsv.h}
+              style={{
+                background:
+                  'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)',
+              }}
+              onChange={(event) =>
+                updateHsv('h', Number(event.currentTarget.value))
+              }
+            />
+            <output aria-label="Hue value">{formatNumber(hsv.h, 0)}°</output>
+          </label>
+          <label className="advanced-color-alpha-picker">
+            <span>Alpha</span>
+            <input
+              className="ts-range"
+              type="range"
+              aria-label="Alpha slider"
+              min={0}
+              max={255}
+              step={1}
+              value={color.a}
+              style={alphaSliderStyle(color)}
+              onChange={(event) =>
+                onChange({ ...color, a: Number(event.currentTarget.value) })
+              }
+            />
+            <output aria-label="Alpha value">{color.a}</output>
+          </label>
+        </div>
+      </section>
+
+      <section
+        className="advanced-color-precision"
+        aria-label="Exact color values"
+      >
+        <div className="advanced-color-section-heading">
+          <span>Exact values</span>
+          <span className="advanced-color-section-note">RGBA bytes</span>
+        </div>
+        <div className="advanced-color-preview-row">
+          <div
+            className="advanced-color-preview"
+            aria-label="Current exact color"
+            style={rgbaSurfaceStyle(color)}
+          />
+          <div className="advanced-color-preview-copy">
+            <strong>{colorToHexRgba(color)}</strong>
+            <span>
+              RGBA {color.r}, {color.g}, {color.b}, {color.a}
+            </span>
+          </div>
+        </div>
+
+        <div className="advanced-color-exact-topline">
+          <label className="advanced-hex-field">
+            <span>Hex</span>
+            <input
+              className="ts-field"
+              type="text"
+              aria-label="Advanced hex color"
+              aria-invalid={parseExactHex(hexValue, color.a) === undefined}
+              autoCapitalize="characters"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="#RRGGBB or #RRGGBBAA"
+              value={hexValue}
+              onBlur={() => {
+                if (ignoreHexBlurRef.current) {
+                  ignoreHexBlurRef.current = false;
+                  setHexDraft(undefined);
+                  return;
+                }
+                commitHex();
+              }}
+              onFocus={() => {
+                ignoreHexBlurRef.current = false;
+              }}
+              onChange={(event) =>
+                setHexDraft({
+                  source: canonicalHex,
+                  value: event.currentTarget.value,
+                })
+              }
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  commitHex();
+                  event.currentTarget.select();
+                } else if (event.key === 'Escape') {
+                  ignoreHexBlurRef.current = true;
+                  event.stopPropagation();
+                  setHexDraft(undefined);
+                  event.currentTarget.blur();
+                }
+              }}
+            />
+          </label>
+          <div className="advanced-color-alpha-field">
+            <NumericField
+              label="Alpha"
+              ariaLabel="Advanced alpha channel"
+              min={0}
+              max={255}
+              step={1}
+              integer
+              value={color.a}
+              onChange={(value) => onChange({ ...color, a: value })}
+            />
+          </div>
+        </div>
+
+        <div
+          className="advanced-color-group"
+          role="group"
+          aria-label="RGB channels"
+        >
+          <span className="advanced-color-group__label">RGB</span>
+          <NumericField
+            label="R"
+            ariaLabel="Red channel"
+            min={0}
+            max={255}
+            step={1}
+            integer
+            value={color.r}
+            onChange={(value) => updateRgb('r', value)}
+          />
+          <NumericField
+            label="G"
+            ariaLabel="Green channel"
+            min={0}
+            max={255}
+            step={1}
+            integer
+            value={color.g}
+            onChange={(value) => updateRgb('g', value)}
+          />
+          <NumericField
+            label="B"
+            ariaLabel="Blue channel"
+            min={0}
+            max={255}
+            step={1}
+            integer
+            value={color.b}
+            onChange={(value) => updateRgb('b', value)}
+          />
+        </div>
+
+        <div
+          className="advanced-color-group"
+          role="group"
+          aria-label="HSV channels"
+        >
+          <span className="advanced-color-group__label">HSV</span>
+          <NumericField
+            label="H°"
+            ariaLabel="Hue channel"
             min={0}
             max={360}
             step={1}
             value={hsv.h}
-            style={{
-              background:
-                'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)',
-            }}
-            onChange={(event) =>
-              updateHsv('h', Number(event.currentTarget.value))
-            }
+            onChange={(value) => updateHsv('h', value)}
           />
-        </label>
-        <label className="advanced-color-alpha-picker">
-          <span>Alpha</span>
-          <input
-            className="ts-range"
-            type="range"
-            aria-label="Alpha slider"
+          <NumericField
+            label="S%"
+            ariaLabel="Saturation channel"
             min={0}
-            max={255}
+            max={100}
             step={1}
-            value={color.a}
-            style={alphaSliderStyle(color)}
-            onChange={(event) =>
-              onChange({ ...color, a: Number(event.currentTarget.value) })
-            }
+            value={hsv.s}
+            onChange={(value) => updateHsv('s', value)}
           />
-          <output aria-label="Alpha value">{color.a}</output>
-        </label>
-      </div>
-
-      <label className="advanced-hex-field">
-        <span>Hex</span>
-        <input
-          className="ts-field"
-          type="text"
-          aria-label="Advanced hex color"
-          aria-invalid={parseExactHex(hexValue, color.a) === undefined}
-          autoCapitalize="characters"
-          autoComplete="off"
-          spellCheck={false}
-          placeholder="#RRGGBB or #RRGGBBAA"
-          value={hexValue}
-          onBlur={() => {
-            if (ignoreHexBlurRef.current) {
-              ignoreHexBlurRef.current = false;
-              setHexDraft(undefined);
-              return;
-            }
-            commitHex();
-          }}
-          onFocus={() => {
-            ignoreHexBlurRef.current = false;
-          }}
-          onChange={(event) =>
-            setHexDraft({
-              source: canonicalHex,
-              value: event.currentTarget.value,
-            })
-          }
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              commitHex();
-              event.currentTarget.select();
-            } else if (event.key === 'Escape') {
-              ignoreHexBlurRef.current = true;
-              event.stopPropagation();
-              setHexDraft(undefined);
-              event.currentTarget.blur();
-            }
-          }}
-        />
-      </label>
-
-      <div
-        className="advanced-color-group"
-        role="group"
-        aria-label="RGB channels"
-      >
-        <span className="advanced-color-group__label">RGB</span>
-        <NumericField
-          label="R"
-          ariaLabel="Red channel"
-          min={0}
-          max={255}
-          step={1}
-          integer
-          value={color.r}
-          onChange={(value) => updateRgb('r', value)}
-        />
-        <NumericField
-          label="G"
-          ariaLabel="Green channel"
-          min={0}
-          max={255}
-          step={1}
-          integer
-          value={color.g}
-          onChange={(value) => updateRgb('g', value)}
-        />
-        <NumericField
-          label="B"
-          ariaLabel="Blue channel"
-          min={0}
-          max={255}
-          step={1}
-          integer
-          value={color.b}
-          onChange={(value) => updateRgb('b', value)}
-        />
-      </div>
-
-      <div
-        className="advanced-color-group"
-        role="group"
-        aria-label="HSV channels"
-      >
-        <span className="advanced-color-group__label">HSV</span>
-        <NumericField
-          label="H°"
-          ariaLabel="Hue channel"
-          min={0}
-          max={360}
-          step={1}
-          value={hsv.h}
-          onChange={(value) => updateHsv('h', value)}
-        />
-        <NumericField
-          label="S%"
-          ariaLabel="Saturation channel"
-          min={0}
-          max={100}
-          step={1}
-          value={hsv.s}
-          onChange={(value) => updateHsv('s', value)}
-        />
-        <NumericField
-          label="V%"
-          ariaLabel="Value channel"
-          min={0}
-          max={100}
-          step={1}
-          value={hsv.v}
-          onChange={(value) => updateHsv('v', value)}
-        />
-      </div>
-
-      <NumericField
-        label="Alpha"
-        ariaLabel="Advanced alpha channel"
-        min={0}
-        max={255}
-        step={1}
-        integer
-        value={color.a}
-        onChange={(value) => onChange({ ...color, a: value })}
-      />
+          <NumericField
+            label="V%"
+            ariaLabel="Value channel"
+            min={0}
+            max={100}
+            step={1}
+            value={hsv.v}
+            onChange={(value) => updateHsv('v', value)}
+          />
+        </div>
+      </section>
     </div>
   );
 }
@@ -672,15 +694,17 @@ export function ColorControls({
           {isAdvancedOpen ? 'Close color' : 'Color controls'}
         </button>
       )}
-      <button
-        type="button"
-        className="color-controls__button ts-button"
-        aria-label="Add current color to swatches"
-        title={`Add ${activeSlot} color to local swatches`}
-        onClick={addCurrentSwatch}
-      >
-        + Swatch
-      </button>
+      {persistent ? null : (
+        <button
+          type="button"
+          className="color-controls__button ts-button"
+          aria-label="Add current color to swatches"
+          title={`Add ${activeSlot} color to local swatches`}
+          onClick={addCurrentSwatch}
+        >
+          + Swatch
+        </button>
+      )}
 
       {showAdvanced ? (
         <div
@@ -758,6 +782,7 @@ export function ColorControls({
               <button
                 type="button"
                 className="ts-button"
+                aria-label="Add current color to swatches"
                 onClick={addCurrentSwatch}
               >
                 Add current
@@ -796,58 +821,76 @@ export function ColorControls({
                         style={swatchStyle(swatch.color)}
                         onClick={() => applySwatch(swatch, activeSlot)}
                       />
-                      <span
-                        className="color-swatch-list__name"
-                        title={exactColor}
-                      >
-                        {label}
-                      </span>
-                      <div className="color-swatch-list__actions">
-                        <button
-                          type="button"
-                          className="color-swatch-list__slot ts-button"
-                          aria-label={`Apply ${label} swatch to Primary`}
-                          title={`Apply ${exactColor} to Primary`}
-                          onClick={() => applySwatch(swatch, 'primary')}
+                      <div className="color-swatch-list__meta">
+                        <span className="color-swatch-list__name" title={label}>
+                          {label}
+                        </span>
+                        <code
+                          className="color-swatch-list__exact"
+                          title={exactColor}
                         >
-                          P
-                        </button>
-                        <button
-                          type="button"
-                          className="color-swatch-list__slot ts-button"
-                          aria-label={`Apply ${label} swatch to Secondary`}
-                          title={`Apply ${exactColor} to Secondary`}
-                          onClick={() => applySwatch(swatch, 'secondary')}
-                        >
-                          S
-                        </button>
-                        <button
-                          type="button"
-                          className="color-swatch-list__icon ts-icon-button ts-icon-button--compact"
-                          aria-label={`Move ${label} swatch up`}
-                          disabled={index === 0}
-                          onClick={() => moveColorSwatch(swatch.id, -1)}
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          className="color-swatch-list__icon ts-icon-button ts-icon-button--compact"
-                          aria-label={`Move ${label} swatch down`}
-                          disabled={index === swatches.length - 1}
-                          onClick={() => moveColorSwatch(swatch.id, 1)}
-                        >
-                          ↓
-                        </button>
-                        <button
-                          type="button"
-                          className="color-swatch-list__icon ts-icon-button ts-icon-button--compact"
-                          aria-label={`Remove ${label} swatch`}
-                          onClick={() => removeColorSwatch(swatch.id)}
-                        >
-                          ×
-                        </button>
+                          {exactColor}
+                        </code>
                       </div>
+                      <details className="color-swatch-list__details">
+                        <summary
+                          className="color-swatch-list__more ts-button"
+                          role="button"
+                          aria-label={`Swatch actions for ${label}`}
+                          title={`Actions for ${label}`}
+                        >
+                          ⋯
+                        </summary>
+                        <div
+                          className="color-swatch-list__menu"
+                          aria-label={`${label} swatch actions`}
+                        >
+                          <button
+                            type="button"
+                            className="ts-button"
+                            aria-label={`Apply ${label} swatch to Primary`}
+                            title={`Apply ${exactColor} to Primary`}
+                            onClick={() => applySwatch(swatch, 'primary')}
+                          >
+                            Primary
+                          </button>
+                          <button
+                            type="button"
+                            className="ts-button"
+                            aria-label={`Apply ${label} swatch to Secondary`}
+                            title={`Apply ${exactColor} to Secondary`}
+                            onClick={() => applySwatch(swatch, 'secondary')}
+                          >
+                            Secondary
+                          </button>
+                          <button
+                            type="button"
+                            className="ts-button"
+                            aria-label={`Move ${label} swatch up`}
+                            disabled={index === 0}
+                            onClick={() => moveColorSwatch(swatch.id, -1)}
+                          >
+                            Move up
+                          </button>
+                          <button
+                            type="button"
+                            className="ts-button"
+                            aria-label={`Move ${label} swatch down`}
+                            disabled={index === swatches.length - 1}
+                            onClick={() => moveColorSwatch(swatch.id, 1)}
+                          >
+                            Move down
+                          </button>
+                          <button
+                            type="button"
+                            className="ts-button color-swatch-list__remove"
+                            aria-label={`Remove ${label} swatch`}
+                            onClick={() => removeColorSwatch(swatch.id)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </details>
                     </li>
                   );
                 })}
