@@ -2,12 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   COLLAPSED_PANEL_SIZE,
+  COLOR_WORKSPACE_HEIGHT_LIMITS,
   DEFAULT_WORKSPACE_LAYOUT,
   LEFT_PANEL_WIDTH_LIMITS,
+  MIN_LOCAL_LIBRARY_HEIGHT,
   RIGHT_INSPECTOR_HEIGHT_LIMITS,
   RIGHT_PANEL_WIDTH_LIMITS,
   WORKSPACE_LAYOUT_STORAGE_KEY,
   deserializeWorkspaceLayout,
+  getColorWorkspaceHeightBounds,
   getEffectiveWorkspaceLayout,
   getLeftPanelWidthBounds,
   getRightInspectorHeightBounds,
@@ -38,6 +41,7 @@ describe('workspace layout model', () => {
       leftPanelWidth: 276,
       rightPanelWidth: 352,
       rightInspectorHeight: 318,
+      colorWorkspaceHeight: 448,
       leftCollapsed: true,
       rightCollapsed: false,
     } as const;
@@ -89,6 +93,7 @@ describe('workspace layout model', () => {
           leftPanelWidth: 9999,
           rightPanelWidth: -20,
           rightInspectorHeight: 9999,
+          colorWorkspaceHeight: -20,
           leftCollapsed: 'yes',
           rightCollapsed: true,
         }),
@@ -97,6 +102,7 @@ describe('workspace layout model', () => {
       leftPanelWidth: LEFT_PANEL_WIDTH_LIMITS.max,
       rightPanelWidth: RIGHT_PANEL_WIDTH_LIMITS.min,
       rightInspectorHeight: RIGHT_INSPECTOR_HEIGHT_LIMITS.max,
+      colorWorkspaceHeight: COLOR_WORKSPACE_HEIGHT_LIMITS.min,
       leftCollapsed: DEFAULT_WORKSPACE_LAYOUT.leftCollapsed,
       rightCollapsed: true,
     });
@@ -154,6 +160,13 @@ describe('workspace layout model', () => {
     expect(getRightInspectorHeightBounds(462)).toEqual({
       min: 180,
       max: 274,
+    });
+    expect(getColorWorkspaceHeightBounds(800)).toEqual({
+      min: COLOR_WORKSPACE_HEIGHT_LIMITS.min,
+      max: Math.min(
+        COLOR_WORKSPACE_HEIGHT_LIMITS.max,
+        800 - 8 - MIN_LOCAL_LIBRARY_HEIGHT,
+      ),
     });
   });
 

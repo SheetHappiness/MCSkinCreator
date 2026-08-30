@@ -398,9 +398,11 @@ The raw pixel buffer should not be naively copied through global React state on 
 
 ## Color Processing
 
-Initial v0.1 only needs reliable color selection.
-
-A dedicated color engine is planned for later versions.
+The current Color Workspace stores the selected color as exact RGBA bytes.
+HSV and hexadecimal fields are deterministic editing representations, and
+alpha remains an exact `0..255` channel. Future procedural palette operations
+may add a separate perceptual color model without replacing this canonical
+paint representation.
 
 Preferred color model for future procedural palette operations:
 

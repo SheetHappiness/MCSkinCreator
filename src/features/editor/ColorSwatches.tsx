@@ -1,7 +1,6 @@
-import type { CSSProperties } from 'react';
-
 import type { RgbaColor } from '../../engine/document';
 import { colorToHex, parseExactHex } from './colorHex';
+import { rgbaSurfaceStyle } from './colorSurfaceStyle';
 import type { ColorSlot } from './editorToolStore';
 
 interface ColorSwatchesProps {
@@ -12,14 +11,6 @@ interface ColorSwatchesProps {
   readonly onChange: (slot: ColorSlot, color: RgbaColor) => void;
   readonly onSwap: () => void;
   readonly onReset: () => void;
-}
-
-function rgbaCss(color: RgbaColor): string {
-  return `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})`;
-}
-
-function swatchStyle(color: RgbaColor): CSSProperties {
-  return { backgroundColor: rgbaCss(color) };
 }
 
 interface ColorSlotButtonProps {
@@ -63,7 +54,7 @@ function ColorSlotButton({
         <span
           className="color-slot-button__chip"
           aria-hidden="true"
-          style={swatchStyle(color)}
+          style={rgbaSurfaceStyle(color)}
         />
         <code>{colorToHex(color)}</code>
       </span>

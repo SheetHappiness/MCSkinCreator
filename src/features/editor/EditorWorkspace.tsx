@@ -79,11 +79,9 @@ import {
   type ActiveEditorCommand,
 } from './activeEditorInteraction';
 import { ColorFields } from './ColorFields';
-import { ColorControls } from './ColorControls';
 import { colorToHex } from './colorHex';
 import {
   resetEditorColors,
-  setActiveColorSlot,
   setEditorColor,
   setActiveEditorTool,
   swapEditorColors,
@@ -1262,16 +1260,6 @@ export function EditorWorkspace({
               </button>
             ))}
           </div>
-
-          <ColorControls
-            primaryColor={primaryColor}
-            secondaryColor={secondaryColor}
-            activeSlot={activeColorSlot}
-            onSelectSlot={setActiveColorSlot}
-            onChange={setEditorColor}
-            onSwap={swapEditorColors}
-            onReset={resetEditorColors}
-          />
         </aside>
 
         <div className="canvas-stage" ref={stageRef}>

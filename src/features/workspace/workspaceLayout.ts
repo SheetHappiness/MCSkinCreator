@@ -30,6 +30,14 @@ export const RIGHT_INSPECTOR_HEIGHT_LIMITS = Object.freeze({
   max: 520,
 });
 
+export const COLOR_WORKSPACE_HEIGHT_LIMITS = Object.freeze({
+  min: 280,
+  max: 620,
+});
+
+/** Minimum height kept for the Local Library above the color workspace. */
+export const MIN_LOCAL_LIBRARY_HEIGHT = 160;
+
 /** Minimum height reserved for the lower 3D preview section. */
 export const MIN_3D_PREVIEW_HEIGHT = 180;
 
@@ -41,6 +49,7 @@ export interface WorkspaceLayout {
   readonly leftPanelWidth: number;
   readonly rightPanelWidth: number;
   readonly rightInspectorHeight: number;
+  readonly colorWorkspaceHeight: number;
   readonly leftCollapsed: boolean;
   readonly rightCollapsed: boolean;
 }
@@ -66,6 +75,7 @@ export const DEFAULT_WORKSPACE_LAYOUT: WorkspaceLayout = Object.freeze({
   leftPanelWidth: 200,
   rightPanelWidth: 300,
   rightInspectorHeight: 260,
+  colorWorkspaceHeight: 400,
   leftCollapsed: false,
   rightCollapsed: false,
 });
@@ -175,6 +185,29 @@ export function getRightInspectorHeightBounds(
   };
 }
 
+/**
+ * Returns the legal preferred height for the left-side Color Workspace.
+ * Local Library retains a usable upper section while the color surface keeps
+ * its own minimum for the persistent picker and slot controls.
+ */
+export function getColorWorkspaceHeightBounds(
+  leftPanelHeight: number,
+): WorkspaceDimensionBounds {
+  if (!finitePositive(leftPanelHeight)) {
+    return staticBounds(COLOR_WORKSPACE_HEIGHT_LIMITS);
+  }
+
+  const maxByLibrary =
+    leftPanelHeight - WORKSPACE_SPLITTER_SIZE - MIN_LOCAL_LIBRARY_HEIGHT;
+  return {
+    min: COLOR_WORKSPACE_HEIGHT_LIMITS.min,
+    max: Math.max(
+      COLOR_WORKSPACE_HEIGHT_LIMITS.min,
+      Math.min(COLOR_WORKSPACE_HEIGHT_LIMITS.max, Math.floor(maxByLibrary)),
+    ),
+  };
+}
+
 function persistedDimension(
   value: unknown,
   fallback: number,
@@ -208,6 +241,11 @@ export function normalizeWorkspaceLayout(
       value?.rightInspectorHeight,
       DEFAULT_WORKSPACE_LAYOUT.rightInspectorHeight,
       RIGHT_INSPECTOR_HEIGHT_LIMITS,
+    ),
+    colorWorkspaceHeight: persistedDimension(
+      value?.colorWorkspaceHeight,
+      DEFAULT_WORKSPACE_LAYOUT.colorWorkspaceHeight,
+      COLOR_WORKSPACE_HEIGHT_LIMITS,
     ),
     leftCollapsed: persistedBoolean(
       value?.leftCollapsed,

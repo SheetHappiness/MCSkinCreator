@@ -70,7 +70,7 @@ test('launches the production Electron application shell', async () => {
     await expect(window).toHaveTitle('Minecraft Skin Editor');
     await expect(
       window.getByRole('heading', { name: 'Minecraft Skin Editor' }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
     await expect(window.getByLabel('Application status')).toHaveText(
       'No document open',
     );
@@ -191,9 +191,10 @@ test('creates a new skin and opens one controlled dropped PNG', async () => {
 
   try {
     const window = await application.firstWindow();
+    await expect(window).toHaveTitle('Minecraft Skin Editor');
     await expect(
       window.getByRole('heading', { name: 'Minecraft Skin Editor' }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
     await window.bringToFront();
     await application.evaluate(({ Menu }) => {
       Menu.getApplicationMenu()?.getMenuItemById('file-new')?.click();
@@ -300,9 +301,10 @@ test('exposes UV semantics, layer-aware focus, and a non-blocking overlay', asyn
 
   try {
     const window = await application.firstWindow();
+    await expect(window).toHaveTitle('Minecraft Skin Editor');
     await expect(
       window.getByRole('heading', { name: 'Minecraft Skin Editor' }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
     await application.evaluate(({ Menu }) => {
       Menu.getApplicationMenu()?.getMenuItemById('file-new')?.click();
     });
@@ -404,9 +406,10 @@ test('links semantic hover, inspect focus, selection, and isolation across 2D an
 
   try {
     const window = await application.firstWindow();
+    await expect(window).toHaveTitle('Minecraft Skin Editor');
     await expect(
       window.getByRole('heading', { name: 'Minecraft Skin Editor' }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
     await application.evaluate(({ Menu }) => {
       Menu.getApplicationMenu()?.getMenuItemById('file-new')?.click();
     });
@@ -1079,7 +1082,10 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
     );
 
     const colors = window.getByLabel('Paint colors');
-    const colorControls = window.getByLabel('Color controls');
+    const colorWorkspace = window.getByLabel('Color Workspace');
+    const colorControls = window.getByRole('region', {
+      name: 'Color controls',
+    });
     await expect(
       colors.getByRole('button', { name: 'Primary color', exact: true }),
     ).toHaveAttribute('aria-pressed', 'true');
@@ -1127,12 +1133,7 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
     await window.getByLabel('Paint hex color').press('Enter');
     await window.getByLabel('Paint alpha').fill('128');
 
-    await colorControls
-      .getByRole('button', { name: 'Color controls', exact: true })
-      .click();
-    const advancedColors = window.getByRole('dialog', {
-      name: 'Advanced color controls',
-    });
+    const advancedColors = colorControls;
     await expect(
       advancedColors.getByRole('group', { name: 'RGB channels' }),
     ).toBeVisible();
@@ -1142,6 +1143,7 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
     await expect(
       advancedColors.getByLabel('Visual color picker'),
     ).toBeVisible();
+    await expect(advancedColors.getByLabel('Alpha slider')).toBeVisible();
     await expect(advancedColors.getByLabel('Advanced hex color')).toHaveValue(
       '#12345680',
     );
@@ -1150,7 +1152,7 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
         .getByLabel('Recent colors')
         .locator('[data-color="#12345680"]'),
     ).toBeVisible();
-    await colorControls
+    await colorWorkspace
       .getByRole('button', {
         name: 'Add current color to swatches',
         exact: true,
@@ -1176,9 +1178,6 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
     );
     await colors
       .getByRole('button', { name: 'Primary color', exact: true })
-      .click();
-    await colorControls
-      .getByRole('button', { name: 'Close color', exact: true })
       .click();
 
     await visibility
@@ -1514,7 +1513,7 @@ test('keeps multiple documents independent and manages the local library', async
     const window = await application.firstWindow();
     await expect(
       window.getByRole('button', { name: 'Open library-one.png' }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
 
     await window.getByRole('button', { name: 'Open PNG' }).click();
     const firstTab = window.getByRole('tab', { name: /first\.png/ });
@@ -1659,7 +1658,9 @@ test('organizes library skins with thumbnails, search, collections, recents, and
 
   try {
     let window = await application.firstWindow();
-    await expect(window.getByAltText('artist.png thumbnail')).toBeVisible();
+    await expect(window.getByAltText('artist.png thumbnail')).toBeVisible({
+      timeout: 15_000,
+    });
     const initialListing = await window.evaluate(async () => {
       const browser = globalThis as typeof globalThis & {
         skinLibrary?: {

@@ -26,12 +26,18 @@ import {
   removeColorSwatch,
   resetColorSwatches,
   resetRecentColors,
-  useColorSwatches,
+  useColorPalette,
   useRecentColors,
   type ColorSwatch,
 } from './colorSwatchStore';
+import { alphaSliderStyle, rgbaSurfaceStyle } from './colorSurfaceStyle';
 import type { ColorSlot } from './editorToolStore';
+import {
+  getPaletteColumns,
+  getRecentColorColumns,
+} from './colorWorkspaceLayout';
 import { exportGplPalette, parseGplPalette } from './gplPalette';
+import { useElementSize } from '../workspace';
 
 interface ColorControlsProps {
   readonly primaryColor: RgbaColor;
@@ -41,6 +47,7 @@ interface ColorControlsProps {
   readonly onChange: (slot: ColorSlot, color: RgbaColor) => void;
   readonly onSwap: () => void;
   readonly onReset: () => void;
+  readonly persistent?: boolean;
 }
 
 interface NumericFieldProps {
@@ -52,10 +59,6 @@ interface NumericFieldProps {
   readonly step: number;
   readonly integer?: boolean;
   readonly onChange: (value: number) => void;
-}
-
-function rgbaCss(color: RgbaColor): string {
-  return `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})`;
 }
 
 function formatNumber(value: number, digits = 1): string {
@@ -97,7 +100,7 @@ function NumericField({
   const isValid = isNumericValueValid(displayedValue, min, max, integer);
 
   const commit = () => {
-    if (isValid) onChange(Number(displayedValue));
+    if (draft !== undefined && isValid) onChange(Number(displayedValue));
     setDraft(undefined);
   };
 
@@ -304,8 +307,10 @@ function AdvancedColorEditor({ color, onChange }: AdvancedColorEditorProps) {
     hexDraft?.source === canonicalHex ? hexDraft.value : canonicalHex;
 
   const commitHex = () => {
-    const parsed = parseExactHex(hexValue, color.a);
-    if (parsed !== undefined) onChange(parsed);
+    if (hexDraft !== undefined) {
+      const parsed = parseExactHex(hexValue, color.a);
+      if (parsed !== undefined) onChange(parsed);
+    }
     setHexDraft(undefined);
   };
 
@@ -327,11 +332,13 @@ function AdvancedColorEditor({ color, onChange }: AdvancedColorEditorProps) {
         <div
           className="advanced-color-preview"
           aria-label="Current exact color"
-          style={{ backgroundColor: rgbaCss(color) }}
+          style={rgbaSurfaceStyle(color)}
         />
         <div className="advanced-color-preview-copy">
-          <strong>{colorToHex(color)}</strong>
-          <span>RGBA alpha {color.a}</span>
+          <strong>{colorToHexRgba(color)}</strong>
+          <span>
+            RGBA {color.r}, {color.g}, {color.b}, {color.a}
+          </span>
         </div>
       </div>
 
@@ -354,6 +361,22 @@ function AdvancedColorEditor({ color, onChange }: AdvancedColorEditorProps) {
               updateHsv('h', Number(event.currentTarget.value))
             }
           />
+        </label>
+        <label className="advanced-color-alpha-picker">
+          <span>Alpha</span>
+          <input
+            type="range"
+            aria-label="Alpha slider"
+            min={0}
+            max={255}
+            step={1}
+            value={color.a}
+            style={alphaSliderStyle(color)}
+            onChange={(event) =>
+              onChange({ ...color, a: Number(event.currentTarget.value) })
+            }
+          />
+          <output aria-label="Alpha value">{color.a}</output>
         </label>
       </div>
 
@@ -487,7 +510,7 @@ function AdvancedColorEditor({ color, onChange }: AdvancedColorEditorProps) {
 }
 
 function swatchStyle(color: RgbaColor): CSSProperties {
-  return { backgroundColor: rgbaCss(color) };
+  return rgbaSurfaceStyle(color);
 }
 
 function swatchLabel(swatch: ColorSwatch): string {
@@ -506,16 +529,24 @@ export function ColorControls({
   onChange,
   onSwap,
   onReset,
+  persistent = false,
 }: ColorControlsProps) {
-  const swatches = useColorSwatches();
+  const palette = useColorPalette();
+  const swatches = palette.groups.flatMap((group) => group.swatches);
   const recentColors = useRecentColors();
   const activeColor = activeSlot === 'primary' ? primaryColor : secondaryColor;
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(persistent);
   const [status, setStatus] = useState('');
   const colorControlsRef = useRef<HTMLDivElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const advancedPanelRef = useRef<HTMLDivElement>(null);
   const advancedTriggerRef = useRef<HTMLButtonElement>(null);
+  const workspaceSize = useElementSize(colorControlsRef);
+  const swatchGridWidth =
+    workspaceSize.width > 0 ? Math.max(0, workspaceSize.width - 20) : 220;
+  const recentColorColumns = getRecentColorColumns(swatchGridWidth);
+  const paletteColumns = getPaletteColumns(swatchGridWidth);
+  const showAdvanced = persistent || isAdvancedOpen;
 
   const closeAdvanced = (restoreFocus = true) => {
     setIsAdvancedOpen(false);
@@ -525,7 +556,7 @@ export function ColorControls({
   };
 
   useEffect(() => {
-    if (!isAdvancedOpen) return;
+    if (persistent || !isAdvancedOpen) return;
     const handleOutsidePointerDown = (event: PointerEvent) => {
       const target = event.target;
       if (!(target instanceof Node)) return;
@@ -541,12 +572,12 @@ export function ColorControls({
     window.addEventListener('pointerdown', handleOutsidePointerDown);
     return () =>
       window.removeEventListener('pointerdown', handleOutsidePointerDown);
-  }, [isAdvancedOpen]);
+  }, [isAdvancedOpen, persistent]);
 
   useEffect(() => {
-    if (!isAdvancedOpen) return;
+    if (persistent || !isAdvancedOpen) return;
     advancedPanelRef.current?.focus({ preventScroll: true });
-  }, [isAdvancedOpen]);
+  }, [isAdvancedOpen, persistent]);
 
   const handleColorChange = (slot: ColorSlot, color: RgbaColor) => {
     onChange(slot, color);
@@ -608,8 +639,9 @@ export function ColorControls({
   return (
     <div
       ref={colorControlsRef}
-      className="color-controls"
-      aria-label="Color controls"
+      id={persistent ? 'color-workspace-panel' : undefined}
+      className={`color-controls${persistent ? ' color-workspace' : ''}`}
+      aria-label={persistent ? 'Color Workspace' : 'Color controls'}
     >
       <ColorSwatches
         primaryColor={primaryColor}
@@ -620,20 +652,22 @@ export function ColorControls({
         onSwap={onSwap}
         onReset={onReset}
       />
-      <button
-        ref={advancedTriggerRef}
-        type="button"
-        className="color-controls__button"
-        aria-expanded={isAdvancedOpen}
-        aria-controls="advanced-color-controls"
-        aria-haspopup="dialog"
-        onClick={() => {
-          if (isAdvancedOpen) closeAdvanced();
-          else setIsAdvancedOpen(true);
-        }}
-      >
-        {isAdvancedOpen ? 'Close color' : 'Color controls'}
-      </button>
+      {persistent ? null : (
+        <button
+          ref={advancedTriggerRef}
+          type="button"
+          className="color-controls__button"
+          aria-expanded={isAdvancedOpen}
+          aria-controls="advanced-color-controls"
+          aria-haspopup="dialog"
+          onClick={() => {
+            if (isAdvancedOpen) closeAdvanced();
+            else setIsAdvancedOpen(true);
+          }}
+        >
+          {isAdvancedOpen ? 'Close color' : 'Color controls'}
+        </button>
+      )}
       <button
         type="button"
         className="color-controls__button"
@@ -644,16 +678,16 @@ export function ColorControls({
         + Swatch
       </button>
 
-      {isAdvancedOpen ? (
+      {showAdvanced ? (
         <div
           ref={advancedPanelRef}
           id="advanced-color-controls"
-          className="color-advanced-panel"
-          role="dialog"
-          aria-label="Advanced color controls"
+          className={`color-advanced-panel${persistent ? ' color-workspace-panel' : ''}`}
+          role={persistent ? 'region' : 'dialog'}
+          aria-label={persistent ? 'Color controls' : 'Advanced color controls'}
           tabIndex={-1}
           onKeyDown={(event) => {
-            if (event.key === 'Escape') {
+            if (event.key === 'Escape' && !persistent) {
               event.preventDefault();
               event.stopPropagation();
               closeAdvanced();
@@ -661,7 +695,7 @@ export function ColorControls({
           }}
         >
           <header className="color-advanced-panel__header">
-            <span>Advanced color</span>
+            <span>{persistent ? 'Color picker' : 'Advanced color'}</span>
             <span>{slotLabel(activeSlot)}</span>
           </header>
           <AdvancedColorEditor
@@ -681,7 +715,12 @@ export function ColorControls({
                 Colors you use will appear here.
               </p>
             ) : (
-              <div className="color-recent-list">
+              <div
+                className="color-recent-list"
+                style={{
+                  gridTemplateColumns: `repeat(${recentColorColumns}, minmax(0, 1fr))`,
+                }}
+              >
                 {recentColors.map((color, index) => {
                   const hex = colorToHex(color);
                   return (
@@ -709,9 +748,9 @@ export function ColorControls({
             </button>
           </section>
 
-          <section className="color-swatch-library" aria-label="Local swatches">
+          <section className="color-swatch-library" aria-label={palette.name}>
             <div className="color-library__header">
-              <span>Local swatches</span>
+              <span>{palette.name}</span>
               <button type="button" onClick={addCurrentSwatch}>
                 Add current
               </button>
@@ -719,15 +758,30 @@ export function ColorControls({
             {swatches.length === 0 ? (
               <p className="color-library__empty">No saved swatches.</p>
             ) : (
-              <ol className="color-swatch-list">
+              <ol
+                className="color-swatch-list"
+                style={{
+                  gridTemplateColumns: `repeat(${paletteColumns}, minmax(0, 1fr))`,
+                }}
+              >
                 {swatches.map((swatch, index) => {
                   const label = swatchLabel(swatch);
                   const exactColor = colorToHexRgba(swatch.color);
+                  const selected =
+                    swatch.color.r === activeColor.r &&
+                    swatch.color.g === activeColor.g &&
+                    swatch.color.b === activeColor.b &&
+                    swatch.color.a === activeColor.a;
                   return (
-                    <li className="color-swatch-list__item" key={swatch.id}>
+                    <li
+                      className={`color-swatch-list__item${selected ? ' is-selected' : ''}`}
+                      data-selected={selected ? 'true' : 'false'}
+                      key={swatch.id}
+                    >
                       <button
                         type="button"
                         className="color-swatch-list__chip"
+                        aria-pressed={selected}
                         aria-label={`Apply ${label} swatch to active color`}
                         title={`${label} · ${exactColor} · Apply to ${slotLabel(activeSlot)}`}
                         data-color={exactColor}
@@ -740,50 +794,52 @@ export function ColorControls({
                       >
                         {label}
                       </span>
-                      <button
-                        type="button"
-                        className="color-swatch-list__slot"
-                        aria-label={`Apply ${label} swatch to Primary`}
-                        title={`Apply ${exactColor} to Primary`}
-                        onClick={() => applySwatch(swatch, 'primary')}
-                      >
-                        P
-                      </button>
-                      <button
-                        type="button"
-                        className="color-swatch-list__slot"
-                        aria-label={`Apply ${label} swatch to Secondary`}
-                        title={`Apply ${exactColor} to Secondary`}
-                        onClick={() => applySwatch(swatch, 'secondary')}
-                      >
-                        S
-                      </button>
-                      <button
-                        type="button"
-                        className="color-swatch-list__icon"
-                        aria-label={`Move ${label} swatch up`}
-                        disabled={index === 0}
-                        onClick={() => moveColorSwatch(swatch.id, -1)}
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        className="color-swatch-list__icon"
-                        aria-label={`Move ${label} swatch down`}
-                        disabled={index === swatches.length - 1}
-                        onClick={() => moveColorSwatch(swatch.id, 1)}
-                      >
-                        ↓
-                      </button>
-                      <button
-                        type="button"
-                        className="color-swatch-list__icon"
-                        aria-label={`Remove ${label} swatch`}
-                        onClick={() => removeColorSwatch(swatch.id)}
-                      >
-                        ×
-                      </button>
+                      <div className="color-swatch-list__actions">
+                        <button
+                          type="button"
+                          className="color-swatch-list__slot"
+                          aria-label={`Apply ${label} swatch to Primary`}
+                          title={`Apply ${exactColor} to Primary`}
+                          onClick={() => applySwatch(swatch, 'primary')}
+                        >
+                          P
+                        </button>
+                        <button
+                          type="button"
+                          className="color-swatch-list__slot"
+                          aria-label={`Apply ${label} swatch to Secondary`}
+                          title={`Apply ${exactColor} to Secondary`}
+                          onClick={() => applySwatch(swatch, 'secondary')}
+                        >
+                          S
+                        </button>
+                        <button
+                          type="button"
+                          className="color-swatch-list__icon"
+                          aria-label={`Move ${label} swatch up`}
+                          disabled={index === 0}
+                          onClick={() => moveColorSwatch(swatch.id, -1)}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          className="color-swatch-list__icon"
+                          aria-label={`Move ${label} swatch down`}
+                          disabled={index === swatches.length - 1}
+                          onClick={() => moveColorSwatch(swatch.id, 1)}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          className="color-swatch-list__icon"
+                          aria-label={`Remove ${label} swatch`}
+                          onClick={() => removeColorSwatch(swatch.id)}
+                        >
+                          ×
+                        </button>
+                      </div>
                     </li>
                   );
                 })}

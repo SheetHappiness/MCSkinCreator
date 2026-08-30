@@ -63,6 +63,24 @@ describe('App', () => {
       leftPanelWidth: 248,
     });
 
+    fireEvent.pointerDown(screen.getByTestId('workspace-splitter-color'), {
+      button: 0,
+      pointerId: 2,
+      clientY: 400,
+    });
+    fireEvent.pointerMove(screen.getByTestId('workspace-splitter-color'), {
+      pointerId: 2,
+      clientY: 360,
+    });
+    fireEvent.pointerUp(screen.getByTestId('workspace-splitter-color'), {
+      pointerId: 2,
+    });
+    expect(
+      JSON.parse(localStorage.getItem(WORKSPACE_LAYOUT_STORAGE_KEY)!),
+    ).toMatchObject({
+      colorWorkspaceHeight: DEFAULT_WORKSPACE_LAYOUT.colorWorkspaceHeight + 40,
+    });
+
     fireEvent.click(
       screen.getByRole('button', { name: 'Collapse Local Library' }),
     );

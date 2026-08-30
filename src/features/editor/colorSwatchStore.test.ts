@@ -7,7 +7,9 @@ import {
   addColorSwatch,
   defaultColorSwatches,
   deserializeColorSwatches,
+  deserializeManualPalette,
   deserializeRecentColors,
+  getColorPalette,
   getColorSwatches,
   getRecentColors,
   moveColorSwatch,
@@ -17,6 +19,7 @@ import {
   resetRecentColors,
   serializeRecentColors,
   serializeColorSwatches,
+  serializeManualPalette,
 } from './colorSwatchStore';
 
 beforeEach(() => {
@@ -34,6 +37,57 @@ afterEach(() => {
 });
 
 describe('local color swatches', () => {
+  it('persists an extensible manual palette model with exact RGBA swatches', () => {
+    const palette = getColorPalette();
+    const serialized = serializeManualPalette({
+      ...palette,
+      groups: [
+        {
+          ...palette.groups[0]!,
+          swatches: [
+            {
+              id: 'artist-blue',
+              name: 'Artist blue',
+              color: { r: 12, g: 34, b: 56, a: 78 },
+            },
+          ],
+        },
+      ],
+    });
+
+    const restored = deserializeManualPalette(serialized);
+    expect(restored.id).toBe(palette.id);
+    expect(restored.groups[0]?.swatches).toEqual([
+      {
+        id: 'artist-blue',
+        name: 'Artist blue',
+        color: { r: 12, g: 34, b: 56, a: 78 },
+      },
+    ]);
+    expect(deserializeColorSwatches(serialized)).toEqual(
+      restored.groups[0]?.swatches,
+    );
+  });
+
+  it('migrates the previous flat swatch persistence shape into the manual palette', () => {
+    const restored = deserializeManualPalette(
+      serializeColorSwatches([
+        {
+          id: 'legacy',
+          name: 'Legacy',
+          color: { r: 1, g: 2, b: 3, a: 4 },
+        },
+      ]),
+    );
+
+    expect(restored.groups).toHaveLength(1);
+    expect(restored.groups[0]?.swatches[0]).toEqual({
+      id: 'legacy',
+      name: 'Legacy',
+      color: { r: 1, g: 2, b: 3, a: 4 },
+    });
+  });
+
   it('adds exact swatches and persists a versioned representation', () => {
     const added = addColorSwatch({
       color: { r: 12, g: 34, b: 56, a: 78 },

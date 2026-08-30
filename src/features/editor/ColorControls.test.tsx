@@ -305,3 +305,126 @@ describe('advanced color controls', () => {
     ).toBeNull();
   });
 });
+
+describe('persistent Color Workspace', () => {
+  it('keeps the slots and picker visible without a popup trigger', () => {
+    const onChange = vi.fn();
+    render(
+      <ColorControls
+        persistent
+        primaryColor={PRIMARY}
+        secondaryColor={SECONDARY}
+        activeSlot="primary"
+        onSelectSlot={vi.fn()}
+        onChange={onChange}
+        onSwap={vi.fn()}
+        onReset={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('Color Workspace')).toBeInTheDocument();
+    expect(screen.getByLabelText('Paint colors')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Primary color' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Secondary color' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('slider', { name: 'Visual color picker' }),
+    ).toBeVisible();
+    expect(screen.getByRole('slider', { name: 'Hue picker' })).toBeVisible();
+    expect(screen.getByRole('slider', { name: 'Alpha slider' })).toBeVisible();
+    expect(screen.getByRole('group', { name: 'RGB channels' })).toBeVisible();
+    expect(screen.getByRole('group', { name: 'HSV channels' })).toBeVisible();
+    expect(screen.getByLabelText('Recent colors')).toBeVisible();
+    expect(screen.getByLabelText('Manual palette')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Color controls' })).toBeNull();
+  });
+
+  it('preserves exact alpha through the persistent slider and applies palette swatches to the active slot', () => {
+    const onChange = vi.fn();
+    render(
+      <ColorControls
+        persistent
+        primaryColor={PRIMARY}
+        secondaryColor={SECONDARY}
+        activeSlot="secondary"
+        onSelectSlot={vi.fn()}
+        onChange={onChange}
+        onSwap={vi.fn()}
+        onReset={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('slider', { name: 'Alpha slider' }), {
+      target: { value: '17' },
+    });
+    expect(onChange).toHaveBeenCalledWith('secondary', {
+      ...SECONDARY,
+      a: 17,
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Apply Black swatch to active color',
+      }),
+    );
+    expect(onChange).toHaveBeenLastCalledWith('secondary', {
+      r: 0,
+      g: 0,
+      b: 0,
+      a: 255,
+    });
+  });
+
+  it('records a changed color as one exact recent swatch and keeps it bounded in the workspace', () => {
+    const onChange = vi.fn();
+    render(
+      <ColorControls
+        persistent
+        primaryColor={PRIMARY}
+        secondaryColor={SECONDARY}
+        activeSlot="primary"
+        onSelectSlot={vi.fn()}
+        onChange={onChange}
+        onSwap={vi.fn()}
+        onReset={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Red channel'), {
+      target: { value: '99' },
+    });
+    expect(screen.getByLabelText('Recent colors')).toContainElement(
+      screen.getByRole('button', {
+        name: 'Apply recent #63141E color to Primary',
+      }),
+    );
+    expect(
+      screen
+        .getByLabelText('Recent colors')
+        .querySelectorAll('.color-recent-list__chip'),
+    ).toHaveLength(1);
+  });
+
+  it('does not rewrite exact RGBA when an HSV field is only focused and blurred', () => {
+    const onChange = vi.fn();
+    render(
+      <ColorControls
+        persistent
+        primaryColor={PRIMARY}
+        secondaryColor={SECONDARY}
+        activeSlot="primary"
+        onSelectSlot={vi.fn()}
+        onChange={onChange}
+        onSwap={vi.fn()}
+        onReset={vi.fn()}
+      />,
+    );
+
+    const saturation = screen.getByLabelText('Saturation channel');
+    fireEvent.focus(saturation);
+    fireEvent.blur(saturation);
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});

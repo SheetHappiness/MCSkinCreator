@@ -51,6 +51,16 @@ describe('exact color conversions', () => {
     });
   });
 
+  it('round-trips representative exact RGBA colors without losing alpha', () => {
+    for (const color of [
+      { r: 12, g: 34, b: 56, a: 78 },
+      { r: 201, g: 77, b: 143, a: 0 },
+      { r: 255, g: 1, b: 254, a: 255 },
+    ]) {
+      expect(hsvToRgba(rgbaToHsv(color), color.a)).toEqual(color);
+    }
+  });
+
   it('canonicalizes fractional and out-of-range UI values to exact bytes', () => {
     expect(canonicalizeRgba({ r: -1, g: 1.49, b: 254.6, a: 300 })).toEqual({
       r: 0,

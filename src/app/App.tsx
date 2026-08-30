@@ -12,6 +12,16 @@ import {
 } from '../features/file-management/fileLifecycleStore';
 import { DocumentTabs } from '../features/file-management/DocumentTabs';
 import { NewSkinDialog } from '../features/file-management/NewSkinDialog';
+import { ColorControls } from '../features/editor/ColorControls';
+import {
+  resetEditorColors,
+  setActiveColorSlot,
+  setEditorColor,
+  swapEditorColors,
+  useActiveColorSlot,
+  usePrimaryEditorColor,
+  useSecondaryEditorColor,
+} from '../features/editor/editorToolStore';
 import { EditorWorkspace } from '../features/editor/EditorWorkspace';
 import { LibraryPanel } from '../features/library/LibraryPanel';
 import {
@@ -27,6 +37,7 @@ import {
   WorkspaceSplitter,
   clampWorkspaceDimension,
   getLeftPanelWidthBounds,
+  getColorWorkspaceHeightBounds,
   loadWorkspaceLayout,
   normalizeWorkspaceLayout,
   persistWorkspaceLayout,
@@ -80,6 +91,16 @@ export function App() {
   const leftPanelWidth = workspaceLayout.leftCollapsed
     ? COLLAPSED_PANEL_SIZE
     : clampWorkspaceDimension(workspaceLayout.leftPanelWidth, leftPanelBounds);
+  const colorWorkspaceBounds = getColorWorkspaceHeightBounds(
+    applicationBodySize.height,
+  );
+  const colorWorkspaceHeight = clampWorkspaceDimension(
+    workspaceLayout.colorWorkspaceHeight,
+    colorWorkspaceBounds,
+  );
+  const activeColorSlot = useActiveColorSlot();
+  const primaryColor = usePrimaryEditorColor();
+  const secondaryColor = useSecondaryEditorColor();
 
   useEffect(() => {
     persistWorkspaceLayout(workspaceLayout);
@@ -228,9 +249,39 @@ export function App() {
         <div
           className={`workspace-side-slot workspace-side-slot--left${workspaceLayout.leftCollapsed ? ' is-collapsed' : ''}`}
         >
-          <LibraryPanel
-            onCollapse={() => updateWorkspaceLayout({ leftCollapsed: true })}
-          />
+          <div
+            className="left-workspace-dock"
+            style={{
+              gridTemplateRows: `minmax(0, 1fr) ${WORKSPACE_SPLITTER_SIZE}px ${colorWorkspaceHeight}px`,
+            }}
+          >
+            <LibraryPanel
+              onCollapse={() => updateWorkspaceLayout({ leftCollapsed: true })}
+            />
+            <WorkspaceSplitter
+              axis="horizontal"
+              value={colorWorkspaceHeight}
+              bounds={colorWorkspaceBounds}
+              deltaSign={-1}
+              label="Resize Color Workspace"
+              controls="color-workspace-panel"
+              disabled={workspaceLayout.leftCollapsed}
+              testId="workspace-splitter-color"
+              onChange={(value) =>
+                updateWorkspaceLayout({ colorWorkspaceHeight: value })
+              }
+            />
+            <ColorControls
+              primaryColor={primaryColor}
+              secondaryColor={secondaryColor}
+              activeSlot={activeColorSlot}
+              onSelectSlot={setActiveColorSlot}
+              onChange={setEditorColor}
+              onSwap={swapEditorColors}
+              onReset={resetEditorColors}
+              persistent
+            />
+          </div>
           <CollapsedWorkspacePanel
             side="left"
             panelLabel="Local Library"
