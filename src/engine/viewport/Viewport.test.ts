@@ -4,6 +4,7 @@ import {
   MAX_VIEWPORT_ZOOM,
   MIN_VIEWPORT_ZOOM,
   clientToLogicalPoint,
+  fitViewportToRegion,
   fitViewportToView,
   getGridLinePositions,
   panViewport,
@@ -124,6 +125,30 @@ describe('viewport zoom and fit', () => {
     expect(fitted).toEqual({ zoom: 8, offsetX: 144, offsetY: 44 });
     expect(fitted.offsetX * 2 + 64 * fitted.zoom).toBe(800);
     expect(fitted.offsetY * 2 + 64 * fitted.zoom).toBe(600);
+  });
+
+  it('fits a half-open focused region and centers its texture bounds', () => {
+    const fitted = fitViewportToRegion(
+      { width: 800, height: 600 },
+      { x: 20, y: 20, width: 8, height: 12 },
+    );
+
+    expect(fitted).toEqual({ zoom: 44, offsetX: -656, offsetY: -844 });
+    expect(fitted.offsetX + (20 + 4) * fitted.zoom).toBe(400);
+    expect(fitted.offsetY + (20 + 6) * fitted.zoom).toBe(300);
+    expect(textureToScreen({ x: 20, y: 20 }, fitted)).toEqual({
+      x: 224,
+      y: 36,
+    });
+  });
+
+  it('rejects empty focus regions', () => {
+    expect(() =>
+      fitViewportToRegion(
+        { width: 800, height: 600 },
+        { x: 0, y: 0, width: 0, height: 1 },
+      ),
+    ).toThrow('Viewport region must have finite positive dimensions.');
   });
 
   it('positions every grid boundary from the same viewport transform', () => {

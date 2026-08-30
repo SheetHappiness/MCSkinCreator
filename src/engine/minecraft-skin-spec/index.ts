@@ -23,6 +23,16 @@ export {
   validateTextureRegion,
 } from './validation';
 
+export {
+  TEXTURE_FOCUS_TARGETS,
+  TEXTURE_LAYER_FILTERS,
+  formatTextureSemantic,
+  getBodyPartTextureBounds,
+  getTextureFocusBounds,
+  queryTextureSemantic,
+  queryTextureSemantics,
+} from './TextureSemantics';
+
 export { BODY_PARTS, CUBE_FACES, SKIN_LAYERS, SKIN_MODELS } from './types';
 
 export type {
@@ -50,3 +60,12 @@ export type {
 } from './diagnosticSkinFixture';
 
 export type { SpecificationIssue, SpecificationIssueCode } from './validation';
+
+export type {
+  BodyPartTextureBoundsQuery,
+  TexelSemanticQuery,
+  TextureFocusBoundsQuery,
+  TextureFocusTarget,
+  TextureLayerFilter,
+  TextureSemantic,
+} from './TextureSemantics';

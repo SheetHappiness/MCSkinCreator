@@ -141,7 +141,19 @@ getFaceDefinition({ model, bodyPart, layer, face });
 getFaceRegion({ model, bodyPart, layer, face });
 getBodyPartRegions({ model, bodyPart, layer });
 getBodyPartGeometry({ model, bodyPart });
+queryTextureSemantic({ model, x, y, layer });
+queryTextureSemantics({ model, x, y, layer });
+getBodyPartTextureBounds({ model, bodyPart, layer });
+getTextureFocusBounds({ model, target, layer });
 ```
+
+Semantic queries return no match for unused or out-of-bounds texels. The
+`layer` filter accepts `base`, `outer`, or `both`; when `both` is used, the
+plural query returns all matches in deterministic base-before-outer order and
+the singular query returns the first one. Classic and Slim are mutually
+exclusive model interpretations, so a query never combines their mappings.
+Focus bounds are half-open bounding boxes around the selected canonical face
+regions and may include gaps between faces.
 
 `validateSkinSpecification()` checks every supported combination for complete
 face coverage, valid 64×64 integer rectangles, and geometry-consistent face

@@ -7,6 +7,7 @@ export {
   clampViewportZoom,
   clientToLogicalPoint,
   fitViewportToView,
+  fitViewportToRegion,
   getGridLinePositions,
   panViewport,
   screenToTexture,
@@ -15,4 +16,10 @@ export {
   zoomViewportAroundPoint,
 } from './Viewport';
 
-export type { Point, Size, TextureCoordinate, ViewportState } from './Viewport';
+export type {
+  Point,
+  Size,
+  TextureCoordinate,
+  ViewportRegion,
+  ViewportState,
+} from './Viewport';

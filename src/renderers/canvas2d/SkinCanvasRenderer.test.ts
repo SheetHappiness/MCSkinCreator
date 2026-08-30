@@ -133,4 +133,76 @@ describe('Canvas 2D skin rendering', () => {
     );
     expect(destinationContext.stroke).toHaveBeenCalledTimes(3);
   });
+
+  it('draws canonical UV boundaries with the same pan, zoom, and DPR transform', () => {
+    const destinationContext = createContext();
+    const sourceContext = createContext();
+    const sourceCanvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => sourceContext),
+    };
+    const canvas = {
+      width: 0,
+      height: 0,
+      ownerDocument: { createElement: vi.fn(() => sourceCanvas) },
+      getContext: vi.fn(() => destinationContext),
+    } as unknown as HTMLCanvasElement;
+    const document = SkinDocument.createBlank({ id: 'uv-render' });
+    const before = document.copyPixelData();
+    const revision = document.revision;
+
+    renderSkinCanvas(
+      canvas,
+      document,
+      { zoom: 8, offsetX: 20, offsetY: 30 },
+      { width: 640, height: 480 },
+      {
+        showGrid: false,
+        pixelRatio: 2,
+        uvOverlay: { layer: 'base' },
+      },
+    );
+
+    // The first canonical head-top rectangle is [8, 0)×[16, 8), projected
+    // through the same logical viewport and aligned to the two-device-pixel
+    // backing store.
+    expect(destinationContext.moveTo).toHaveBeenCalledWith(84.25, 30.25);
+    expect(destinationContext.lineTo).toHaveBeenCalledWith(148.25, 30.25);
+    expect(destinationContext.lineTo).toHaveBeenCalledWith(148.25, 94.25);
+    expect(destinationContext.stroke).toHaveBeenCalledTimes(2);
+    expect(document.copyPixelData()).toEqual(before);
+    expect(document.revision).toBe(revision);
+  });
+
+  it('uses a distinct dashed path for outer-layer boundaries', () => {
+    const destinationContext = createContext();
+    const sourceContext = createContext();
+    const sourceCanvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => sourceContext),
+    };
+    const canvas = {
+      width: 0,
+      height: 0,
+      ownerDocument: { createElement: vi.fn(() => sourceCanvas) },
+      getContext: vi.fn(() => destinationContext),
+    } as unknown as HTMLCanvasElement;
+
+    renderSkinCanvas(
+      canvas,
+      SkinDocument.createBlank({ id: 'outer-uv-render' }),
+      { zoom: 8, offsetX: 20, offsetY: 30 },
+      { width: 640, height: 480 },
+      {
+        showGrid: false,
+        pixelRatio: 2,
+        uvOverlay: { layer: 'outer' },
+      },
+    );
+
+    expect(destinationContext.setLineDash).toHaveBeenCalledWith([4, 3]);
+    expect(destinationContext.stroke).toHaveBeenCalledTimes(2);
+  });
 });

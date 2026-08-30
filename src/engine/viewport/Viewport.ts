@@ -13,6 +13,13 @@ export interface TextureCoordinate {
   readonly y: number;
 }
 
+export interface ViewportRegion {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 export interface ViewportState {
   /** Logical CSS pixels occupied by one source texture pixel. */
   readonly zoom: number;
@@ -144,6 +151,57 @@ export function panViewport(
   };
 }
 
+function assertViewportRegion(region: ViewportRegion): void {
+  if (
+    !Number.isFinite(region.x) ||
+    !Number.isFinite(region.y) ||
+    !Number.isFinite(region.width) ||
+    !Number.isFinite(region.height) ||
+    region.width <= 0 ||
+    region.height <= 0
+  ) {
+    throw new RangeError(
+      'Viewport region must have finite positive dimensions.',
+    );
+  }
+}
+
+/**
+ * Fits a half-open texture region while keeping its center in the view.
+ * Texture-space x/y are applied through the same offset transform as the
+ * whole-texture viewport, so focused views remain compatible with tools.
+ */
+export function fitViewportToRegion(
+  viewSize: Size,
+  region: ViewportRegion,
+  padding = VIEWPORT_FIT_PADDING,
+): ViewportState {
+  assertPositive(viewSize.width, 'View width');
+  assertPositive(viewSize.height, 'View height');
+  assertViewportRegion(region);
+
+  if (!Number.isFinite(padding) || padding < 0) {
+    throw new RangeError('Viewport padding must be a non-negative number.');
+  }
+
+  const availableWidth = Math.max(1, viewSize.width - padding * 2);
+  const availableHeight = Math.max(1, viewSize.height - padding * 2);
+  const rawZoom = Math.min(
+    availableWidth / region.width,
+    availableHeight / region.height,
+  );
+  const practicalZoom = rawZoom >= 1 ? Math.floor(rawZoom) : rawZoom;
+  const zoom = clampViewportZoom(practicalZoom);
+  const renderedWidth = region.width * zoom;
+  const renderedHeight = region.height * zoom;
+
+  return {
+    zoom,
+    offsetX: (viewSize.width - renderedWidth) / 2 - region.x * zoom,
+    offsetY: (viewSize.height - renderedHeight) / 2 - region.y * zoom,
+  };
+}
+
 export function fitViewportToView(
   viewSize: Size,
   textureSize: Size,
@@ -153,29 +211,11 @@ export function fitViewportToView(
   assertPositive(viewSize.height, 'View height');
   assertPositive(textureSize.width, 'Texture width');
   assertPositive(textureSize.height, 'Texture height');
-
-  if (!Number.isFinite(padding) || padding < 0) {
-    throw new RangeError('Viewport padding must be a non-negative number.');
-  }
-
-  const availableWidth = Math.max(1, viewSize.width - padding * 2);
-  const availableHeight = Math.max(1, viewSize.height - padding * 2);
-  const rawZoom = Math.min(
-    availableWidth / textureSize.width,
-    availableHeight / textureSize.height,
+  return fitViewportToRegion(
+    viewSize,
+    { x: 0, y: 0, width: textureSize.width, height: textureSize.height },
+    padding,
   );
-  // Integer display scaling keeps fit-to-view source pixels equally sized when
-  // the workspace can show every source pixel at one or more logical pixels.
-  const practicalZoom = rawZoom >= 1 ? Math.floor(rawZoom) : rawZoom;
-  const zoom = clampViewportZoom(practicalZoom);
-  const renderedWidth = textureSize.width * zoom;
-  const renderedHeight = textureSize.height * zoom;
-
-  return {
-    zoom,
-    offsetX: (viewSize.width - renderedWidth) / 2,
-    offsetY: (viewSize.height - renderedHeight) / 2,
-  };
 }
 
 export function getGridLinePositions(

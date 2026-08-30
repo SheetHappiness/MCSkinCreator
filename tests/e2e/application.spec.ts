@@ -275,6 +275,109 @@ test('creates a new skin and opens one controlled dropped PNG', async () => {
   }
 });
 
+test('exposes UV semantics, layer-aware focus, and a non-blocking overlay', async () => {
+  const application = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      MINECRAFT_SKIN_EDITOR_E2E: '1',
+    },
+  });
+
+  try {
+    const window = await application.firstWindow();
+    await expect(
+      window.getByRole('heading', { name: 'Minecraft Skin Editor' }),
+    ).toBeVisible();
+    await application.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById('file-new')?.click();
+    });
+    const dialog = window.getByRole('dialog', { name: 'New Skin' });
+    await dialog
+      .getByRole('button', { name: 'Classic skin model', exact: true })
+      .click();
+    await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+
+    const canvas = window.getByRole('img', { name: '2D skin canvas' });
+    const structure = window.getByRole('group', {
+      name: 'Canvas structure',
+    });
+    const editorStatus = window.getByLabel('Editor status');
+    const focus = structure.getByLabel('Canvas focus');
+    const zoomValue = window.getByTestId('zoom-value');
+
+    await expect(canvas).toBeVisible();
+    await expect(
+      editorStatus.getByText('Untitled.png', { exact: true }),
+    ).toBeVisible();
+    await expect(focus).toHaveValue('whole');
+    await expect(
+      structure.getByRole('button', { name: 'UV boundaries' }),
+    ).toHaveAttribute('aria-pressed', 'false');
+
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox).not.toBeNull();
+    const wholeZoom =
+      Number.parseInt((await zoomValue.textContent()) ?? '', 10) / 100;
+    const wholeTexturePoint = (x: number, y: number) => ({
+      x:
+        canvasBox!.x +
+        (canvasBox!.width - 64 * wholeZoom) / 2 +
+        (x + 0.5) * wholeZoom,
+      y:
+        canvasBox!.y +
+        (canvasBox!.height - 64 * wholeZoom) / 2 +
+        (y + 0.5) * wholeZoom,
+    });
+
+    await window.mouse.move(
+      wholeTexturePoint(8, 8).x,
+      wholeTexturePoint(8, 8).y,
+    );
+    await expect(window.getByLabel('Canvas semantic')).toHaveText(
+      'Head · Front · Base',
+    );
+
+    const overlay = structure.getByRole('button', {
+      name: 'UV boundaries',
+    });
+    await overlay.click();
+    await expect(overlay).toHaveAttribute('aria-pressed', 'true');
+    await structure.getByRole('button', { name: 'Base', exact: true }).click();
+    await expect(
+      structure.getByRole('button', { name: 'Base', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    await focus.selectOption('head');
+    await expect(focus).toHaveValue('head');
+    await expect(zoomValue).not.toHaveText(`${wholeZoom * 100}%`);
+    for (const target of [
+      'torso',
+      'arms',
+      'rightArm',
+      'leftArm',
+      'legs',
+      'rightLeg',
+      'leftLeg',
+    ] as const) {
+      await focus.selectOption(target);
+      await expect(focus).toHaveValue(target);
+    }
+    await focus.selectOption('whole');
+    await expect(focus).toHaveValue('whole');
+
+    // UV controls are view state only; creating the skin remains clean.
+    await expect(
+      editorStatus.getByText('Untitled.png', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      editorStatus.getByText('Untitled.png •', { exact: true }),
+    ).toHaveCount(0);
+  } finally {
+    await application.close();
+  }
+});
+
 test('selects exact pixels, previews paste and move, supports rollback, and cleans selection per document', async () => {
   const temporaryDirectory = await mkdtemp(
     path.join(tmpdir(), 'minecraft-skin-editor-selection-e2e-'),

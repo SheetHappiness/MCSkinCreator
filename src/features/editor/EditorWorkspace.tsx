@@ -20,7 +20,14 @@ import {
   type BodyPartTransferRequest,
   type SelectionState,
 } from '../../engine/selection';
-import type { SkinLayer } from '../../engine/minecraft-skin-spec';
+import {
+  formatTextureSemantic,
+  getTextureFocusBounds,
+  queryTextureSemantic,
+  type SkinLayer,
+  type TextureFocusTarget,
+  type TextureLayerFilter,
+} from '../../engine/minecraft-skin-spec';
 import {
   beginAdvancedPaintStroke,
   ERASER_COLOR,
@@ -35,6 +42,7 @@ import {
 import {
   VIEWPORT_ZOOM_BUTTON_FACTOR,
   clientToLogicalPoint,
+  fitViewportToRegion,
   fitViewportToView,
   panViewport,
   screenToTexture,
@@ -84,6 +92,7 @@ import {
 } from './editorShortcuts';
 import { getToolOptions } from './toolOptions';
 import { getSymmetryMode } from './symmetryStore';
+import { UvCanvasControls } from './UvCanvasControls';
 
 interface EditorWorkspaceProps {
   readonly document: SkinDocument;
@@ -464,6 +473,9 @@ export function EditorWorkspace({
     activeColorSlot === 'primary' ? primaryColor : secondaryColor;
   const [viewport, setViewport] = useState(INITIAL_VIEWPORT);
   const [showGrid, setShowGrid] = useState(true);
+  const [showUvOverlay, setShowUvOverlay] = useState(false);
+  const [uvLayer, setUvLayer] = useState<TextureLayerFilter>('both');
+  const [focusTarget, setFocusTarget] = useState<TextureFocusTarget>('whole');
   const [hoveredPixel, setHoveredPixel] = useState<
     TextureCoordinate | undefined
   >(undefined);
@@ -478,8 +490,37 @@ export function EditorWorkspace({
   const fitToView = useCallback(() => {
     if (size.width <= 0 || size.height <= 0) return;
     setViewport(fitViewportToView(size, skinDocument));
+    setFocusTarget('whole');
     setHoveredPixel(undefined);
   }, [size, skinDocument]);
+
+  const focusCanvas = useCallback(
+    (target: TextureFocusTarget, layer: TextureLayerFilter = uvLayer) => {
+      cancelActiveEditorInteraction();
+      setFocusTarget(target);
+      setHoveredPixel(undefined);
+      if (size.width <= 0 || size.height <= 0) return;
+      setViewport(
+        fitViewportToRegion(
+          size,
+          getTextureFocusBounds({
+            model: skinDocument.model,
+            target,
+            layer,
+          }),
+        ),
+      );
+    },
+    [size, skinDocument.model, uvLayer],
+  );
+
+  const handleUvLayerChange = useCallback(
+    (layer: TextureLayerFilter) => {
+      setUvLayer(layer);
+      focusCanvas(focusTarget, layer);
+    },
+    [focusCanvas, focusTarget],
+  );
 
   useLayoutEffect(() => {
     if (
@@ -500,8 +541,17 @@ export function EditorWorkspace({
       showGrid,
       pixelRatio: window.devicePixelRatio || 1,
       selection: selectionState,
+      uvOverlay: showUvOverlay ? { layer: uvLayer } : undefined,
     });
-  }, [selectionState, showGrid, size, skinDocument, viewport]);
+  }, [
+    selectionState,
+    showGrid,
+    showUvOverlay,
+    size,
+    skinDocument,
+    uvLayer,
+    viewport,
+  ]);
 
   const invalidateCanvas = useCallback(() => {
     if (renderFrameRef.current !== undefined) return;
@@ -1048,6 +1098,17 @@ export function EditorWorkspace({
 
   const zoomPercent = Math.round(viewport.zoom * 100);
   const selectedHex = colorToHex(selectedColor);
+  const hoveredSemantic =
+    hoveredPixel === undefined
+      ? undefined
+      : queryTextureSemantic({
+          model: skinDocument.model,
+          x: hoveredPixel.x,
+          y: hoveredPixel.y,
+          layer: 'both',
+        });
+  const semanticReadout =
+    hoveredPixel === undefined ? '—' : formatTextureSemantic(hoveredSemantic);
   const visibleSelection =
     selectionState.floating?.rect ??
     selectionState.draft ??
@@ -1097,10 +1158,21 @@ export function EditorWorkspace({
         </aside>
 
         <div className="canvas-stage" ref={stageRef}>
+          <UvCanvasControls
+            showUvOverlay={showUvOverlay}
+            layer={uvLayer}
+            focusTarget={focusTarget}
+            onToggleUvOverlay={() => setShowUvOverlay((current) => !current)}
+            onLayerChange={handleUvLayerChange}
+            onFocusChange={focusCanvas}
+          />
           <canvas
             ref={canvasRef}
             className={`skin-canvas${isSpacePressed ? ' is-pan-ready' : ''}${isPanning ? ' is-panning' : ''}`}
             data-tool={effectiveTool}
+            data-uv-overlay={showUvOverlay ? 'visible' : 'hidden'}
+            data-uv-layer={uvLayer}
+            data-focus-target={focusTarget}
             data-selection-rect={selectionRectAttribute}
             data-selection-state={
               selectionState.floating !== undefined
@@ -1259,9 +1331,21 @@ export function EditorWorkspace({
             Grid
           </button>
         </div>
-        <output className="coordinate-readout" aria-label="Texture coordinates">
-          X: {hoveredPixel?.x ?? '—'}&nbsp;&nbsp; Y: {hoveredPixel?.y ?? '—'}
-        </output>
+        <div className="canvas-status-readout">
+          <output
+            className="coordinate-readout"
+            aria-label="Texture coordinates"
+          >
+            X: {hoveredPixel?.x ?? '—'}&nbsp;&nbsp; Y: {hoveredPixel?.y ?? '—'}
+          </output>
+          <output
+            className="semantic-readout"
+            aria-label="Canvas semantic"
+            data-testid="canvas-semantic"
+          >
+            {semanticReadout}
+          </output>
+        </div>
         <ColorFields
           color={selectedColor}
           colorSlot={activeColorSlot === 'primary' ? 'Primary' : 'Secondary'}

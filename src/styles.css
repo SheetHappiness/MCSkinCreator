@@ -1453,6 +1453,70 @@ body.is-workspace-resizing-horizontal * {
   background: var(--color-workspace);
 }
 
+.canvas-structure-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 24px);
+  padding: 4px;
+  border: 1px solid #454a51;
+  border-radius: var(--radius-control);
+  color: #cbd0d6;
+  background: rgb(32 34 37 / 94%);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 24%);
+  font-size: 10px;
+}
+
+.canvas-structure-controls button,
+.canvas-structure-controls select {
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid #454a51;
+  border-radius: var(--radius-control);
+  color: #cbd0d6;
+  background: #292c30;
+  font: inherit;
+  line-height: 20px;
+}
+
+.canvas-structure-controls button:hover,
+.canvas-structure-controls select:hover {
+  border-color: #6a7078;
+}
+
+.canvas-structure-controls button[aria-pressed='true'] {
+  border-color: #61758d;
+  color: #e1e7ee;
+  background: #3a4654;
+}
+
+.canvas-layer-controls {
+  display: flex;
+  gap: 2px;
+}
+
+.canvas-focus-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.canvas-focus-control select {
+  max-width: 142px;
+  overflow: hidden;
+  padding-inline: 5px;
+  text-overflow: ellipsis;
+  text-transform: none;
+}
+
 .skin-canvas {
   position: absolute;
   inset: 0;
@@ -2183,6 +2247,21 @@ body.is-workspace-resizing-horizontal * {
   white-space: nowrap;
 }
 
+.canvas-status-readout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.semantic-readout {
+  min-width: 0;
+  overflow: hidden;
+  color: #c3c8cf;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .color-fields {
   display: flex;
   align-items: center;
@@ -2361,7 +2440,8 @@ button:disabled {
   }
 
   .color-field > span,
-  .model-selector__label {
+  .model-selector__label,
+  .canvas-focus-control > span {
     position: absolute;
     width: 1px;
     height: 1px;

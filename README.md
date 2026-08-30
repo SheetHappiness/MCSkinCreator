@@ -222,10 +222,12 @@ The UI must allow users to:
 - edit them intentionally;
 - understand which layer is active.
 
-The current editor provides body-part visibility and isolation. UV-aware canvas
-identification and structural selection remain outside the current parity
-slice; paired-limb transfer uses the canonical UV specification without
-turning the canvas into a structural selector.
+The current editor provides body-part visibility and isolation. The 2D canvas
+also exposes a view-only UV-aware workflow: optional canonical face boundaries,
+semantic hover identification, and focus views for the whole texture and body
+parts. Structural selection remains outside the current parity slice;
+paired-limb transfer uses the canonical UV specification without turning the
+canvas into a structural selector.
 
 ---
 

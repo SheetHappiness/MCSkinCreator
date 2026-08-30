@@ -1,5 +1,14 @@
 import type { SkinDocument } from '../../engine/document';
 import {
+  BODY_PARTS,
+  CUBE_FACES,
+  getBodyPartRegions,
+  type SkinLayer,
+  type SkinModel,
+  type TextureLayerFilter,
+  type TextureRegion,
+} from '../../engine/minecraft-skin-spec';
+import {
   clipPixelRegion,
   type PixelRegion,
   type SelectionState,
@@ -22,11 +31,17 @@ const CHECKER_LIGHT = '#85878d';
 const CHECKER_DARK = '#777a80';
 const GRID_COLOR = 'rgba(10, 12, 15, 0.26)';
 const TEXTURE_BOUNDARY_COLOR = 'rgba(225, 229, 235, 0.32)';
+const UV_BASE_BOUNDARY_COLOR = 'rgba(221, 230, 240, 0.42)';
+const UV_OUTER_BOUNDARY_COLOR = 'rgba(184, 202, 221, 0.46)';
 
 export interface SkinCanvasRenderOptions {
   readonly showGrid: boolean;
   readonly pixelRatio: number;
   readonly selection?: SelectionState;
+  /** The UV overlay is view-only and rendered into this same canvas. */
+  readonly uvOverlay?: {
+    readonly layer: TextureLayerFilter;
+  };
 }
 
 function drawTransparencySurface(
@@ -274,6 +289,81 @@ function drawTextureBoundary(
   context.restore();
 }
 
+function alignUvBoundary(position: number, scale: number): number {
+  return (Math.round(position * scale) + 0.5) / scale;
+}
+
+function drawUvRegionPath(
+  context: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  region: TextureRegion,
+  surface: CanvasSurface,
+): void {
+  const left = alignUvBoundary(
+    viewport.offsetX + region.x * viewport.zoom,
+    surface.scaleX,
+  );
+  const top = alignUvBoundary(
+    viewport.offsetY + region.y * viewport.zoom,
+    surface.scaleY,
+  );
+  const right = alignUvBoundary(
+    viewport.offsetX + (region.x + region.width) * viewport.zoom,
+    surface.scaleX,
+  );
+  const bottom = alignUvBoundary(
+    viewport.offsetY + (region.y + region.height) * viewport.zoom,
+    surface.scaleY,
+  );
+
+  context.moveTo(left, top);
+  context.lineTo(right, top);
+  context.lineTo(right, bottom);
+  context.lineTo(left, bottom);
+  context.lineTo(left, top);
+}
+
+function layersForOverlay(layer: TextureLayerFilter): readonly SkinLayer[] {
+  return layer === 'both' ? ['base', 'outer'] : [layer];
+}
+
+/** Draws canonical face boundaries without creating a pointer-intercepting DOM layer. */
+function drawUvBoundaryOverlay(
+  context: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  model: SkinModel,
+  layer: TextureLayerFilter,
+  surface: CanvasSurface,
+): void {
+  context.save();
+  context.lineWidth = 1 / surface.pixelRatio;
+
+  for (const currentLayer of layersForOverlay(layer)) {
+    context.strokeStyle =
+      currentLayer === 'base'
+        ? UV_BASE_BOUNDARY_COLOR
+        : UV_OUTER_BOUNDARY_COLOR;
+    context.setLineDash(currentLayer === 'outer' ? [4, 3] : []);
+    context.beginPath();
+
+    for (const bodyPart of BODY_PARTS) {
+      const definitions = getBodyPartRegions({
+        model,
+        bodyPart,
+        layer: currentLayer,
+      });
+      for (const face of CUBE_FACES) {
+        drawUvRegionPath(context, viewport, definitions[face].region, surface);
+      }
+    }
+
+    context.stroke();
+  }
+
+  context.setLineDash([]);
+  context.restore();
+}
+
 export function renderSkinCanvas(
   canvas: HTMLCanvasElement,
   skinDocument: SkinDocument,
@@ -331,6 +421,16 @@ export function renderSkinCanvas(
   }
 
   drawTextureBoundary(context, viewport, skinDocument, surface);
+
+  if (options.uvOverlay !== undefined) {
+    drawUvBoundaryOverlay(
+      context,
+      viewport,
+      skinDocument.model,
+      options.uvOverlay.layer,
+      surface,
+    );
+  }
 
   if (shouldRenderPixelGrid(options.showGrid, viewport.zoom)) {
     drawPixelGrid(context, viewport, skinDocument, surface);
