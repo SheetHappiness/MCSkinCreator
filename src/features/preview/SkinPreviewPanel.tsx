@@ -32,7 +32,6 @@ import {
   usePrimaryEditorColor,
   useSecondaryEditorColor,
 } from '../editor/editorToolStore';
-import { ToolOptionsInspector } from '../editor/ToolOptionsInspector';
 import { HistoryTimeline } from '../history/HistoryTimeline';
 import { changeSkinModel } from './modelSelection';
 import {
@@ -661,7 +660,6 @@ export function SkinPreviewPanel({
             })}
           </div>
         </section>
-        <ToolOptionsInspector activeTool={activeTool} />
         <HistoryTimeline history={history} />
       </div>
       <WorkspaceSplitter

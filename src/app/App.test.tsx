@@ -39,6 +39,12 @@ describe('App', () => {
     expect(applicationBody).toHaveStyle(
       'grid-template-columns: 200px 8px minmax(0, 1fr)',
     );
+    expect(
+      screen.getByRole('button', { name: 'Expand Library' }),
+    ).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      screen.queryByLabelText('Search local library'),
+    ).not.toBeInTheDocument();
 
     fireEvent.pointerDown(screen.getByTestId('workspace-splitter-left'), {
       button: 0,
@@ -66,11 +72,11 @@ describe('App', () => {
     fireEvent.pointerDown(screen.getByTestId('workspace-splitter-color'), {
       button: 0,
       pointerId: 2,
-      clientY: 400,
+      clientY: 220,
     });
     fireEvent.pointerMove(screen.getByTestId('workspace-splitter-color'), {
       pointerId: 2,
-      clientY: 360,
+      clientY: 260,
     });
     fireEvent.pointerUp(screen.getByTestId('workspace-splitter-color'), {
       pointerId: 2,
@@ -78,8 +84,18 @@ describe('App', () => {
     expect(
       JSON.parse(localStorage.getItem(WORKSPACE_LAYOUT_STORAGE_KEY)!),
     ).toMatchObject({
-      colorWorkspaceHeight: DEFAULT_WORKSPACE_LAYOUT.colorWorkspaceHeight + 40,
+      leftUpperHeight: DEFAULT_WORKSPACE_LAYOUT.leftUpperHeight + 40,
     });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Library' }));
+    expect(
+      screen.getByRole('button', { name: 'Collapse Library' }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByLabelText('Search local library')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Library' }));
+    expect(
+      screen.queryByLabelText('Search local library'),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Collapse Local Library' }),

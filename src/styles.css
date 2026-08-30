@@ -74,6 +74,27 @@ body {
   min-height: 0;
 }
 
+.left-workspace-upper {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.left-workspace-upper > .library-panel--compact {
+  flex: 0 0 auto;
+}
+
+.left-workspace-upper > .library-panel--expanded {
+  flex: 1 1 auto;
+}
+
+.left-workspace-upper > .tool-options-inspector {
+  flex: 0 0 auto;
+  border-top: 1px solid #34373b;
+}
+
 .workspace-side-slot.is-collapsed > .left-workspace-dock {
   visibility: hidden;
   pointer-events: none;
@@ -290,6 +311,19 @@ body.is-workspace-resizing-horizontal * {
   background: #24262a;
 }
 
+.library-panel__details {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
+.library-panel__details > .library-panel__content {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
 .library-panel__header {
   display: flex;
   align-items: center;
@@ -350,6 +384,57 @@ body.is-workspace-resizing-horizontal * {
   flex: 0 0 24px;
   padding: 0;
   font-size: 14px;
+}
+
+.library-panel__expand-button {
+  color: #d7dade !important;
+}
+
+.library-panel__expand-button[aria-expanded='true'] {
+  border-color: #61758d;
+  background: var(--color-accent-surface);
+}
+
+.library-panel__active-skin {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-bottom: 1px solid #34373b;
+}
+
+.library-panel__active-skin .library-thumbnail {
+  width: 40px;
+  height: 40px;
+  flex-basis: 40px;
+}
+
+.library-panel__active-skin-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.library-panel__active-skin-copy > span {
+  color: var(--color-text-muted);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.library-panel__active-skin-copy > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #d7dade;
+  font-size: 10px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-panel--compact .library-panel__active-skin {
+  padding-block: 5px;
 }
 
 .library-panel__header button:hover:not(:disabled),
@@ -1945,7 +2030,7 @@ body.is-workspace-resizing-horizontal * {
 
 .skin-preview-inspector {
   display: grid;
-  grid-template-rows: auto auto auto auto;
+  grid-template-rows: auto auto auto;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -2710,7 +2795,7 @@ button:disabled {
   }
 }
 
-/* Color Workspace: a persistent artist surface docked below Local Library. */
+/* Color Workspace: a persistent artist surface below the compact upper stack. */
 .color-workspace {
   position: relative;
   display: flex;
@@ -2849,7 +2934,7 @@ button:disabled {
 }
 
 .color-workspace .advanced-color-sv-picker {
-  width: min(100%, 260px);
+  width: min(100%, 320px);
   height: auto;
   aspect-ratio: 1;
   justify-self: center;

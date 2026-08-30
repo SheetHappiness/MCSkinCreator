@@ -13,12 +13,14 @@ import {
 import { DocumentTabs } from '../features/file-management/DocumentTabs';
 import { NewSkinDialog } from '../features/file-management/NewSkinDialog';
 import { ColorControls } from '../features/editor/ColorControls';
+import { ToolOptionsInspector } from '../features/editor/ToolOptionsInspector';
 import {
   resetEditorColors,
   setActiveColorSlot,
   setEditorColor,
   swapEditorColors,
   useActiveColorSlot,
+  useActiveEditorTool,
   usePrimaryEditorColor,
   useSecondaryEditorColor,
 } from '../features/editor/editorToolStore';
@@ -38,6 +40,7 @@ import {
   clampWorkspaceDimension,
   getLeftPanelWidthBounds,
   getColorWorkspaceHeightBounds,
+  getLeftUpperHeightBounds,
   loadWorkspaceLayout,
   normalizeWorkspaceLayout,
   persistWorkspaceLayout,
@@ -98,6 +101,19 @@ export function App() {
     workspaceLayout.colorWorkspaceHeight,
     colorWorkspaceBounds,
   );
+  const leftUpperBounds = getLeftUpperHeightBounds(applicationBodySize.height);
+  const compactLeftUpperHeight = clampWorkspaceDimension(
+    workspaceLayout.leftUpperHeight,
+    leftUpperBounds,
+  );
+  const expandedLeftUpperHeight = clampWorkspaceDimension(
+    applicationBodySize.height - WORKSPACE_SPLITTER_SIZE - colorWorkspaceHeight,
+    leftUpperBounds,
+  );
+  const leftUpperHeight = workspaceLayout.libraryExpanded
+    ? expandedLeftUpperHeight
+    : compactLeftUpperHeight;
+  const activeTool = useActiveEditorTool();
   const activeColorSlot = useActiveColorSlot();
   const primaryColor = usePrimaryEditorColor();
   const secondaryColor = useSecondaryEditorColor();
@@ -250,25 +266,54 @@ export function App() {
           className={`workspace-side-slot workspace-side-slot--left${workspaceLayout.leftCollapsed ? ' is-collapsed' : ''}`}
         >
           <div
-            className="left-workspace-dock"
+            className={`left-workspace-dock${workspaceLayout.libraryExpanded ? ' is-library-expanded' : ' is-library-compact'}`}
             style={{
-              gridTemplateRows: `minmax(0, 1fr) ${WORKSPACE_SPLITTER_SIZE}px ${colorWorkspaceHeight}px`,
+              gridTemplateRows: workspaceLayout.libraryExpanded
+                ? `${leftUpperHeight}px ${WORKSPACE_SPLITTER_SIZE}px ${colorWorkspaceHeight}px`
+                : `${leftUpperHeight}px ${WORKSPACE_SPLITTER_SIZE}px minmax(0, 1fr)`,
             }}
           >
-            <LibraryPanel
-              onCollapse={() => updateWorkspaceLayout({ leftCollapsed: true })}
-            />
+            <div
+              className={`left-workspace-upper${workspaceLayout.libraryExpanded ? ' is-expanded' : ' is-compact'}`}
+            >
+              <LibraryPanel
+                isExpanded={workspaceLayout.libraryExpanded}
+                onExpandedChange={(isExpanded) =>
+                  updateWorkspaceLayout({ libraryExpanded: isExpanded })
+                }
+                onCollapse={() =>
+                  updateWorkspaceLayout({ leftCollapsed: true })
+                }
+              />
+              <ToolOptionsInspector activeTool={activeTool} />
+            </div>
             <WorkspaceSplitter
               axis="horizontal"
-              value={colorWorkspaceHeight}
-              bounds={colorWorkspaceBounds}
-              deltaSign={-1}
-              label="Resize Color Workspace"
+              value={
+                workspaceLayout.libraryExpanded
+                  ? colorWorkspaceHeight
+                  : leftUpperHeight
+              }
+              bounds={
+                workspaceLayout.libraryExpanded
+                  ? colorWorkspaceBounds
+                  : leftUpperBounds
+              }
+              deltaSign={workspaceLayout.libraryExpanded ? -1 : 1}
+              label={
+                workspaceLayout.libraryExpanded
+                  ? 'Resize Color Workspace'
+                  : 'Resize Library and Tool Options'
+              }
               controls="color-workspace-panel"
               disabled={workspaceLayout.leftCollapsed}
               testId="workspace-splitter-color"
               onChange={(value) =>
-                updateWorkspaceLayout({ colorWorkspaceHeight: value })
+                updateWorkspaceLayout(
+                  workspaceLayout.libraryExpanded
+                    ? { colorWorkspaceHeight: value }
+                    : { leftUpperHeight: value },
+                )
               }
             />
             <ColorControls

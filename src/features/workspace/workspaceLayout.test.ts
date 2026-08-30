@@ -4,14 +4,16 @@ import {
   COLLAPSED_PANEL_SIZE,
   COLOR_WORKSPACE_HEIGHT_LIMITS,
   DEFAULT_WORKSPACE_LAYOUT,
+  LEFT_UPPER_HEIGHT_LIMITS,
   LEFT_PANEL_WIDTH_LIMITS,
-  MIN_LOCAL_LIBRARY_HEIGHT,
+  MIN_LEFT_UPPER_HEIGHT,
   RIGHT_INSPECTOR_HEIGHT_LIMITS,
   RIGHT_PANEL_WIDTH_LIMITS,
   WORKSPACE_LAYOUT_STORAGE_KEY,
   deserializeWorkspaceLayout,
   getColorWorkspaceHeightBounds,
   getEffectiveWorkspaceLayout,
+  getLeftUpperHeightBounds,
   getLeftPanelWidthBounds,
   getRightInspectorHeightBounds,
   getRightPanelWidthBounds,
@@ -41,7 +43,9 @@ describe('workspace layout model', () => {
       leftPanelWidth: 276,
       rightPanelWidth: 352,
       rightInspectorHeight: 318,
+      leftUpperHeight: 236,
       colorWorkspaceHeight: 448,
+      libraryExpanded: true,
       leftCollapsed: true,
       rightCollapsed: false,
     } as const;
@@ -93,7 +97,9 @@ describe('workspace layout model', () => {
           leftPanelWidth: 9999,
           rightPanelWidth: -20,
           rightInspectorHeight: 9999,
+          leftUpperHeight: 9999,
           colorWorkspaceHeight: -20,
+          libraryExpanded: 'yes',
           leftCollapsed: 'yes',
           rightCollapsed: true,
         }),
@@ -102,7 +108,9 @@ describe('workspace layout model', () => {
       leftPanelWidth: LEFT_PANEL_WIDTH_LIMITS.max,
       rightPanelWidth: RIGHT_PANEL_WIDTH_LIMITS.min,
       rightInspectorHeight: RIGHT_INSPECTOR_HEIGHT_LIMITS.max,
+      leftUpperHeight: LEFT_UPPER_HEIGHT_LIMITS.max,
       colorWorkspaceHeight: COLOR_WORKSPACE_HEIGHT_LIMITS.min,
+      libraryExpanded: DEFAULT_WORKSPACE_LAYOUT.libraryExpanded,
       leftCollapsed: DEFAULT_WORKSPACE_LAYOUT.leftCollapsed,
       rightCollapsed: true,
     });
@@ -123,6 +131,9 @@ describe('workspace layout model', () => {
     expect(effective.leftPanelWidth).toBe(272);
     expect(effective.rightPanelWidth).toBe(257);
     expect(effective.rightInspectorHeight).toBe(274);
+    expect(effective.leftUpperHeight).toBe(
+      DEFAULT_WORKSPACE_LAYOUT.leftUpperHeight,
+    );
     expect(preferred.leftPanelWidth).toBe(LEFT_PANEL_WIDTH_LIMITS.max);
     expect(preferred.rightPanelWidth).toBe(RIGHT_PANEL_WIDTH_LIMITS.max);
     expect(preferred.rightInspectorHeight).toBe(
@@ -161,11 +172,15 @@ describe('workspace layout model', () => {
       min: 180,
       max: 274,
     });
+    expect(getLeftUpperHeightBounds(800)).toEqual({
+      min: MIN_LEFT_UPPER_HEIGHT,
+      max: Math.min(LEFT_UPPER_HEIGHT_LIMITS.max, 800 - 8 - 280),
+    });
     expect(getColorWorkspaceHeightBounds(800)).toEqual({
       min: COLOR_WORKSPACE_HEIGHT_LIMITS.min,
       max: Math.min(
         COLOR_WORKSPACE_HEIGHT_LIMITS.max,
-        800 - 8 - MIN_LOCAL_LIBRARY_HEIGHT,
+        800 - 8 - MIN_LEFT_UPPER_HEIGHT,
       ),
     });
   });

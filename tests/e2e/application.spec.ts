@@ -874,7 +874,7 @@ test('paints, erases, undoes, redoes, and saves exact RGBA pixels', async () => 
 
     const pencil = window.getByRole('button', { name: 'Pencil' });
     await expect(pencil).toHaveAttribute('aria-pressed', 'true');
-    const toolOptions = window.getByLabel('Tool options');
+    const toolOptions = window.getByRole('region', { name: 'Tool options' });
     await expect(toolOptions).toHaveAttribute('data-tool', 'pencil');
     await expect(toolOptions.getByLabel('Size option')).toHaveText('1 px');
     await window.getByRole('button', { name: 'Fill' }).click();
@@ -966,6 +966,7 @@ test('paints, erases, undoes, redoes, and saves exact RGBA pixels', async () => 
     });
     await expect(editorStatus.getByText('input-skin.png •')).toBeVisible();
 
+    await window.getByRole('button', { name: 'Expand Library' }).click();
     const librarySearch = window.getByLabel('Search local library');
     await librarySearch.fill('input');
     await application.evaluate(({ Menu }) => {
@@ -1082,7 +1083,9 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
     );
 
     const colors = window.getByLabel('Paint colors');
-    const colorWorkspace = window.getByLabel('Color Workspace');
+    const colorWorkspace = window.getByLabel('Color Workspace', {
+      exact: true,
+    });
     const colorControls = window.getByRole('region', {
       name: 'Color controls',
     });
@@ -1307,7 +1310,7 @@ test('applies advanced paint tools through the contextual 2D inspector', async (
     await window.getByRole('button', { name: 'Open PNG' }).click();
     const canvas = window.getByRole('img', { name: '2D skin canvas' });
     const editorStatus = window.getByLabel('Editor status');
-    const toolOptions = window.getByLabel('Tool options');
+    const toolOptions = window.getByRole('region', { name: 'Tool options' });
     const zoomValue = window.getByTestId('zoom-value');
     await expect(canvas).toBeVisible();
 
@@ -1422,7 +1425,7 @@ test('applies Lighten to one exact picked 3D texel', async () => {
     const window = await application.firstWindow();
     await window.getByRole('button', { name: 'Open PNG' }).click();
     const preview = window.getByRole('img', { name: '3D skin preview' });
-    const toolOptions = window.getByLabel('Tool options');
+    const toolOptions = window.getByRole('region', { name: 'Tool options' });
     const editorStatus = window.getByLabel('Editor status');
     await expect(preview).toBeVisible();
 
@@ -1511,6 +1514,7 @@ test('keeps multiple documents independent and manages the local library', async
 
   try {
     const window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Expand Library' }).click();
     await expect(
       window.getByRole('button', { name: 'Open library-one.png' }),
     ).toBeVisible({ timeout: 15_000 });
@@ -1658,6 +1662,7 @@ test('organizes library skins with thumbnails, search, collections, recents, and
 
   try {
     let window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Expand Library' }).click();
     await expect(window.getByAltText('artist.png thumbnail')).toBeVisible({
       timeout: 15_000,
     });
@@ -1923,7 +1928,11 @@ test('organizes library skins with thumbnails, search, collections, recents, and
       window.getByRole('button', { name: 'Open artist-renamed Copy.png' }),
     ).toBeVisible();
     await expect(
-      window.getByRole('option', { name: /Characters \(2\)/ }),
+      window
+        .locator(
+          'select[aria-label="Filter local library by collection"] option',
+        )
+        .filter({ hasText: /Characters \(2\)/ }),
     ).toBeAttached();
     const duplicatedListing = await window.evaluate(async () => {
       const browser = globalThis as typeof globalThis & {
@@ -1962,8 +1971,13 @@ test('organizes library skins with thumbnails, search, collections, recents, and
       },
     });
     window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Expand Library' }).click();
     await expect(
-      window.getByRole('option', { name: /Characters \(2\)/ }),
+      window
+        .locator(
+          'select[aria-label="Filter local library by collection"] option',
+        )
+        .filter({ hasText: /Characters \(2\)/ }),
     ).toBeAttached();
     await expect(
       window.getByRole('button', { name: 'Open recent artist-renamed.png' }),
@@ -2445,12 +2459,51 @@ test('resizes, collapses, restores, persists, and resets the artist workspace', 
     const inspectorSplitter = window.getByTestId(
       'workspace-splitter-inspector',
     );
+    const colorSplitter = window.getByTestId('workspace-splitter-color');
+    const colorWorkspace = window.getByLabel('Color Workspace', {
+      exact: true,
+    });
 
     await expect(canvas).toBeVisible();
     await expect(preview).toHaveAttribute('data-document-revision', '0');
     await expect(leftSplitter).toHaveAttribute('aria-valuenow', '200');
     await expect(rightSplitter).toHaveAttribute('aria-valuenow', '300');
     await expect(inspectorSplitter).toHaveAttribute('aria-valuenow', '260');
+    await expect(colorSplitter).toHaveAttribute('aria-valuenow', '220');
+    await expect(colorSplitter).toHaveAttribute(
+      'aria-label',
+      'Resize Library and Tool Options',
+    );
+    await expect(
+      window.getByRole('button', { name: 'Expand Library' }),
+    ).toHaveAttribute('aria-expanded', 'false');
+    await expect(window.getByLabel('Search local library')).toHaveCount(0);
+
+    const compactColorBefore = await colorWorkspace.boundingBox();
+    const compactLeftSlot = await leftSlot.boundingBox();
+    expect(compactColorBefore).not.toBeNull();
+    expect(compactLeftSlot).not.toBeNull();
+    expect(compactColorBefore!.height).toBeGreaterThan(
+      compactLeftSlot!.height / 2,
+    );
+
+    await window.getByRole('button', { name: 'Expand Library' }).click();
+    await expect(
+      window.getByRole('button', { name: 'Collapse Library' }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    await expect(window.getByLabel('Search local library')).toBeVisible();
+    await expect(colorSplitter).toHaveAttribute('aria-valuenow', '400');
+    await expect(colorSplitter).toHaveAttribute(
+      'aria-label',
+      'Resize Color Workspace',
+    );
+    const expandedColor = await colorWorkspace.boundingBox();
+    expect(expandedColor).not.toBeNull();
+    expect(compactColorBefore!.height).toBeGreaterThan(expandedColor!.height);
+    await window.getByRole('button', { name: 'Collapse Library' }).click();
+    await expect(window.getByLabel('Search local library')).toHaveCount(0);
+    await expect(colorSplitter).toHaveAttribute('aria-valuenow', '220');
+    await expect(preview).toHaveAttribute('data-document-revision', '0');
 
     const leftBefore = await leftSlot.boundingBox();
     expect(leftBefore).not.toBeNull();
@@ -2545,6 +2598,8 @@ test('resizes, collapses, restores, persists, and resets the artist workspace', 
       leftPanelWidth: 240,
       rightPanelWidth: 332,
       rightInspectorHeight: 292,
+      leftUpperHeight: 220,
+      libraryExpanded: false,
       leftCollapsed: false,
       rightCollapsed: false,
     });

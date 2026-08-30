@@ -15,6 +15,11 @@ export const MIN_2D_CANVAS_WIDTH = 220;
 /** The fixed editor tool rail width used by the current shell. */
 export const TOOL_RAIL_WIDTH = 48;
 
+export const LEFT_UPPER_HEIGHT_LIMITS = Object.freeze({
+  min: 200,
+  max: 520,
+});
+
 export const LEFT_PANEL_WIDTH_LIMITS = Object.freeze({
   min: 160,
   max: 360,
@@ -35,8 +40,11 @@ export const COLOR_WORKSPACE_HEIGHT_LIMITS = Object.freeze({
   max: 620,
 });
 
-/** Minimum height kept for the Local Library above the color workspace. */
-export const MIN_LOCAL_LIBRARY_HEIGHT = 160;
+/** Minimum height kept for the compact Library and contextual tool options. */
+export const MIN_LEFT_UPPER_HEIGHT = LEFT_UPPER_HEIGHT_LIMITS.min;
+
+/** @deprecated Use MIN_LEFT_UPPER_HEIGHT for the complete upper stack. */
+export const MIN_LOCAL_LIBRARY_HEIGHT = MIN_LEFT_UPPER_HEIGHT;
 
 /** Minimum height reserved for the lower 3D preview section. */
 export const MIN_3D_PREVIEW_HEIGHT = 180;
@@ -49,7 +57,10 @@ export interface WorkspaceLayout {
   readonly leftPanelWidth: number;
   readonly rightPanelWidth: number;
   readonly rightInspectorHeight: number;
+  /** Preferred height of the left upper stack while Library is compact. */
+  readonly leftUpperHeight: number;
   readonly colorWorkspaceHeight: number;
+  readonly libraryExpanded: boolean;
   readonly leftCollapsed: boolean;
   readonly rightCollapsed: boolean;
 }
@@ -75,7 +86,9 @@ export const DEFAULT_WORKSPACE_LAYOUT: WorkspaceLayout = Object.freeze({
   leftPanelWidth: 200,
   rightPanelWidth: 300,
   rightInspectorHeight: 260,
+  leftUpperHeight: 220,
   colorWorkspaceHeight: 400,
+  libraryExpanded: false,
   leftCollapsed: false,
   rightCollapsed: false,
 });
@@ -186,9 +199,33 @@ export function getRightInspectorHeightBounds(
 }
 
 /**
+ * Returns the legal preferred height of the left upper stack. The minimum
+ * Color Workspace height remains reserved below the shared splitter.
+ */
+export function getLeftUpperHeightBounds(
+  leftPanelHeight: number,
+): WorkspaceDimensionBounds {
+  if (!finitePositive(leftPanelHeight)) {
+    return staticBounds(LEFT_UPPER_HEIGHT_LIMITS);
+  }
+
+  const maxByColor =
+    leftPanelHeight -
+    WORKSPACE_SPLITTER_SIZE -
+    COLOR_WORKSPACE_HEIGHT_LIMITS.min;
+  return {
+    min: LEFT_UPPER_HEIGHT_LIMITS.min,
+    max: Math.max(
+      LEFT_UPPER_HEIGHT_LIMITS.min,
+      Math.min(LEFT_UPPER_HEIGHT_LIMITS.max, Math.floor(maxByColor)),
+    ),
+  };
+}
+
+/**
  * Returns the legal preferred height for the left-side Color Workspace.
- * Local Library retains a usable upper section while the color surface keeps
- * its own minimum for the persistent picker and slot controls.
+ * The complete upper stack retains a usable minimum while the color surface
+ * keeps its own minimum for the persistent picker and slot controls.
  */
 export function getColorWorkspaceHeightBounds(
   leftPanelHeight: number,
@@ -198,7 +235,7 @@ export function getColorWorkspaceHeightBounds(
   }
 
   const maxByLibrary =
-    leftPanelHeight - WORKSPACE_SPLITTER_SIZE - MIN_LOCAL_LIBRARY_HEIGHT;
+    leftPanelHeight - WORKSPACE_SPLITTER_SIZE - MIN_LEFT_UPPER_HEIGHT;
   return {
     min: COLOR_WORKSPACE_HEIGHT_LIMITS.min,
     max: Math.max(
@@ -242,10 +279,19 @@ export function normalizeWorkspaceLayout(
       DEFAULT_WORKSPACE_LAYOUT.rightInspectorHeight,
       RIGHT_INSPECTOR_HEIGHT_LIMITS,
     ),
+    leftUpperHeight: persistedDimension(
+      value?.leftUpperHeight,
+      DEFAULT_WORKSPACE_LAYOUT.leftUpperHeight,
+      LEFT_UPPER_HEIGHT_LIMITS,
+    ),
     colorWorkspaceHeight: persistedDimension(
       value?.colorWorkspaceHeight,
       DEFAULT_WORKSPACE_LAYOUT.colorWorkspaceHeight,
       COLOR_WORKSPACE_HEIGHT_LIMITS,
+    ),
+    libraryExpanded: persistedBoolean(
+      value?.libraryExpanded,
+      DEFAULT_WORKSPACE_LAYOUT.libraryExpanded,
     ),
     leftCollapsed: persistedBoolean(
       value?.leftCollapsed,
