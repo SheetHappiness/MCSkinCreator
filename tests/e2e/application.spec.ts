@@ -821,6 +821,7 @@ test('paints, erases, undoes, redoes, and saves exact RGBA pixels', async () => 
 
   try {
     const window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Reset Layout' }).click();
 
     await window.getByRole('button', { name: 'Open PNG' }).click();
     const editorStatus = window.getByLabel('Editor status');
@@ -1164,6 +1165,25 @@ test('paints one picked 3D texel, undoes, redoes, and saves it exactly', async (
     await advancedColors
       .getByRole('button', { name: 'Swatch actions for #123456', exact: true })
       .click();
+    const swatchMenus = advancedColors.locator('.color-swatch-list__menu');
+    const swatchMenuLayout = await swatchMenus.evaluateAll((menus) =>
+      menus.map((menu) => {
+        const details = menu.parentElement;
+        const bounds = menu.getBoundingClientRect();
+        return {
+          open: details?.hasAttribute('open') ?? false,
+          width: bounds.width,
+        };
+      }),
+    );
+    const openSwatchMenus = swatchMenuLayout.filter((menu) => menu.open);
+    expect(openSwatchMenus).toHaveLength(1);
+    expect(
+      swatchMenuLayout
+        .filter((menu) => !menu.open)
+        .every((menu) => menu.width === 0),
+    ).toBe(true);
+    expect(openSwatchMenus[0]?.width).toBeGreaterThan(120);
     await expect(
       advancedColors.getByRole('button', {
         name: 'Apply #123456 swatch to Secondary',
@@ -1517,6 +1537,7 @@ test('keeps multiple documents independent and manages the local library', async
 
   try {
     const window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Reset Layout' }).click();
     await window.getByRole('button', { name: 'Expand Library' }).click();
     await expect(
       window.getByRole('button', { name: 'Open library-one.png' }),
@@ -1665,6 +1686,7 @@ test('organizes library skins with thumbnails, search, collections, recents, and
 
   try {
     let window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Reset Layout' }).click();
     await window.getByRole('button', { name: 'Expand Library' }).click();
     await expect(window.getByAltText('artist.png thumbnail')).toBeVisible({
       timeout: 15_000,
@@ -1974,6 +1996,7 @@ test('organizes library skins with thumbnails, search, collections, recents, and
       },
     });
     window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Reset Layout' }).click();
     await window.getByRole('button', { name: 'Expand Library' }).click();
     await expect(
       window
@@ -2343,7 +2366,96 @@ test('keeps the 2D-first layout coherent across supported desktop sizes', async 
 
   try {
     const window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Reset Layout' }).click();
     await window.getByRole('button', { name: 'Open PNG' }).click();
+    await expect(
+      window.getByRole('img', { name: '2D skin canvas' }),
+    ).toBeVisible();
+
+    const compactQuality = await window.evaluate(() => {
+      interface BrowserElement {
+        readonly clientHeight: number;
+        readonly scrollHeight: number;
+      }
+      const browser = globalThis as unknown as {
+        readonly document: {
+          querySelector(selector: string): BrowserElement | null;
+        };
+        getComputedStyle(element: BrowserElement): {
+          readonly fontSize: string;
+        };
+      };
+      const query = (selector: string) =>
+        browser.document.querySelector(selector);
+      const fontSize = (selector: string) => {
+        const element = query(selector);
+        return element === null
+          ? 0
+          : Number.parseFloat(browser.getComputedStyle(element).fontSize);
+      };
+      const upper = query('.left-workspace-upper');
+      const toolOptions = query('.tool-options-inspector');
+      return {
+        upperFits: upper !== null && upper.scrollHeight <= upper.clientHeight,
+        toolOptionsFits:
+          toolOptions !== null &&
+          toolOptions.scrollHeight <= toolOptions.clientHeight,
+        fontSizes: {
+          activeSkinLabel: fontSize('.library-panel__active-skin-label'),
+          symmetrySelect: fontSize('.tool-options-inspector__symmetry select'),
+          shortcutHint: fontSize('.shortcut-hint'),
+        },
+      };
+    });
+    expect(compactQuality).toMatchObject({
+      upperFits: true,
+      toolOptionsFits: true,
+      fontSizes: {
+        activeSkinLabel: 11,
+        symmetrySelect: 12,
+        shortcutHint: 11,
+      },
+    });
+
+    await window.getByRole('button', { name: 'Noise', exact: true }).click();
+    await expect(
+      window.getByRole('region', { name: 'Tool options' }),
+    ).toHaveAttribute('data-tool', 'noise');
+    const advancedToolQuality = await window.evaluate(() => {
+      interface BrowserElement {
+        readonly clientHeight: number;
+        readonly scrollHeight: number;
+        getBoundingClientRect(): { readonly bottom: number };
+      }
+      const browser = globalThis as unknown as {
+        readonly document: {
+          querySelector(selector: string): BrowserElement | null;
+        };
+      };
+      const upper = browser.document.querySelector('.left-workspace-upper');
+      const toolOptions = browser.document.querySelector(
+        '.tool-options-inspector',
+      );
+      if (upper === null || toolOptions === null) {
+        return { upperFits: false, optionsScrollable: false };
+      }
+      return {
+        upperFits: upper.scrollHeight <= upper.clientHeight,
+        optionsScrollable: toolOptions.scrollHeight > toolOptions.clientHeight,
+        optionsWithinUpper:
+          toolOptions.getBoundingClientRect().bottom <=
+          upper.getBoundingClientRect().bottom + 0.5,
+      };
+    });
+    expect(advancedToolQuality).toEqual({
+      upperFits: true,
+      optionsScrollable: true,
+      optionsWithinUpper: true,
+    });
+    await window.getByRole('button', { name: 'Pencil', exact: true }).click();
+    await expect(
+      window.getByRole('region', { name: 'Tool options' }),
+    ).toHaveAttribute('data-tool', 'pencil');
 
     for (const [width, height] of [
       [1600, 900],
@@ -2362,10 +2474,26 @@ test('keeps the 2D-first layout coherent across supported desktop sizes', async 
       await expect(
         window.getByRole('img', { name: '3D skin preview' }),
       ).toBeVisible();
+      await expect
+        .poll(
+          async () => {
+            const stage = await window.locator('.canvas-stage').boundingBox();
+            const preview = await window
+              .locator('.skin-preview-panel')
+              .boundingBox();
+            return (
+              stage !== null && preview !== null && stage.width > preview.width
+            );
+          },
+          { timeout: 5_000 },
+        )
+        .toBe(true);
 
       const metrics = await window.evaluate(() => {
         interface BrowserElement {
+          readonly clientHeight: number;
           readonly scrollWidth: number;
+          readonly scrollHeight: number;
           readonly clientWidth: number;
           getBoundingClientRect(): { readonly width: number };
         }
@@ -2383,6 +2511,9 @@ test('keeps the 2D-first layout coherent across supported desktop sizes', async 
         const bounds = (selector: string) =>
           browser.document.querySelector(selector)!.getBoundingClientRect();
         const preview = browser.document.querySelector('.skin-preview-panel')!;
+        const previewViewport = browser.document.querySelector(
+          '.skin-preview-viewport',
+        )!;
         const previewToolbar = browser.document.querySelector(
           '.skin-preview-toolbar',
         )!;
@@ -2396,6 +2527,8 @@ test('keeps the 2D-first layout coherent across supported desktop sizes', async 
               browser.innerWidth &&
             browser.document.documentElement.scrollHeight ===
               browser.innerHeight,
+          previewFits:
+            previewViewport.scrollHeight <= previewViewport.clientHeight,
           stageWidth: bounds('.canvas-stage').width,
           previewWidth: preview.getBoundingClientRect().width,
           previewToolbarFits:
@@ -2408,6 +2541,7 @@ test('keeps the 2D-first layout coherent across supported desktop sizes', async 
 
       expect(metrics).toMatchObject({
         bodyFits: true,
+        previewFits: true,
         previewToolbarFits: true,
         previewControlsFit: true,
         statusFits: true,
@@ -2415,6 +2549,41 @@ test('keeps the 2D-first layout coherent across supported desktop sizes', async 
       expect(metrics.previewWidth).toBeGreaterThanOrEqual(244);
       expect(metrics.stageWidth).toBeGreaterThan(metrics.previewWidth);
     }
+
+    const leftSplitter = window.getByTestId('workspace-splitter-left');
+    const leftSplitterBox = await leftSplitter.boundingBox();
+    expect(leftSplitterBox).not.toBeNull();
+    await window.mouse.move(
+      leftSplitterBox!.x + leftSplitterBox!.width / 2,
+      leftSplitterBox!.y + leftSplitterBox!.height / 2,
+    );
+    await window.mouse.down();
+    await window.mouse.move(
+      leftSplitterBox!.x + leftSplitterBox!.width / 2 - 40,
+      leftSplitterBox!.y + leftSplitterBox!.height / 2,
+    );
+    await window.mouse.up();
+    await expect(leftSplitter).toHaveAttribute('aria-valuenow', '160');
+    await window
+      .getByRole('button', { name: /Swatch actions for/ })
+      .first()
+      .click();
+    const narrowMenuButtons = await window
+      .locator(
+        '.color-swatch-list__details[open] .color-swatch-list__menu .ts-button',
+      )
+      .evaluateAll((buttons) =>
+        buttons.map((button) => {
+          const bounds = button.getBoundingClientRect();
+          return { width: bounds.width, scrollWidth: button.scrollWidth };
+        }),
+      );
+    expect(narrowMenuButtons).toHaveLength(5);
+    expect(
+      narrowMenuButtons.every(
+        (button) => button.width >= 100 && button.scrollWidth <= button.width,
+      ),
+    ).toBe(true);
   } finally {
     await application.close();
     await rm(temporaryDirectory, { recursive: true, force: true });

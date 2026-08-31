@@ -6566,3 +6566,87 @@ input[type='range']:disabled {
   outline: var(--ts-focus-ring);
   outline-offset: -3px;
 }
+
+/* Roadmap 4 V07: technical studio quality pass. */
+.library-panel__active-skin-copy > .library-panel__active-skin-label {
+  font-size: var(--ts-font-size-meta);
+  line-height: var(--ts-line-height-tight);
+}
+
+.tool-options-inspector__seed input,
+.tool-options-inspector__select select {
+  font-size: var(--ts-font-size-compact);
+  line-height: 1;
+}
+
+.tool-options-inspector__seed input {
+  font-family: var(--ts-font-family-mono);
+}
+
+.tool-options-inspector__select select {
+  font-family: var(--ts-font-family-ui);
+}
+
+.shortcut-hint {
+  right: 1px;
+  bottom: 1px;
+  z-index: 1;
+  padding: 1px 2px;
+  border-radius: 2px;
+  color: var(--ts-text-muted);
+  background: var(--ts-bg-panel);
+  font-family: var(--ts-font-family-mono);
+  font-size: var(--ts-font-size-meta);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.tool-button[aria-pressed='true'] .shortcut-hint {
+  color: var(--ts-text-on-accent);
+  background: var(--ts-state-selected-surface);
+}
+
+.left-workspace-upper > .tool-options-inspector {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  gap: var(--ts-space-dense);
+  padding-block: 4px;
+}
+
+.tool-options-inspector::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.tool-options-inspector::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--ts-scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+.color-workspace
+  .color-swatch-list__details:not([open])
+  > .color-swatch-list__menu {
+  display: none;
+}
+
+@container color-workspace (max-width: 180px) {
+  .color-workspace .color-swatch-list__menu {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .color-workspace .color-swatch-list__remove {
+    grid-column: auto;
+  }
+}
+
+.skin-preview-viewport {
+  grid-template-rows: minmax(0, 1fr) 34px;
+}
+
+.skin-preview-viewport.has-notice {
+  grid-template-rows: minmax(0, 1fr) auto 34px;
+}

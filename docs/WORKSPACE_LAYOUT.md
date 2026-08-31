@@ -24,6 +24,9 @@ the central 2D canvas and at least 180 px for the lower 3D preview section.
 The left-side dock keeps a compact Library and contextual tool options above
 the persistent Color Workspace. In the normal compact state, the upper stack
 uses its preferred height and Color Workspace receives the remaining space.
+Tool Options uses the remaining compact-stack height; advanced tool controls
+scroll within that section when their content is taller than the available
+space, while the Library remains visible.
 Expanding Library temporarily gives the upper stack the available height and
 restores the persisted Color Workspace height; collapsing it immediately
 returns that space to Color Workspace. The horizontal separator resizes the

@@ -67,6 +67,17 @@ The focus contract is `--ts-focus-ring` with
 `--ts-focus-ring-offset`. Selected and disabled states must remain
 distinguishable from color alone through borders, indicators, or text changes.
 
+## Roadmap 4 completion
+
+Roadmap 4 — Technical Studio Visual System complete. The V07 quality pass
+keeps the token scale authoritative for the application shell, compact side
+panels, canvas chrome, right inspector, 3D viewport, document tabs, swatches,
+and semantic overlays. Advanced Tool Options scroll within the compact stack
+when their content exceeds the available height, closed swatch action menus
+are removed from the visual and interaction surface, and the preview footer
+has an explicit grid track so supported window sizes do not introduce inner
+overflow.
+
 The older `--color-*` and `--radius-control` names remain compatibility
 aliases for existing selectors during the Roadmap 4 migration. They should
 not be extended in new code.

@@ -123,7 +123,13 @@ and visibility isolation keeps the two views coordinated.
 Roadmap 3 A08 completes the artist workflow quality pass for the existing
 A00–A07 slice: native Edit commands respect text-field focus, New Skin manages
 modal keyboard focus, HSV dragging cancels safely on window blur, and saved
-PNGs invalidate cached library thumbnails. No Roadmap 4 scope is included.
+PNGs invalidate cached library thumbnails.
+
+Roadmap 4 — Technical Studio Visual System complete. The final quality pass
+applies the durable token scale across the shell, compact Library, Tool
+Options, Color Workspace, canvas chrome, inspector, 3D viewport, document
+tabs, swatches, and semantic overlays. It also closes compact-mode clipping
+and overflow regressions without adding new product functionality.
 
 The formal MCSkin3D comparison, compatibility boundary, and explicit
 exclusions are recorded in
