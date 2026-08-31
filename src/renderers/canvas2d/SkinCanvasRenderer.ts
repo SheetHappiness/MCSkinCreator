@@ -34,13 +34,16 @@ const CHECKER_LIGHT = '#85878d';
 const CHECKER_DARK = '#777a80';
 const GRID_COLOR = 'rgba(10, 12, 15, 0.26)';
 const TEXTURE_BOUNDARY_COLOR = 'rgba(225, 229, 235, 0.32)';
-const UV_BASE_BOUNDARY_COLOR = 'rgba(221, 230, 240, 0.42)';
-const UV_OUTER_BOUNDARY_COLOR = 'rgba(184, 202, 221, 0.46)';
-const SEMANTIC_SELECTION_FILL = 'rgba(239, 198, 107, 0.12)';
-const SEMANTIC_SELECTION_STROKE = 'rgba(248, 211, 128, 0.9)';
-const SEMANTIC_HIGHLIGHT_FILL = 'rgba(112, 201, 255, 0.24)';
-const SEMANTIC_HIGHLIGHT_STROKE = 'rgba(150, 221, 255, 0.96)';
-const ISOLATION_FILL = 'rgba(12, 15, 19, 0.48)';
+const OVERLAY_KEYLINE_COLOR = 'rgba(10, 13, 17, 0.78)';
+const UV_BASE_BOUNDARY_COLOR = 'rgba(177, 201, 224, 0.9)';
+const UV_OUTER_BOUNDARY_COLOR = 'rgba(132, 164, 193, 0.98)';
+const SEMANTIC_SELECTION_FILL = 'rgba(120, 146, 174, 0.23)';
+const SEMANTIC_SELECTION_STROKE = 'rgba(171, 198, 221, 0.98)';
+const SEMANTIC_HIGHLIGHT_FILL = 'rgba(202, 217, 230, 0.14)';
+const SEMANTIC_HIGHLIGHT_STROKE = 'rgba(229, 237, 244, 0.96)';
+const SELECTION_LIGHT_COLOR = 'rgba(231, 237, 243, 0.96)';
+const FLOATING_SELECTION_LIGHT_COLOR = 'rgba(159, 190, 216, 0.98)';
+const ISOLATION_FILL = 'rgba(12, 15, 19, 0.36)';
 
 export interface SkinCanvasRenderOptions {
   readonly showGrid: boolean;
@@ -212,6 +215,7 @@ function drawSelectionOverlay(
   const height = visible.height * viewport.zoom;
   const lineWidth = 1 / surface.pixelRatio;
   const inset = lineWidth / 2;
+  const isFloating = selection.floating !== undefined;
 
   context.save();
   context.beginPath();
@@ -222,12 +226,14 @@ function drawSelectionOverlay(
     Math.max(0, height - lineWidth),
   );
   context.lineWidth = lineWidth;
-  context.setLineDash([4, 4]);
+  context.setLineDash(isFloating ? [3, 3] : [4, 4]);
   context.lineDashOffset = 0;
-  context.strokeStyle = '#111419';
+  context.strokeStyle = OVERLAY_KEYLINE_COLOR;
   context.stroke();
-  context.lineDashOffset = 4;
-  context.strokeStyle = '#f2f5f8';
+  context.lineDashOffset = isFloating ? 3 : 4;
+  context.strokeStyle = isFloating
+    ? FLOATING_SELECTION_LIGHT_COLOR
+    : SELECTION_LIGHT_COLOR;
   context.stroke();
   context.setLineDash([]);
   context.restore();
@@ -394,8 +400,13 @@ function drawSemanticRegion(
   context.save();
   context.fillStyle = fill;
   context.fillRect(left, top, width, height);
-  context.strokeStyle = stroke;
+  context.lineWidth = 2 / surface.pixelRatio;
+  context.strokeStyle = OVERLAY_KEYLINE_COLOR;
+  context.beginPath();
+  drawUvRegionPath(context, viewport, region, surface);
+  context.stroke();
   context.lineWidth = 1 / surface.pixelRatio;
+  context.strokeStyle = stroke;
   context.beginPath();
   drawUvRegionPath(context, viewport, region, surface);
   context.stroke();
@@ -410,16 +421,6 @@ function drawSemanticTargetOverlays(
   selection: SkinSemanticTarget | undefined,
   highlight: SkinSemanticTarget | undefined,
 ): void {
-  if (selection !== undefined && selection.model === model) {
-    drawSemanticRegion(
-      context,
-      viewport,
-      surface,
-      selection,
-      SEMANTIC_SELECTION_FILL,
-      SEMANTIC_SELECTION_STROKE,
-    );
-  }
   if (highlight !== undefined && highlight.model === model) {
     drawSemanticRegion(
       context,
@@ -428,6 +429,16 @@ function drawSemanticTargetOverlays(
       highlight,
       SEMANTIC_HIGHLIGHT_FILL,
       SEMANTIC_HIGHLIGHT_STROKE,
+    );
+  }
+  if (selection !== undefined && selection.model === model) {
+    drawSemanticRegion(
+      context,
+      viewport,
+      surface,
+      selection,
+      SEMANTIC_SELECTION_FILL,
+      SEMANTIC_SELECTION_STROKE,
     );
   }
 }
@@ -441,28 +452,41 @@ function drawUvBoundaryOverlay(
   surface: CanvasSurface,
 ): void {
   context.save();
-  context.lineWidth = 1 / surface.pixelRatio;
 
   for (const currentLayer of layersForOverlay(layer)) {
-    context.strokeStyle =
+    const lineDash = currentLayer === 'outer' ? [4, 3] : [];
+    const drawLayerPass = (strokeStyle: string, lineWidth: number) => {
+      context.strokeStyle = strokeStyle;
+      context.lineWidth = lineWidth;
+      context.setLineDash(lineDash);
+      context.beginPath();
+
+      for (const bodyPart of BODY_PARTS) {
+        const definitions = getBodyPartRegions({
+          model,
+          bodyPart,
+          layer: currentLayer,
+        });
+        for (const face of CUBE_FACES) {
+          drawUvRegionPath(
+            context,
+            viewport,
+            definitions[face].region,
+            surface,
+          );
+        }
+      }
+
+      context.stroke();
+    };
+
+    drawLayerPass(OVERLAY_KEYLINE_COLOR, 2 / surface.pixelRatio);
+    drawLayerPass(
       currentLayer === 'base'
         ? UV_BASE_BOUNDARY_COLOR
-        : UV_OUTER_BOUNDARY_COLOR;
-    context.setLineDash(currentLayer === 'outer' ? [4, 3] : []);
-    context.beginPath();
-
-    for (const bodyPart of BODY_PARTS) {
-      const definitions = getBodyPartRegions({
-        model,
-        bodyPart,
-        layer: currentLayer,
-      });
-      for (const face of CUBE_FACES) {
-        drawUvRegionPath(context, viewport, definitions[face].region, surface);
-      }
-    }
-
-    context.stroke();
+        : UV_OUTER_BOUNDARY_COLOR,
+      1 / surface.pixelRatio,
+    );
   }
 
   context.setLineDash([]);
@@ -534,6 +558,10 @@ export function renderSkinCanvas(
 
   drawTextureBoundary(context, viewport, skinDocument, surface);
 
+  if (shouldRenderPixelGrid(options.showGrid, viewport.zoom)) {
+    drawPixelGrid(context, viewport, skinDocument, surface);
+  }
+
   if (options.uvOverlay !== undefined) {
     drawUvBoundaryOverlay(
       context,
@@ -553,9 +581,6 @@ export function renderSkinCanvas(
     options.semanticHighlight,
   );
 
-  if (shouldRenderPixelGrid(options.showGrid, viewport.zoom)) {
-    drawPixelGrid(context, viewport, skinDocument, surface);
-  }
   drawSelectionOverlay(
     context,
     viewport,

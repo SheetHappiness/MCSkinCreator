@@ -360,8 +360,9 @@ function SelectionTransformMenu({
 
   return (
     <div
-      className="selection-transform-menu"
+      className={`selection-transform-menu${isFloating ? ' selection-transform-menu--floating' : ''}`}
       data-testid="selection-transform-menu"
+      data-selection-mode={isFloating ? 'floating' : 'selected'}
       role="group"
       aria-label="Selection transformations"
     >
@@ -443,7 +444,7 @@ function SelectionTransformMenu({
               </label>
               <button
                 type="button"
-                className="ts-button"
+                className="ts-button ts-button--primary"
                 aria-label={`Transfer ${transferOption.label}`}
                 onClick={() =>
                   controller.transferBodyPart({
@@ -545,6 +546,7 @@ export function EditorWorkspace({
     setViewport(fitViewportToView(size, skinDocument));
     setFocusTarget('whole');
     setHoveredPixel(undefined);
+    setHovered3DTarget(undefined);
   }, [size, skinDocument]);
 
   const focusCanvas = useCallback(
@@ -663,9 +665,9 @@ export function EditorWorkspace({
     ) {
       fittedDocumentIdRef.current = skinDocument.id;
       setViewport(fitViewportToView(size, skinDocument));
-      setHoveredPixel(undefined);
+      clearSemanticState();
     }
-  }, [size, skinDocument]);
+  }, [clearSemanticState, size, skinDocument]);
 
   const hoveredSemantic =
     hoveredPixel === undefined
@@ -854,6 +856,7 @@ export function EditorWorkspace({
     cancelSelectionGesture();
     selectionController.cancelTransient();
     setHoveredPixel(undefined);
+    setHovered3DTarget(undefined);
     spacePressedRef.current = false;
     setIsSpacePressed(false);
     temporaryEyedropperSlotRef.current = undefined;
@@ -1365,7 +1368,10 @@ export function EditorWorkspace({
               cancelSelectionGesture(event.pointerId);
             }}
             onPointerDown={handlePointerDown}
-            onPointerLeave={() => setHoveredPixel(undefined)}
+            onPointerLeave={() => {
+              setHoveredPixel(undefined);
+              setHovered3DTarget(undefined);
+            }}
             onPointerMove={handlePointerMove}
             onPointerUp={(event) => {
               finishPan(event.pointerId);
@@ -1402,7 +1408,7 @@ export function EditorWorkspace({
               </span>
               <button
                 type="button"
-                className="ts-button"
+                className="ts-button ts-button--primary"
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={() => selectionController.commitFloating()}
               >
@@ -1410,7 +1416,7 @@ export function EditorWorkspace({
               </button>
               <button
                 type="button"
-                className="ts-button"
+                className="ts-button ts-button--quiet"
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={() => selectionController.cancelFloating()}
               >
@@ -1513,6 +1519,7 @@ export function EditorWorkspace({
             className="semantic-readout"
             aria-label="Canvas semantic"
             data-testid="canvas-semantic"
+            data-semantic-state={hoveredPixel === undefined ? 'idle' : 'active'}
           >
             {semanticReadout}
           </output>

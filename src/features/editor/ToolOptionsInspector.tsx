@@ -184,7 +184,11 @@ function SymmetryOption({ activeTool }: { readonly activeTool: EditorTool }) {
   const supportsTool = symmetrySupportsTool(activeTool);
 
   return (
-    <div className="tool-options-inspector__symmetry">
+    <div
+      className="tool-options-inspector__symmetry"
+      data-symmetry-mode={mode}
+      data-symmetry-supported={supportsTool ? 'true' : 'false'}
+    >
       <label className="tool-options-inspector__control tool-options-inspector__select">
         <span>Symmetry</span>
         <select

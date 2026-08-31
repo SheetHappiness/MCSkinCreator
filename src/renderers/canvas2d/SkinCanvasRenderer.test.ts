@@ -134,6 +134,48 @@ describe('Canvas 2D skin rendering', () => {
     expect(destinationContext.stroke).toHaveBeenCalledTimes(3);
   });
 
+  it('uses a compact accent dash for a floating selection', () => {
+    const destinationContext = createContext();
+    const sourceContext = createContext();
+    const sourceCanvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => sourceContext),
+    };
+    const canvas = {
+      width: 0,
+      height: 0,
+      ownerDocument: { createElement: vi.fn(() => sourceCanvas) },
+      getContext: vi.fn(() => destinationContext),
+    } as unknown as HTMLCanvasElement;
+    const document = SkinDocument.createBlank({
+      id: 'floating-selection-render',
+    });
+
+    renderSkinCanvas(
+      canvas,
+      document,
+      { zoom: 8, offsetX: 20, offsetY: 30 },
+      { width: 640, height: 480 },
+      {
+        showGrid: false,
+        pixelRatio: 2,
+        selection: {
+          selection: { x: 2, y: 3, width: 4, height: 5 },
+          draft: undefined,
+          floating: {
+            kind: 'duplicate',
+            rect: { x: 2, y: 3, width: 4, height: 5 },
+            data: new Uint8ClampedArray(4 * 5 * 4),
+          },
+        },
+      },
+    );
+
+    expect(destinationContext.setLineDash).toHaveBeenCalledWith([3, 3]);
+    expect(destinationContext.stroke).toHaveBeenCalledTimes(3);
+  });
+
   it('draws canonical UV boundaries with the same pan, zoom, and DPR transform', () => {
     const destinationContext = createContext();
     const sourceContext = createContext();
@@ -170,7 +212,7 @@ describe('Canvas 2D skin rendering', () => {
     expect(destinationContext.moveTo).toHaveBeenCalledWith(84.25, 30.25);
     expect(destinationContext.lineTo).toHaveBeenCalledWith(148.25, 30.25);
     expect(destinationContext.lineTo).toHaveBeenCalledWith(148.25, 94.25);
-    expect(destinationContext.stroke).toHaveBeenCalledTimes(2);
+    expect(destinationContext.stroke).toHaveBeenCalledTimes(3);
     expect(document.copyPixelData()).toEqual(before);
     expect(document.revision).toBe(revision);
   });
@@ -203,7 +245,7 @@ describe('Canvas 2D skin rendering', () => {
     );
 
     expect(destinationContext.setLineDash).toHaveBeenCalledWith([4, 3]);
-    expect(destinationContext.stroke).toHaveBeenCalledTimes(2);
+    expect(destinationContext.stroke).toHaveBeenCalledTimes(3);
   });
 
   it('draws a view-only semantic highlight from a canonical face target', () => {
@@ -242,7 +284,7 @@ describe('Canvas 2D skin rendering', () => {
     );
 
     expect(destinationContext.fillRect).toHaveBeenCalledWith(180, 190, 64, 96);
-    expect(destinationContext.stroke).toHaveBeenCalledTimes(2);
+    expect(destinationContext.stroke).toHaveBeenCalledTimes(3);
     expect(document.copyPixelData()).toEqual(before);
     expect(document.revision).toBe(revision);
   });

@@ -89,6 +89,11 @@ function createSemanticMaterial(
   return material;
 }
 
+const SEMANTIC_SELECTION_COLOR = 0x7892ae;
+const SEMANTIC_SELECTION_OPACITY = 0.3;
+const SEMANTIC_HIGHLIGHT_COLOR = 0xd6e1eb;
+const SEMANTIC_HIGHLIGHT_OPACITY = 0.2;
+
 interface SemanticOverlay {
   readonly target: SkinSemanticTarget;
   readonly mesh: Mesh;
@@ -122,13 +127,13 @@ export class SkinModelResources {
     this.outerMaterial = createSkinMaterial(texture, 'skin-outer');
     this.selectionMaterial = createSemanticMaterial(
       'skin-semantic-selection',
-      0xf0c76f,
-      0.2,
+      SEMANTIC_SELECTION_COLOR,
+      SEMANTIC_SELECTION_OPACITY,
     );
     this.highlightMaterial = createSemanticMaterial(
       'skin-semantic-highlight',
-      0x70c9ff,
-      0.32,
+      SEMANTIC_HIGHLIGHT_COLOR,
+      SEMANTIC_HIGHLIGHT_OPACITY,
     );
 
     for (const descriptor of createSkinModelDescriptor(model)) {

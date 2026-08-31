@@ -53,6 +53,8 @@ export function UvCanvasControls({
     <div
       className="canvas-structure-controls"
       data-testid="canvas-structure-controls"
+      data-uv-state={showUvOverlay ? 'visible' : 'hidden'}
+      data-uv-layer={layer}
       role="group"
       aria-label="Canvas structure"
     >

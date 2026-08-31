@@ -272,6 +272,9 @@ export function SkinPreviewPanel({
       ? viewStateEntry.state
       : defaultView.state;
   const [hoveredPick, setHoveredPick] = useState<SkinPickResult | undefined>();
+  const [hoveredPickTool, setHoveredPickTool] = useState<
+    EditorTool | undefined
+  >();
   const [targetLayer, setTargetLayer] = useState<SkinLayer>('base');
   const [temporaryEyedropper, setTemporaryEyedropper] = useState(false);
   const [previewNotice, setPreviewNotice] = useState<string | undefined>();
@@ -340,6 +343,9 @@ export function SkinPreviewPanel({
     const renderer = new SkinPreviewRenderer(mount, document, undefined, {
       onPickChange: (result) => {
         setHoveredPick(result);
+        setHoveredPickTool(
+          result === undefined ? undefined : activeToolRef.current,
+        );
         semanticHoverChangeRef.current?.(
           result === undefined
             ? undefined
@@ -430,6 +436,7 @@ export function SkinPreviewPanel({
       renderer.dispose();
       interactionRef.current = undefined;
       setHoveredPick(undefined);
+      setHoveredPickTool(undefined);
       semanticHoverChangeRef.current?.(undefined);
     };
   }, [defaultView, document, history]);
@@ -454,6 +461,8 @@ export function SkinPreviewPanel({
   useEffect(() => {
     interactionRef.current?.cancel();
     rendererRef.current?.setEditingTool(activeTool);
+    semanticHoverChangeRef.current?.(undefined);
+    rendererRef.current?.setHighlightedTarget(undefined);
   }, [activeTool]);
 
   useEffect(() => {
@@ -500,6 +509,7 @@ export function SkinPreviewPanel({
   const updateViewState = (update: (state: SkinViewState) => SkinViewState) => {
     cancelActiveEditorInteraction();
     clearSemanticStateRef.current?.();
+    setHoveredPick(undefined);
     setViewStateEntry((current) => {
       const state =
         current.documentId === defaultView.documentId
@@ -517,8 +527,10 @@ export function SkinPreviewPanel({
     selectedTarget?.model === document.model
       ? selectedTarget.layer
       : targetLayer;
+  const currentHoveredPick =
+    hoveredPickTool === activeTool ? hoveredPick : undefined;
   const hoveredInspectorTarget =
-    canvasHoverTarget ?? semanticTargetForPick(hoveredPick);
+    canvasHoverTarget ?? semanticTargetForPick(currentHoveredPick);
   const visibleBodyPartCount = BODY_PARTS.filter(
     (bodyPart) => viewState.bodyParts[bodyPart],
   ).length;
@@ -756,6 +768,9 @@ export function SkinPreviewPanel({
                   className="skin-preview-body-part"
                   key={bodyPart}
                   data-visible={visible}
+                  data-isolated={
+                    viewState.isolatedBodyPart === bodyPart ? 'true' : undefined
+                  }
                   data-semantic-hovered={isHovered ? 'true' : undefined}
                   data-semantic-selected={isSelected ? 'true' : undefined}
                 >
@@ -871,8 +886,14 @@ export function SkinPreviewPanel({
         <footer className="skin-preview-controls">
           <div className="skin-preview-pick-readout">
             <span className="skin-preview-pick-readout__label">Pick</span>
-            <output aria-label="3D pick" data-testid="preview-pick">
-              {formatPick(hoveredPick)}
+            <output
+              aria-label="3D pick"
+              data-testid="preview-pick"
+              data-pick-state={
+                currentHoveredPick === undefined ? 'idle' : 'active'
+              }
+            >
+              {formatPick(currentHoveredPick)}
             </output>
           </div>
           <span className="skin-preview-controls__hint">
