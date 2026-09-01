@@ -13,6 +13,9 @@
     "build": "rimraf dist && npm run build:renderer && npm run build:electron",
     "build:renderer": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
+    "package:win": "npm run build && electron-builder --win --x64 --publish never",
+    "package:win:portable": "npm run build && electron-builder --win portable --x64 --publish never",
+    "package:win:installer": "npm run build && electron-builder --win nsis --x64 --publish never",
     "typecheck": "tsc --noEmit -p tsconfig.electron.json && tsc -p tsconfig.renderer.json && tsc -p tsconfig.node.json",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
@@ -20,6 +23,46 @@
     "test": "vitest run",
     "test:e2e": "npm run build && playwright test",
     "validate": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build && npm run test:e2e"
+  },
+  "build": {
+    "appId": "com.minecraftskineditor.app",
+    "productName": "Minecraft Skin Editor",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Minecraft Skin Editor"
+    }
   },
   "dependencies": {
     "fast-png": "^8.0.0",
@@ -41,6 +84,7 @@
     "concurrently": "^10.0.5",
     "cross-env": "^10.1.0",
     "electron": "^43.4.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^10.9.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.4",

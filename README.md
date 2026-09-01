@@ -12,6 +12,32 @@ The first version is intentionally narrow:
 
 Everything else comes later.
 
+## Local Windows packaging
+
+Development runs with:
+
+```text
+npm run dev
+```
+
+To create a production-like Windows test build containing both artifacts, run:
+
+```text
+npm run package:win
+```
+
+The individual targets are also available as `npm run package:win:portable`
+and `npm run package:win:installer`. The generated artifacts are written to
+`release/`:
+
+- `release/Minecraft Skin Editor-Portable-0.1.0-x64.exe` — portable build;
+- `release/Minecraft Skin Editor-Setup-0.1.0-x64.exe` — per-user NSIS installer.
+
+The installer does not require administrator privileges by default and offers
+the standard install-directory choice. Builds are unsigned for local testing.
+The repository does not yet contain a final application icon, so the packager's
+default Electron icon is used temporarily.
+
 ---
 
 ## Product Direction
