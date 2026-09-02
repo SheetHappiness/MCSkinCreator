@@ -78,7 +78,7 @@ export function ColorSwatches({
   return (
     <div className="color-control" aria-label="Paint colors">
       <div className="color-control__heading">
-        <span className="color-control__label">Colors</span>
+        <span className="color-control__label">Color Studio</span>
         <span className="color-control__active-slot">
           Active: {activeLabel}
         </span>

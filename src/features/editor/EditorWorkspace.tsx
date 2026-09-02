@@ -65,7 +65,6 @@ import {
   COLLAPSED_PANEL_SIZE,
   CollapsedWorkspacePanel,
   DEFAULT_WORKSPACE_LAYOUT,
-  TOOL_RAIL_WIDTH,
   WORKSPACE_SPLITTER_SIZE,
   WorkspaceSplitter,
   clampWorkspaceDimension,
@@ -95,7 +94,7 @@ import {
   getEditorToolShortcut,
   getPointerAction,
 } from './editorShortcuts';
-import { getToolOptions } from './toolOptions';
+import { getToolOptions, toolLabel } from './toolOptions';
 import { getSymmetryMode } from './symmetryStore';
 import { UvCanvasControls } from './UvCanvasControls';
 
@@ -156,12 +155,12 @@ const TOOL_GROUPS: readonly {
 }[] = [
   {
     id: 'selection',
-    label: 'Selection tools',
+    label: 'Selection and transform tools',
     tools: TOOLS.filter(({ group }) => group === 'selection'),
   },
   {
     id: 'paint',
-    label: 'Paint tools',
+    label: 'Painting tools',
     tools: TOOLS.filter(({ group }) => group === 'paint'),
   },
   {
@@ -1267,51 +1266,115 @@ export function EditorWorkspace({
 
   return (
     <section className="editor-workspace" aria-label="2D editor viewport">
+      <nav
+        className="editor-toolbar"
+        role="toolbar"
+        aria-orientation="horizontal"
+        aria-label="Editor toolbar"
+        data-testid="editor-toolbar"
+      >
+        <div className="editor-toolbar__groups">
+          {TOOL_GROUPS.map(({ id, label: groupLabel, tools }) => (
+            <div
+              key={id}
+              className={`editor-toolbar__group editor-toolbar__group--${id}`}
+              role="group"
+              aria-label={groupLabel}
+            >
+              {tools.map(({ tool, label, shortcut }) => (
+                <button
+                  key={tool}
+                  type="button"
+                  className="tool-button ts-icon-button"
+                  aria-label={label}
+                  aria-pressed={activeTool === tool}
+                  aria-keyshortcuts={shortcut}
+                  data-tooltip={`${label}\n${shortcut}`}
+                  onClick={() => requestToolChange(tool)}
+                >
+                  <ToolIcon tool={tool} />
+                  <span className="shortcut-hint">{shortcut}</span>
+                </button>
+              ))}
+              {id === 'selection' ? (
+                <SelectionTransformMenu
+                  controller={selectionController}
+                  selectionState={selectionState}
+                />
+              ) : null}
+            </div>
+          ))}
+
+          <div
+            className="editor-toolbar__group editor-toolbar__group--view"
+            role="group"
+            aria-label="View and navigation tools"
+          >
+            <button
+              type="button"
+              className="ts-icon-button ts-icon-button--compact"
+              aria-label="Zoom out"
+              onClick={() => zoomFromCenter(1 / VIEWPORT_ZOOM_BUTTON_FACTOR)}
+            >
+              −
+            </button>
+            <output aria-label="Current zoom" data-testid="zoom-value">
+              {zoomPercent}%
+            </output>
+            <button
+              type="button"
+              className="ts-icon-button ts-icon-button--compact"
+              aria-label="Zoom in"
+              onClick={() => zoomFromCenter(VIEWPORT_ZOOM_BUTTON_FACTOR)}
+            >
+              +
+            </button>
+            <button type="button" className="ts-button" onClick={fitToView}>
+              Fit
+            </button>
+            <button
+              type="button"
+              className="ts-button"
+              aria-pressed={showGrid}
+              onClick={() => setShowGrid((current) => !current)}
+            >
+              Grid
+            </button>
+            <UvCanvasControls
+              showUvOverlay={showUvOverlay}
+              layer={uvLayer}
+              focusTarget={focusTarget}
+              onToggleUvOverlay={() => setShowUvOverlay((current) => !current)}
+              onLayerChange={handleUvLayerChange}
+              onFocusChange={focusCanvas}
+            />
+          </div>
+
+          <div
+            className="editor-toolbar__group editor-toolbar__group--context"
+            role="group"
+            aria-label="Active tool controls"
+          >
+            <span className="editor-toolbar__context-label">Active tool</span>
+            <strong data-testid="active-tool-label">
+              {toolLabel(activeTool)}
+            </strong>
+            <span className="editor-toolbar__context-meta">
+              {temporaryEyedropper
+                ? 'Alt · Sampling'
+                : `${TOOLS.find(({ tool }) => tool === activeTool)?.shortcut ?? ''} · Canvas`}
+            </span>
+          </div>
+        </div>
+      </nav>
       <div
         ref={editorMainRef}
         className="editor-main"
         style={{
-          gridTemplateColumns: `${TOOL_RAIL_WIDTH}px minmax(0, 1fr) ${WORKSPACE_SPLITTER_SIZE}px ${effectiveRightPanelWidth}px`,
+          gridTemplateColumns: `minmax(0, 1fr) ${WORKSPACE_SPLITTER_SIZE}px ${effectiveRightPanelWidth}px`,
         }}
       >
-        <aside className="tool-rail" aria-label="Painting tools">
-          <div className="tool-rail__groups">
-            {TOOL_GROUPS.map(({ id, label: groupLabel, tools }) => (
-              <div
-                key={id}
-                className={`tool-list tool-list--${id}`}
-                role="group"
-                aria-label={groupLabel}
-              >
-                {tools.map(({ tool, label, shortcut }) => (
-                  <button
-                    key={tool}
-                    type="button"
-                    className="tool-button ts-icon-button"
-                    aria-label={label}
-                    aria-pressed={activeTool === tool}
-                    aria-keyshortcuts={shortcut}
-                    data-tooltip={`${label}\n${shortcut}`}
-                    onClick={() => requestToolChange(tool)}
-                  >
-                    <ToolIcon tool={tool} />
-                    <span className="shortcut-hint">{shortcut}</span>
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-        </aside>
-
         <div className="canvas-stage" ref={stageRef}>
-          <UvCanvasControls
-            showUvOverlay={showUvOverlay}
-            layer={uvLayer}
-            focusTarget={focusTarget}
-            onToggleUvOverlay={() => setShowUvOverlay((current) => !current)}
-            onLayerChange={handleUvLayerChange}
-            onFocusChange={focusCanvas}
-          />
           <canvas
             ref={canvasRef}
             className={`skin-canvas${isSpacePressed ? ' is-pan-ready' : ''}${isPanning ? ' is-panning' : ''}`}
@@ -1379,10 +1442,6 @@ export function EditorWorkspace({
               finishSelection(event.pointerId);
             }}
             onWheel={handleWheel}
-          />
-          <SelectionTransformMenu
-            controller={selectionController}
-            selectionState={selectionState}
           />
           {selectionState.floating === undefined ? null : (
             <div
@@ -1476,38 +1535,6 @@ export function EditorWorkspace({
         >
           64×64
         </span>
-        <div className="viewport-controls" aria-label="Viewport controls">
-          <button
-            type="button"
-            className="ts-icon-button ts-icon-button--compact"
-            aria-label="Zoom out"
-            onClick={() => zoomFromCenter(1 / VIEWPORT_ZOOM_BUTTON_FACTOR)}
-          >
-            −
-          </button>
-          <output aria-label="Current zoom" data-testid="zoom-value">
-            {zoomPercent}%
-          </output>
-          <button
-            type="button"
-            className="ts-icon-button ts-icon-button--compact"
-            aria-label="Zoom in"
-            onClick={() => zoomFromCenter(VIEWPORT_ZOOM_BUTTON_FACTOR)}
-          >
-            +
-          </button>
-          <button type="button" className="ts-button" onClick={fitToView}>
-            Fit
-          </button>
-          <button
-            type="button"
-            className="ts-button"
-            aria-pressed={showGrid}
-            onClick={() => setShowGrid((current) => !current)}
-          >
-            Grid
-          </button>
-        </div>
         <div className="canvas-status-readout">
           <output
             className="coordinate-readout"

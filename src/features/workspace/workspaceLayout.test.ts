@@ -128,8 +128,8 @@ describe('workspace layout model', () => {
       rightPanelHeight: 462,
     });
 
-    expect(effective.leftPanelWidth).toBe(272);
-    expect(effective.rightPanelWidth).toBe(257);
+    expect(effective.leftPanelWidth).toBe(288);
+    expect(effective.rightPanelWidth).toBe(280);
     expect(effective.rightInspectorHeight).toBe(274);
     expect(effective.leftUpperHeight).toBe(
       DEFAULT_WORKSPACE_LAYOUT.leftUpperHeight,
@@ -139,6 +139,14 @@ describe('workspace layout model', () => {
     expect(preferred.rightInspectorHeight).toBe(
       RIGHT_INSPECTOR_HEIGHT_LIMITS.max,
     );
+  });
+
+  it('gives the left artist workspace a substantial wide-desktop default', () => {
+    expect(DEFAULT_WORKSPACE_LAYOUT.leftPanelWidth).toBe(480);
+    expect(DEFAULT_WORKSPACE_LAYOUT.leftPanelWidth).toBeGreaterThanOrEqual(440);
+    expect(getLeftPanelWidthBounds(1200)).toEqual({ min: 240, max: 560 });
+    expect(getLeftPanelWidthBounds(1600)).toEqual({ min: 240, max: 560 });
+    expect(getLeftPanelWidthBounds(2560)).toEqual({ min: 240, max: 560 });
   });
 
   it('keeps the collapsed rail effective size while preserving restore size', () => {
@@ -166,8 +174,8 @@ describe('workspace layout model', () => {
   });
 
   it('exposes usable splitter constraints for each supported orientation', () => {
-    expect(getLeftPanelWidthBounds(800)).toEqual({ min: 160, max: 272 });
-    expect(getRightPanelWidthBounds(592)).toEqual({ min: 244, max: 257 });
+    expect(getLeftPanelWidthBounds(800)).toEqual({ min: 240, max: 288 });
+    expect(getRightPanelWidthBounds(592)).toEqual({ min: 244, max: 280 });
     expect(getRightInspectorHeightBounds(462)).toEqual({
       min: 180,
       max: 274,

@@ -10,7 +10,7 @@ The first run starts with these preferred CSS-pixel dimensions:
 
 | Preference                    | Default | Static limits |
 | ----------------------------- | ------: | ------------: |
-| Local Library width           |  200 px |    160–360 px |
+| Left artist workspace width   |  480 px |    240–560 px |
 | 3D Preview width              |  300 px |    244–480 px |
 | Upper controls/history height |  260 px |    180–520 px |
 | Compact left upper stack      |  220 px |    200–520 px |
@@ -20,6 +20,14 @@ Both outer side-panel rails start expanded; the Library content itself starts
 compact. The collapsed rail is 32 px wide, and each interactive splitter
 reserves an 8 px track. The layout solver also reserves at least 220 px for
 the central 2D canvas and at least 180 px for the lower 3D preview section.
+
+The default left artist workspace is calibrated for a wide desktop around a
+2560 px monitor: its preferred width is 480 px and its user-resizable static
+range is 240–560 px. At smaller supported sizes the layout solver derives a
+temporary effective width from the available space while reserving a central
+Canvas surface slightly wider than the minimum 3D preview; it does not
+overwrite the stored preference. The effective reset width is 480 px at 1200 px
+and 288 px at the 800 px minimum window width.
 
 The left-side dock keeps a compact Library and contextual tool options above
 the persistent Color Workspace. In the normal compact state, the upper stack
@@ -50,7 +58,7 @@ usable offline.
 
 The stored dimensions are preferred values. A smaller window derives temporary
 effective dimensions from the current available space without overwriting the
-stored preference. The effective left and right widths leave the tool rail,
+stored preference. The effective left and right widths leave the toolbar,
 splitters, and a usable 2D surface visible; the effective inspector height
 leaves room for the 3D preview. Restoring a panel reuses its previous
 preferred dimension.

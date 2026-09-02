@@ -344,7 +344,7 @@ export function App() {
           axis="vertical"
           value={leftPanelWidth}
           bounds={leftPanelBounds}
-          label="Resize Local Library"
+          label="Resize Left Artist Workspace"
           controls="workspace-column"
           disabled={workspaceLayout.leftCollapsed}
           testId="workspace-splitter-left"

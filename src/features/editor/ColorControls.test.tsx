@@ -13,6 +13,11 @@ import {
   resetRecentColors,
 } from './colorSwatchStore';
 import { ColorControls } from './ColorControls';
+import { hsvToRgba, rgbaToHsv } from './colorConversions';
+import {
+  hsvFromTrianglePoint,
+  normalizedPointFromPointer,
+} from './colorPickerGeometry';
 
 const PRIMARY = { r: 10, g: 20, b: 30, a: 40 } as const;
 const SECONDARY = { r: 200, g: 210, b: 220, a: 230 } as const;
@@ -380,6 +385,78 @@ describe('persistent Color Workspace', () => {
       b: 0,
       a: 255,
     });
+  });
+
+  it('maps the hue wheel and triangle without losing exact alpha', () => {
+    const onChange = vi.fn();
+    render(
+      <ColorControls
+        persistent
+        primaryColor={PRIMARY}
+        secondaryColor={SECONDARY}
+        activeSlot="primary"
+        onSelectSlot={vi.fn()}
+        onChange={onChange}
+        onSwap={vi.fn()}
+        onReset={vi.fn()}
+      />,
+    );
+
+    const hueWheel = screen.getByTestId('hue-wheel');
+    vi.spyOn(hueWheel, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 100,
+      height: 100,
+      right: 100,
+      bottom: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    const primaryHsv = rgbaToHsv(PRIMARY);
+    fireEvent.pointerDown(hueWheel, {
+      pointerId: 1,
+      clientX: 100,
+      clientY: 50,
+    });
+    expect(onChange).toHaveBeenLastCalledWith(
+      'primary',
+      hsvToRgba({ ...primaryHsv, h: 90 }, PRIMARY.a),
+    );
+
+    onChange.mockClear();
+    const triangle = screen.getByTestId('color-triangle');
+    vi.spyOn(triangle, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 100,
+      height: 100,
+      right: 100,
+      bottom: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    const trianglePoint = normalizedPointFromPointer(
+      {
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 100,
+      },
+      92,
+      86,
+    );
+    fireEvent.pointerDown(triangle, {
+      pointerId: 2,
+      clientX: 92,
+      clientY: 86,
+    });
+    expect(onChange).toHaveBeenLastCalledWith(
+      'primary',
+      hsvToRgba(hsvFromTrianglePoint(trianglePoint, primaryHsv.h), PRIMARY.a),
+    );
   });
 
   it('records a changed color as one exact recent swatch and keeps it bounded in the workspace', () => {

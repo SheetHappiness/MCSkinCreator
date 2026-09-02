@@ -12,23 +12,24 @@ export const COLLAPSED_PANEL_SIZE = 32;
 /** The minimum canvas width reserved by the layout solver. */
 export const MIN_2D_CANVAS_WIDTH = 220;
 
-/** The fixed editor tool rail width used by the current shell. */
-export const TOOL_RAIL_WIDTH = 48;
-
 export const LEFT_UPPER_HEIGHT_LIMITS = Object.freeze({
   min: 200,
   max: 520,
 });
 
 export const LEFT_PANEL_WIDTH_LIMITS = Object.freeze({
-  min: 160,
-  max: 360,
+  min: 240,
+  max: 560,
 });
 
 export const RIGHT_PANEL_WIDTH_LIMITS = Object.freeze({
   min: 244,
   max: 480,
 });
+
+/** Slightly exceeds the minimum preview width so the 2D surface stays primary. */
+const MIN_CENTRAL_CANVAS_WIDTH =
+  RIGHT_PANEL_WIDTH_LIMITS.min + WORKSPACE_SPLITTER_SIZE;
 
 export const RIGHT_INSPECTOR_HEIGHT_LIMITS = Object.freeze({
   min: 180,
@@ -83,7 +84,7 @@ export interface EffectiveWorkspaceLayout extends WorkspaceLayout {
 }
 
 export const DEFAULT_WORKSPACE_LAYOUT: WorkspaceLayout = Object.freeze({
-  leftPanelWidth: 200,
+  leftPanelWidth: 480,
   rightPanelWidth: 300,
   rightInspectorHeight: 260,
   leftUpperHeight: 220,
@@ -119,9 +120,9 @@ export function clampWorkspaceDimension(
 }
 
 /**
- * Returns the legal preferred width for Local Library at the current window
- * size. The maximum leaves the tool rail, right panel minimum, splitters, and
- * a usable 2D canvas in the central workspace.
+ * Returns the legal preferred width for the left artist workspace at the
+ * current window size. The maximum leaves the right panel minimum, splitters,
+ * and a slightly dominant 2D canvas in the central workspace.
  */
 export function getLeftPanelWidthBounds(
   applicationWidth: number,
@@ -133,15 +134,20 @@ export function getLeftPanelWidthBounds(
   const maxByUsableEditor =
     applicationWidth -
     WORKSPACE_SPLITTER_SIZE -
-    TOOL_RAIL_WIDTH -
     WORKSPACE_SPLITTER_SIZE -
     RIGHT_PANEL_WIDTH_LIMITS.min -
-    MIN_2D_CANVAS_WIDTH;
+    MIN_CENTRAL_CANVAS_WIDTH;
+  // A supported narrow window may temporarily need to dip below the static
+  // preference minimum. Keeping the responsive minimum below the available
+  // maximum preserves the canvas reservation instead of producing an invalid
+  // min/max range or forcing the left dock to consume the canvas.
+  const availableMax = Math.max(0, Math.floor(maxByUsableEditor));
+  const responsiveMin = Math.min(LEFT_PANEL_WIDTH_LIMITS.min, availableMax);
   return {
-    min: LEFT_PANEL_WIDTH_LIMITS.min,
+    min: responsiveMin,
     max: Math.max(
-      LEFT_PANEL_WIDTH_LIMITS.min,
-      Math.min(LEFT_PANEL_WIDTH_LIMITS.max, Math.floor(maxByUsableEditor)),
+      responsiveMin,
+      Math.min(LEFT_PANEL_WIDTH_LIMITS.max, availableMax),
     ),
   };
 }
@@ -158,8 +164,7 @@ export function getRightPanelWidthBounds(
     return staticBounds(RIGHT_PANEL_WIDTH_LIMITS);
   }
 
-  const canvasAndPanelWidth =
-    editorMainWidth - TOOL_RAIL_WIDTH - WORKSPACE_SPLITTER_SIZE;
+  const canvasAndPanelWidth = editorMainWidth - WORKSPACE_SPLITTER_SIZE;
   const maxByCanvas = canvasAndPanelWidth - MIN_2D_CANVAS_WIDTH;
   const maxByShare = Math.floor(canvasAndPanelWidth * 0.48);
   return {

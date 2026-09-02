@@ -37,7 +37,7 @@ describe('App', () => {
 
     const applicationBody = document.querySelector('.application-body');
     expect(applicationBody).toHaveStyle(
-      'grid-template-columns: 200px 8px minmax(0, 1fr)',
+      'grid-template-columns: 480px 8px minmax(0, 1fr)',
     );
     expect(
       screen.getByRole('button', { name: 'Expand Library' }),
@@ -49,24 +49,24 @@ describe('App', () => {
     fireEvent.pointerDown(screen.getByTestId('workspace-splitter-left'), {
       button: 0,
       pointerId: 1,
-      clientX: 200,
+      clientX: 480,
     });
     fireEvent.pointerMove(screen.getByTestId('workspace-splitter-left'), {
       pointerId: 1,
-      clientX: 248,
+      clientX: 528,
     });
     fireEvent.pointerUp(screen.getByTestId('workspace-splitter-left'), {
       pointerId: 1,
     });
     expect(applicationBody).toHaveStyle(
-      'grid-template-columns: 248px 8px minmax(0, 1fr)',
+      'grid-template-columns: 528px 8px minmax(0, 1fr)',
     );
     expect(
       JSON.parse(localStorage.getItem(WORKSPACE_LAYOUT_STORAGE_KEY)!),
     ).toEqual({
       version: 1,
       ...DEFAULT_WORKSPACE_LAYOUT,
-      leftPanelWidth: 248,
+      leftPanelWidth: 528,
     });
 
     fireEvent.pointerDown(screen.getByTestId('workspace-splitter-color'), {
@@ -116,7 +116,7 @@ describe('App', () => {
       document.querySelector('.workspace-side-slot--left'),
     ).not.toHaveClass('is-collapsed');
     expect(applicationBody).toHaveStyle(
-      'grid-template-columns: 200px 8px minmax(0, 1fr)',
+      'grid-template-columns: 480px 8px minmax(0, 1fr)',
     );
     expect(
       JSON.parse(localStorage.getItem(WORKSPACE_LAYOUT_STORAGE_KEY)!),

@@ -16,6 +16,13 @@ import {
   rgbaToHsv,
   type HsvColor,
 } from './colorConversions';
+import {
+  hsvFromTrianglePoint,
+  hueFromNormalizedPoint,
+  normalizedPointFromHue,
+  normalizedPointFromPointer,
+  trianglePointFromHsv,
+} from './colorPickerGeometry';
 import { ColorSwatches } from './ColorSwatches';
 import {
   addColorSwatch,
@@ -153,7 +160,7 @@ function NumericField({
   );
 }
 
-interface SaturationValuePickerProps {
+interface ColorPickerProps {
   readonly hsv: HsvColor;
   readonly onChange: (hsv: HsvColor) => void;
 }
@@ -162,22 +169,7 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-function pickerHsvFromPointer(
-  element: HTMLDivElement,
-  clientX: number,
-  clientY: number,
-  hsv: HsvColor,
-): HsvColor {
-  const bounds = element.getBoundingClientRect();
-  if (bounds.width <= 0 || bounds.height <= 0) return hsv;
-  return {
-    ...hsv,
-    s: clamp(((clientX - bounds.left) / bounds.width) * 100, 0, 100),
-    v: clamp(100 - ((clientY - bounds.top) / bounds.height) * 100, 0, 100),
-  };
-}
-
-function SaturationValuePicker({ hsv, onChange }: SaturationValuePickerProps) {
+function HueWheelPicker({ hsv, onChange }: ColorPickerProps) {
   const activePointerIdRef = useRef<number | undefined>(undefined);
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -201,50 +193,42 @@ function SaturationValuePicker({ hsv, onChange }: SaturationValuePickerProps) {
   }, []);
 
   const updateFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
-    onChange(
-      pickerHsvFromPointer(
-        event.currentTarget,
-        event.clientX,
-        event.clientY,
-        hsv,
-      ),
+    const point = normalizedPointFromPointer(
+      event.currentTarget.getBoundingClientRect(),
+      event.clientX,
+      event.clientY,
     );
+    onChange({ ...hsv, h: hueFromNormalizedPoint(point) });
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const amount = event.shiftKey ? 10 : 1;
-    let saturation = hsv.s;
-    let value = hsv.v;
-    if (event.key === 'ArrowLeft') saturation -= amount;
-    else if (event.key === 'ArrowRight') saturation += amount;
-    else if (event.key === 'ArrowDown') value -= amount;
-    else if (event.key === 'ArrowUp') value += amount;
-    else if (event.key === 'Home') saturation = 0;
-    else if (event.key === 'End') saturation = 100;
+    let hue = hsv.h;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') hue -= amount;
+    else if (event.key === 'ArrowRight' || event.key === 'ArrowUp')
+      hue += amount;
+    else if (event.key === 'Home') hue = 0;
+    else if (event.key === 'End') hue = 360;
     else return;
 
     event.preventDefault();
-    onChange({
-      ...hsv,
-      s: clamp(saturation, 0, 100),
-      v: clamp(value, 0, 100),
-    });
+    onChange({ ...hsv, h: clamp(hue, 0, 360) });
   };
+
+  const handlePoint = normalizedPointFromHue(hsv.h);
 
   return (
     <div
       ref={pickerRef}
-      className="advanced-color-sv-picker"
+      className="advanced-color-hue-wheel"
       role="slider"
-      aria-label="Visual color picker"
+      aria-label="Hue picker"
       aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(hsv.s)}
-      aria-valuetext={`Saturation ${formatNumber(hsv.s)}%, Value ${formatNumber(hsv.v)}%`}
+      aria-valuemax={360}
+      aria-valuenow={Math.round(hsv.h)}
+      aria-valuetext={`Hue ${formatNumber(hsv.h, 0)}°`}
+      data-testid="hue-wheel"
       tabIndex={0}
-      style={{
-        background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(${hsv.h} 100% 50%))`,
-      }}
       onKeyDown={handleKeyDown}
       onPointerCancel={(event) => {
         if (activePointerIdRef.current === event.pointerId) {
@@ -281,11 +265,125 @@ function SaturationValuePicker({ hsv, onChange }: SaturationValuePickerProps) {
       }}
     >
       <span
-        className="advanced-color-sv-picker__cursor"
+        className="advanced-color-hue-wheel__handle"
         aria-hidden="true"
         style={{
-          left: `${hsv.s}%`,
-          top: `${100 - hsv.v}%`,
+          left: `${handlePoint.x * 100}%`,
+          top: `${handlePoint.y * 100}%`,
+        }}
+      />
+    </div>
+  );
+}
+
+function TriangleColorPicker({ hsv, onChange }: ColorPickerProps) {
+  const activePointerIdRef = useRef<number | undefined>(undefined);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const cancelActivePointer = () => {
+      const pointerId = activePointerIdRef.current;
+      activePointerIdRef.current = undefined;
+      if (pointerId === undefined) return;
+
+      const picker = pickerRef.current;
+      if (picker?.hasPointerCapture?.(pointerId)) {
+        picker.releasePointerCapture?.(pointerId);
+      }
+    };
+
+    window.addEventListener('blur', cancelActivePointer);
+    return () => {
+      window.removeEventListener('blur', cancelActivePointer);
+      cancelActivePointer();
+    };
+  }, []);
+
+  const updateFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const point = normalizedPointFromPointer(
+      event.currentTarget.getBoundingClientRect(),
+      event.clientX,
+      event.clientY,
+    );
+    onChange(hsvFromTrianglePoint(point, hsv.h));
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const amount = event.shiftKey ? 10 : 1;
+    let saturation = hsv.s;
+    let value = hsv.v;
+    if (event.key === 'ArrowLeft') saturation -= amount;
+    else if (event.key === 'ArrowRight') saturation += amount;
+    else if (event.key === 'ArrowDown') value -= amount;
+    else if (event.key === 'ArrowUp') value += amount;
+    else if (event.key === 'Home') saturation = 0;
+    else if (event.key === 'End') saturation = 100;
+    else return;
+
+    event.preventDefault();
+    onChange({
+      ...hsv,
+      s: clamp(saturation, 0, 100),
+      v: clamp(value, 0, 100),
+    });
+  };
+
+  const handlePoint = trianglePointFromHsv(hsv);
+
+  return (
+    <div
+      ref={pickerRef}
+      className="advanced-color-triangle"
+      role="slider"
+      aria-label="Visual color picker"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(hsv.s)}
+      aria-valuetext={`Saturation ${formatNumber(hsv.s)}%, Value ${formatNumber(hsv.v)}%`}
+      data-testid="color-triangle"
+      tabIndex={0}
+      style={{ '--picker-hue': `${hsv.h}deg` } as CSSProperties}
+      onKeyDown={handleKeyDown}
+      onPointerCancel={(event) => {
+        if (activePointerIdRef.current === event.pointerId) {
+          activePointerIdRef.current = undefined;
+        }
+        if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      }}
+      onPointerDown={(event) => {
+        event.preventDefault();
+        event.currentTarget.focus({ preventScroll: true });
+        activePointerIdRef.current = event.pointerId;
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        updateFromPointer(event);
+      }}
+      onPointerMove={(event) => {
+        if (
+          activePointerIdRef.current === event.pointerId ||
+          event.currentTarget.hasPointerCapture?.(event.pointerId)
+        ) {
+          updateFromPointer(event);
+        }
+      }}
+      onPointerUp={(event) => {
+        if (
+          activePointerIdRef.current === event.pointerId ||
+          event.currentTarget.hasPointerCapture?.(event.pointerId)
+        ) {
+          updateFromPointer(event);
+          activePointerIdRef.current = undefined;
+          event.currentTarget.releasePointerCapture?.(event.pointerId);
+        }
+      }}
+    >
+      <span
+        className="advanced-color-triangle__cursor"
+        aria-hidden="true"
+        style={{
+          left: `${handlePoint.x * 100}%`,
+          top: `${handlePoint.y * 100}%`,
         }}
       />
     </div>
@@ -331,34 +429,17 @@ function AdvancedColorEditor({ color, onChange }: AdvancedColorEditorProps) {
     <div className="advanced-color-editor">
       <section
         className="advanced-color-picker-field"
-        aria-label="Surface and value picker"
+        aria-label="Hue ring and triangle picker"
       >
         <div className="advanced-color-section-heading">
-          <span>Surface / Value</span>
+          <span>Hue ring / Color triangle</span>
           <output>H {formatNumber(hsv.h, 0)}°</output>
         </div>
-        <SaturationValuePicker hsv={hsv} onChange={updatePickerHsv} />
+        <div className="advanced-color-picker-visual">
+          <HueWheelPicker hsv={hsv} onChange={updatePickerHsv} />
+          <TriangleColorPicker hsv={hsv} onChange={updatePickerHsv} />
+        </div>
         <div className="advanced-color-slider-stack">
-          <label className="advanced-color-hue-picker">
-            <span>Hue</span>
-            <input
-              className="ts-range"
-              type="range"
-              aria-label="Hue picker"
-              min={0}
-              max={360}
-              step={1}
-              value={hsv.h}
-              style={{
-                background:
-                  'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)',
-              }}
-              onChange={(event) =>
-                updateHsv('h', Number(event.currentTarget.value))
-              }
-            />
-            <output aria-label="Hue value">{formatNumber(hsv.h, 0)}°</output>
-          </label>
           <label className="advanced-color-alpha-picker">
             <span>Alpha</span>
             <input
@@ -723,7 +804,7 @@ export function ColorControls({
           }}
         >
           <header className="color-advanced-panel__header">
-            <span>{persistent ? 'Color picker' : 'Advanced color'}</span>
+            <span>{persistent ? 'Color Studio' : 'Advanced color'}</span>
             <span>{slotLabel(activeSlot)}</span>
           </header>
           <AdvancedColorEditor

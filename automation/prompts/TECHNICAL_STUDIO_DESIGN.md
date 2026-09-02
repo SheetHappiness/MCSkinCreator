@@ -11,6 +11,7 @@ Roadmap 4 preserves existing product behavior and architecture while moving the 
 The editor is a professional skin-art tool, not a Minecraft-themed utility and not a SaaS dashboard. The shell should feel closer to disciplined desktop creative software such as Blender, Substance Painter, Affinity, Figma desktop, or DaVinci Resolve than to a website.
 
 Core properties:
+
 - dense but readable;
 - technical without looking unfinished;
 - restrained;
@@ -27,6 +28,7 @@ Minecraft appears in content and domain semantics, not ornament.
 ## Workspace hierarchy
 
 Priority:
+
 1. Canvas — dominant visual/interaction surface.
 2. Color Workspace — primary artist surface.
 3. 3D / Structure — inspection and structural surface.
@@ -178,9 +180,13 @@ Splitters: subtle idle line, clear hover, correct cursor, accessible where suppo
 
 Canvas is dominant. Preserve exact checkerboard/grid/pixels/zoom/pan. Chrome should be quiet. Canvas controls should look like a professional viewport toolbar. Selection/UV/semantic highlights must be readable without overpowering skin colors.
 
-## Vertical tool rail
+## Editor toolbar
 
-Keep tool rail near Canvas. It is primary tool-selection surface. Use ~30–32 px targets, consistent icons, clear active state, separators between drawing/selection/navigation, shortcut tooltips. Do not duplicate the full tool list in the left workspace.
+Place the primary tool-selection surface horizontally below the document tabs
+and above the Canvas. Group selection/transform, painting, adjustment, and
+view/navigation controls with subtle separators, consistent icon targets,
+clear active state, shortcut tooltips, and a compact active-tool context readout.
+Do not duplicate the full tool list in the left workspace.
 
 ## Color Workspace — primary artist surface
 
@@ -191,9 +197,9 @@ Preferred hierarchy:
 ```text
 PRIMARY / SECONDARY
 ↓
-SV PICKER
+HUE RING + INNER TRIANGLE
 ↓
-HUE / ALPHA
+ALPHA
 ↓
 EXACT VALUES
 ↓
@@ -208,7 +214,10 @@ High visual importance. Both always visible in compact state. Active slot obviou
 
 ### Picker
 
-Keep SV square + Hue/Alpha. Give generous area. Do not replace with novelty wheel unless requested later.
+Use a generous circular hue ring with an inner triangular saturation/value
+picker. It is the central visual instrument in the Color Studio. Hue, RGB,
+HSV, HEX, and alpha controls remain exact editing representations of the
+canonical RGBA bytes; the picker must not change those semantics.
 
 ### Exact values
 
@@ -241,7 +250,9 @@ Expanded state may expose search, collections, recent files, actions. It must no
 
 ## Active Tool Options
 
-Tool options are contextual. Tool selection remains at Canvas rail. Left side shows only relevant active-tool options. Avoid duplicate tool lists. Use compact rows and aligned fields.
+Tool options are contextual. Tool selection remains in the horizontal Editor
+toolbar, while the left side shows only relevant active-tool options. Avoid
+duplicate tool lists. Use compact rows and aligned fields.
 
 ## Right inspector
 
@@ -282,6 +293,7 @@ Roadmap 4 is visual, not architectural churn. Do not introduce per-texel React r
 ## Explicit anti-patterns
 
 Do not use:
+
 - glassmorphism;
 - glossy gradients;
 - neon cyberpunk decoration;
@@ -303,6 +315,7 @@ Roadmap 4 changes visual language, hierarchy, spacing, typography, component des
 It does not add new product capability.
 
 Explicitly deferred:
+
 - AI;
 - palette generation / AI stylist;
 - semantic palettes;

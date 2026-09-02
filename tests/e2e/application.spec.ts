@@ -168,6 +168,86 @@ test('launches the production Electron application shell', async () => {
   }
 });
 
+test('keeps one horizontal tool surface and layout interactions view-only', async () => {
+  const temporaryDirectory = await mkdtemp(
+    path.join(tmpdir(), 'minecraft-skin-editor-toolbar-e2e-'),
+  );
+  const inputPath = path.join(temporaryDirectory, 'toolbar.png');
+  await writeFile(
+    inputPath,
+    encode({
+      width: 64,
+      height: 64,
+      data: new Uint8Array(64 * 64 * 4),
+      channels: 4,
+      depth: 8,
+    }),
+  );
+
+  const application = await electron.launch({
+    args: ['.'],
+    env: {
+      ...process.env,
+      MINECRAFT_SKIN_EDITOR_E2E: '1',
+      MINECRAFT_SKIN_EDITOR_E2E_OPEN_PATH: inputPath,
+    },
+  });
+
+  try {
+    const window = await application.firstWindow();
+    await window.getByRole('button', { name: 'Open PNG' }).click();
+
+    const toolbar = window.getByRole('toolbar', { name: 'Editor toolbar' });
+    const preview = window.getByRole('img', { name: '3D skin preview' });
+    await expect(toolbar).toBeVisible();
+    await expect(window.locator('.tool-rail')).toHaveCount(0);
+    await expect(window.locator('.editor-toolbar')).toHaveCount(1);
+    await expect(
+      window.locator('.editor-status-bar .viewport-controls'),
+    ).toHaveCount(0);
+
+    for (const tool of [
+      'Selection',
+      'Pencil',
+      'Eraser',
+      'Fill',
+      'Eyedropper',
+      'Lighten',
+      'Darken',
+      'Noise',
+      'Stamp',
+    ]) {
+      await expect(
+        toolbar.getByRole('button', { name: tool, exact: true }),
+      ).toHaveCount(1);
+    }
+    await expect(
+      toolbar.getByRole('group', { name: 'Painting tools' }),
+    ).toBeVisible();
+    await expect(
+      toolbar.getByRole('group', { name: 'View and navigation tools' }),
+    ).toBeVisible();
+    await expect(
+      toolbar.getByRole('group', { name: 'Active tool controls' }),
+    ).toBeVisible();
+    await expect(window.getByTestId('active-tool-label')).toHaveText('Pencil');
+
+    const revision = await preview.getAttribute('data-document-revision');
+    await toolbar.getByRole('button', { name: 'Noise', exact: true }).click();
+    await toolbar.getByRole('button', { name: 'Grid', exact: true }).click();
+    await toolbar.getByRole('button', { name: 'Zoom in', exact: true }).click();
+    await toolbar.getByRole('button', { name: 'Fit', exact: true }).click();
+    await expect(window.getByTestId('active-tool-label')).toHaveText('Noise');
+    await expect(preview).toHaveAttribute(
+      'data-document-revision',
+      revision ?? '0',
+    );
+  } finally {
+    await application.close();
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
 test('creates a new skin and opens one controlled dropped PNG', async () => {
   const temporaryDirectory = await mkdtemp(
     path.join(tmpdir(), 'minecraft-skin-editor-new-drop-e2e-'),
@@ -684,7 +764,7 @@ test('selects exact pixels, previews paste and move, supports rollback, and clea
   }
 });
 
-test('runs selection flips, duplicate, and explicit paired-limb transfer from the contextual menu', async () => {
+test('runs selection flips, duplicate, and explicit paired-limb transfer from the toolbar', async () => {
   const temporaryDirectory = await mkdtemp(
     path.join(tmpdir(), 'minecraft-skin-editor-transform-e2e-'),
   );
@@ -2563,7 +2643,7 @@ test('keeps the 2D-first layout coherent across supported desktop sizes', async 
       leftSplitterBox!.y + leftSplitterBox!.height / 2,
     );
     await window.mouse.up();
-    await expect(leftSplitter).toHaveAttribute('aria-valuenow', '160');
+    await expect(leftSplitter).toHaveAttribute('aria-valuenow', '248');
     await window
       .getByRole('button', { name: /Swatch actions for/ })
       .first()
@@ -2638,7 +2718,10 @@ test('resizes, collapses, restores, persists, and resets the artist workspace', 
 
     await expect(canvas).toBeVisible();
     await expect(preview).toHaveAttribute('data-document-revision', '0');
-    await expect(leftSplitter).toHaveAttribute('aria-valuenow', '200');
+    const defaultLeftWidth = Number(
+      await leftSplitter.getAttribute('aria-valuenow'),
+    );
+    expect(defaultLeftWidth).toBe(480);
     await expect(rightSplitter).toHaveAttribute('aria-valuenow', '300');
     await expect(inspectorSplitter).toHaveAttribute('aria-valuenow', '260');
     await expect(colorSplitter).toHaveAttribute('aria-valuenow', '220');
@@ -2691,7 +2774,10 @@ test('resizes, collapses, restores, persists, and resets the artist workspace', 
       leftHandle!.y + leftHandle!.height / 2,
     );
     await window.mouse.up();
-    await expect(leftSplitter).toHaveAttribute('aria-valuenow', '240');
+    await expect(leftSplitter).toHaveAttribute(
+      'aria-valuenow',
+      String(defaultLeftWidth + 40),
+    );
     const leftAfter = await leftSlot.boundingBox();
     expect(leftAfter?.width).toBeGreaterThan(leftBefore!.width);
 
@@ -2699,19 +2785,25 @@ test('resizes, collapses, restores, persists, and resets the artist workspace', 
     expect(rightBefore).not.toBeNull();
     const rightHandle = await rightSplitter.boundingBox();
     expect(rightHandle).not.toBeNull();
+    const rightBeforeWidth = Number(
+      await rightSplitter.getAttribute('aria-valuenow'),
+    );
     await window.mouse.move(
       rightHandle!.x + rightHandle!.width / 2,
       rightHandle!.y + rightHandle!.height / 2,
     );
     await window.mouse.down();
     await window.mouse.move(
-      rightHandle!.x + rightHandle!.width / 2 - 32,
+      rightHandle!.x + rightHandle!.width / 2 + 32,
       rightHandle!.y + rightHandle!.height / 2,
     );
     await window.mouse.up();
-    await expect(rightSplitter).toHaveAttribute('aria-valuenow', '332');
+    await expect(rightSplitter).toHaveAttribute(
+      'aria-valuenow',
+      String(rightBeforeWidth - 32),
+    );
     const rightAfter = await rightSlot.boundingBox();
-    expect(rightAfter?.width).toBeGreaterThan(rightBefore!.width);
+    expect(rightAfter?.width).toBeLessThan(rightBefore!.width);
 
     const inspectorBefore = await window
       .getByTestId('workspace-splitter-inspector')
@@ -2767,8 +2859,8 @@ test('resizes, collapses, restores, persists, and resets the artist workspace', 
     );
     expect(persisted).toMatchObject({
       version: 1,
-      leftPanelWidth: 240,
-      rightPanelWidth: 332,
+      leftPanelWidth: defaultLeftWidth + 40,
+      rightPanelWidth: rightBeforeWidth - 32,
       rightInspectorHeight: 292,
       leftUpperHeight: 220,
       libraryExpanded: false,
@@ -2777,7 +2869,10 @@ test('resizes, collapses, restores, persists, and resets the artist workspace', 
     });
 
     await resetLayout.click();
-    await expect(leftSplitter).toHaveAttribute('aria-valuenow', '200');
+    await expect(leftSplitter).toHaveAttribute(
+      'aria-valuenow',
+      String(defaultLeftWidth),
+    );
     await expect(rightSplitter).toHaveAttribute('aria-valuenow', '300');
     await expect(inspectorSplitter).toHaveAttribute('aria-valuenow', '260');
     await expect(
