@@ -7026,3 +7026,48 @@ input[type='range']:disabled {
     max-width: 112px;
   }
 }
+
+/* Color Studio: keep the wide workspace an artist instrument, not a stretched stack. */
+.color-workspace
+  .color-advanced-panel.color-workspace-panel.color-workspace__columns {
+  display: grid;
+  grid-template-columns: minmax(300px, 1.2fr) minmax(240px, 0.8fr);
+  align-items: start;
+  gap: var(--ts-space-section);
+  padding: var(--ts-space-group) 0 var(--ts-space-section);
+  border-top: 0;
+}
+
+.color-workspace__picker-column,
+.color-workspace__detail-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--ts-space-group);
+}
+
+.color-workspace .color-workspace__picker-column > .color-control {
+  width: 100%;
+}
+
+.color-workspace .color-workspace__picker-column .advanced-color-picker-field {
+  width: 100%;
+}
+
+.color-workspace .color-workspace__detail-column .advanced-color-precision {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.color-popup-libraries {
+  display: grid;
+  gap: var(--ts-space-group);
+  min-width: 0;
+}
+
+@container color-workspace (max-width: 580px) {
+  .color-workspace
+    .color-advanced-panel.color-workspace-panel.color-workspace__columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

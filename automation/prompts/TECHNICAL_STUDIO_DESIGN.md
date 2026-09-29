@@ -208,6 +208,22 @@ RECENT
 MANUAL PALETTE
 ```
 
+On wide desktop, compose Color Studio as a genuine two-column artist
+instrument rather than stretching the stacked layout horizontally:
+
+```text
+LEFT SUB-AREA                         RIGHT SUB-AREA
+Primary / Secondary                   Exact RGBA / HSV / HEX values
+Hue ring + SV triangle                Recent colors
+Alpha                                 Manual palette
+```
+
+The left dock's wide-desktop preference is roughly 600–640 CSS px, but remains
+user-resizable and responsive. Below the usable-width threshold, collapse the
+two sub-areas back to one column so the picker stays generous and the exact
+controls remain readable. Library is compact and visually secondary to Color
+Studio. Do not add a second Color Studio heading inside the picker instrument.
+
 ### Primary / Secondary
 
 High visual importance. Both always visible in compact state. Active slot obvious without color-only indication. Swap/reset compact. Exact value available. No oversized cards.

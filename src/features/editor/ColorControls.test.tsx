@@ -334,6 +334,14 @@ describe('persistent Color Workspace', () => {
     );
 
     expect(screen.getByLabelText('Color Workspace')).toBeInTheDocument();
+    expect(screen.getAllByText('Color Studio')).toHaveLength(1);
+    expect(
+      document.querySelector('.color-workspace__picker-column'),
+    ).not.toBeNull();
+    expect(
+      document.querySelector('.color-workspace__detail-column'),
+    ).not.toBeNull();
+    expect(document.querySelector('.color-advanced-panel__header')).toBeNull();
     expect(screen.getByLabelText('Paint colors')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Primary color' })).toBeVisible();
     expect(

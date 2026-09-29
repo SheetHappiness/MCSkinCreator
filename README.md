@@ -750,6 +750,13 @@ A possible default layout:
 
 This is a structural reference, not a final visual design.
 
+The persistent Color Studio is intentionally more specific than this compact
+structural sketch: on wide desktop its dock uses a two-column instrument, with
+Primary/Secondary and the hue-ring/SV-triangle picker on the left, and exact
+values, Recents, and the compact Palette on the right. It collapses to one
+column at narrower widths. See `docs/WORKSPACE_LAYOUT.md` for the responsive
+layout contract.
+
 ---
 
 # Initial v0.1 Non-Goals

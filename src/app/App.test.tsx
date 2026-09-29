@@ -37,7 +37,7 @@ describe('App', () => {
 
     const applicationBody = document.querySelector('.application-body');
     expect(applicationBody).toHaveStyle(
-      'grid-template-columns: 480px 8px minmax(0, 1fr)',
+      'grid-template-columns: 620px 8px minmax(0, 1fr)',
     );
     expect(
       screen.getByRole('button', { name: 'Expand Library' }),
@@ -49,7 +49,7 @@ describe('App', () => {
     fireEvent.pointerDown(screen.getByTestId('workspace-splitter-left'), {
       button: 0,
       pointerId: 1,
-      clientX: 480,
+      clientX: 620,
     });
     fireEvent.pointerMove(screen.getByTestId('workspace-splitter-left'), {
       pointerId: 1,
@@ -116,7 +116,7 @@ describe('App', () => {
       document.querySelector('.workspace-side-slot--left'),
     ).not.toHaveClass('is-collapsed');
     expect(applicationBody).toHaveStyle(
-      'grid-template-columns: 480px 8px minmax(0, 1fr)',
+      'grid-template-columns: 620px 8px minmax(0, 1fr)',
     );
     expect(
       JSON.parse(localStorage.getItem(WORKSPACE_LAYOUT_STORAGE_KEY)!),

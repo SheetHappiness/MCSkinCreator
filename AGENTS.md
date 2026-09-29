@@ -881,3 +881,10 @@ a smaller, cleaner, more predictable editor
 choose the second.
 
 The initial product succeeds when a user can open a Minecraft skin, edit it with confidence, understand the result in 3D, and save it without the software getting in the way.
+
+# Agent Orchestration
+
+For a task involving multiple agents, the root orchestrator must load
+`.agents/skills/mcskincreator-luna-orchestration/SKILL.md`. This is the single
+project-local topology and contract policy; keep product and engineering rules
+in this file rather than duplicating them in the Skill, `docs/`, or `automation/`.

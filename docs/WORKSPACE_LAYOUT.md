@@ -10,7 +10,7 @@ The first run starts with these preferred CSS-pixel dimensions:
 
 | Preference                    | Default | Static limits |
 | ----------------------------- | ------: | ------------: |
-| Left artist workspace width   |  480 px |    240–560 px |
+| Left artist workspace width   |  620 px |    240–720 px |
 | 3D Preview width              |  300 px |    244–480 px |
 | Upper controls/history height |  260 px |    180–520 px |
 | Compact left upper stack      |  220 px |    200–520 px |
@@ -22,11 +22,11 @@ reserves an 8 px track. The layout solver also reserves at least 220 px for
 the central 2D canvas and at least 180 px for the lower 3D preview section.
 
 The default left artist workspace is calibrated for a wide desktop around a
-2560 px monitor: its preferred width is 480 px and its user-resizable static
-range is 240–560 px. At smaller supported sizes the layout solver derives a
+2560 px monitor: its preferred width is 620 px and its user-resizable static
+range is 240–720 px. At smaller supported sizes the layout solver derives a
 temporary effective width from the available space while reserving a central
 Canvas surface slightly wider than the minimum 3D preview; it does not
-overwrite the stored preference. The effective reset width is 480 px at 1200 px
+overwrite the stored preference. The effective reset width is 484 px at 1200 px
 and 288 px at the 800 px minimum window width.
 
 The left-side dock keeps a compact Library and contextual tool options above
@@ -41,6 +41,13 @@ returns that space to Color Workspace. The horizontal separator resizes the
 active stack in either state. The Color Workspace contains the
 primary/secondary slots, exact picker, recents, and manual palette; its layout
 state is view-only and does not affect the active skin document.
+
+On wide desktop, Color Studio is a two-column instrument: the left sub-area
+keeps Primary/Secondary and the large hue-ring/SV-triangle picker together;
+the right sub-area holds exact RGBA/HSV/HEX values, Recents, and the compact
+manual Palette. The dock remains resizable, but the split is not forced at
+narrow widths. Below the usable-width threshold it intentionally collapses to
+one column so the picker and controls remain legible instead of being squeezed.
 
 The right-side vertical split is between the controls/history inspector and
 the 3D preview. Its separator has horizontal orientation because dragging it

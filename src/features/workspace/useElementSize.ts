@@ -15,10 +15,13 @@ function getElementSize(element: HTMLElement): ElementSize {
 /** Observes CSS layout size without coupling it to document or history state. */
 export function useElementSize<T extends HTMLElement>(
   elementRef: RefObject<T | null>,
+  enabled = true,
 ): ElementSize {
   const [size, setSize] = useState<ElementSize>(EMPTY_SIZE);
 
   useLayoutEffect(() => {
+    if (!enabled) return;
+
     const element = elementRef.current;
     if (element === null) return;
 
@@ -37,7 +40,7 @@ export function useElementSize<T extends HTMLElement>(
     const observer = new ResizeObserver(updateSize);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [elementRef]);
+  }, [elementRef, enabled]);
 
   return size;
 }

@@ -19,7 +19,7 @@ export const LEFT_UPPER_HEIGHT_LIMITS = Object.freeze({
 
 export const LEFT_PANEL_WIDTH_LIMITS = Object.freeze({
   min: 240,
-  max: 560,
+  max: 720,
 });
 
 export const RIGHT_PANEL_WIDTH_LIMITS = Object.freeze({
@@ -84,7 +84,7 @@ export interface EffectiveWorkspaceLayout extends WorkspaceLayout {
 }
 
 export const DEFAULT_WORKSPACE_LAYOUT: WorkspaceLayout = Object.freeze({
-  leftPanelWidth: 480,
+  leftPanelWidth: 620,
   rightPanelWidth: 300,
   rightInspectorHeight: 260,
   leftUpperHeight: 220,
@@ -131,12 +131,22 @@ export function getLeftPanelWidthBounds(
     return staticBounds(LEFT_PANEL_WIDTH_LIMITS);
   }
 
+  // Wide desktops can afford a genuine two-column Color Studio, while
+  // narrower windows must give the central canvas a meaningful minimum before
+  // the preferred left dock is allowed to claim more width. The continuous
+  // growth from the 800px baseline avoids a discontinuity at the breakpoint.
+  const minimumCentralCanvas = Math.min(
+    640,
+    Math.floor(
+      MIN_CENTRAL_CANVAS_WIDTH + Math.max(0, applicationWidth - 800) * 0.51,
+    ),
+  );
   const maxByUsableEditor =
     applicationWidth -
     WORKSPACE_SPLITTER_SIZE -
     WORKSPACE_SPLITTER_SIZE -
     RIGHT_PANEL_WIDTH_LIMITS.min -
-    MIN_CENTRAL_CANVAS_WIDTH;
+    minimumCentralCanvas;
   // A supported narrow window may temporarily need to dip below the static
   // preference minimum. Keeping the responsive minimum below the available
   // maximum preserves the canvas reservation instead of producing an invalid

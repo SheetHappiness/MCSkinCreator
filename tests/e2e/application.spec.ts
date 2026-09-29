@@ -2538,6 +2538,7 @@ test('keeps the 2D-first layout coherent across supported desktop sizes', async 
     ).toHaveAttribute('data-tool', 'pencil');
 
     for (const [width, height] of [
+      [2560, 1440],
       [1600, 900],
       [1200, 760],
       [800, 560],
@@ -2575,7 +2576,10 @@ test('keeps the 2D-first layout coherent across supported desktop sizes', async 
           readonly scrollWidth: number;
           readonly scrollHeight: number;
           readonly clientWidth: number;
-          getBoundingClientRect(): { readonly width: number };
+          getBoundingClientRect(): {
+            readonly x: number;
+            readonly width: number;
+          };
         }
         const browser = globalThis as unknown as {
           readonly innerWidth: number;
@@ -2601,6 +2605,17 @@ test('keeps the 2D-first layout coherent across supported desktop sizes', async 
           '.skin-preview-controls',
         )!;
         const status = browser.document.querySelector('.editor-status-bar')!;
+        const colorWorkspace =
+          browser.document.querySelector('.color-workspace')!;
+        const colorPanel = browser.document.querySelector(
+          '.color-workspace__columns',
+        )!;
+        const colorPickerColumn = browser.document.querySelector(
+          '.color-workspace__picker-column',
+        )!;
+        const colorDetailColumn = browser.document.querySelector(
+          '.color-workspace__detail-column',
+        )!;
         return {
           bodyFits:
             browser.document.documentElement.scrollWidth ===
@@ -2616,6 +2631,16 @@ test('keeps the 2D-first layout coherent across supported desktop sizes', async 
           previewControlsFit:
             previewControls.scrollWidth <= previewControls.clientWidth,
           statusFits: status.scrollWidth <= status.clientWidth,
+          colorWorkspaceFits:
+            colorWorkspace.scrollWidth <= colorWorkspace.clientWidth,
+          colorPanelFits: colorPanel.scrollWidth <= colorPanel.clientWidth,
+          colorTwoColumn:
+            colorDetailColumn.getBoundingClientRect().x >
+            colorPickerColumn.getBoundingClientRect().x +
+              colorPickerColumn.getBoundingClientRect().width +
+              1,
+          colorPickerWidth: colorPickerColumn.getBoundingClientRect().width,
+          colorDetailWidth: colorDetailColumn.getBoundingClientRect().width,
         };
       });
 
@@ -2625,9 +2650,16 @@ test('keeps the 2D-first layout coherent across supported desktop sizes', async 
         previewToolbarFits: true,
         previewControlsFit: true,
         statusFits: true,
+        colorWorkspaceFits: true,
+        colorPanelFits: true,
       });
       expect(metrics.previewWidth).toBeGreaterThanOrEqual(244);
       expect(metrics.stageWidth).toBeGreaterThan(metrics.previewWidth);
+      expect(metrics.colorTwoColumn).toBe(width >= 1600);
+      if (width >= 1600) {
+        expect(metrics.colorPickerWidth).toBeGreaterThanOrEqual(300);
+        expect(metrics.colorDetailWidth).toBeGreaterThanOrEqual(240);
+      }
     }
 
     const leftSplitter = window.getByTestId('workspace-splitter-left');
@@ -2721,7 +2753,7 @@ test('resizes, collapses, restores, persists, and resets the artist workspace', 
     const defaultLeftWidth = Number(
       await leftSplitter.getAttribute('aria-valuenow'),
     );
-    expect(defaultLeftWidth).toBe(480);
+    expect(defaultLeftWidth).toBe(484);
     await expect(rightSplitter).toHaveAttribute('aria-valuenow', '300');
     await expect(inspectorSplitter).toHaveAttribute('aria-valuenow', '260');
     await expect(colorSplitter).toHaveAttribute('aria-valuenow', '220');
